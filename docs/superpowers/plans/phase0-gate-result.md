@@ -171,7 +171,8 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 ## Phase 1.5 完了記録（spec §15 フェーズ1.5）
 
 - 完了確認日 (UTC): 2026-05-16
-- コミット範囲: `9dc82b0`（Task0 着手ゲート）..`7a9ae65`（Task8 golden）
+- コミット範囲: `9dc82b0`（Task0 着手ゲート）..`f3f8d30`（Task8 golden）..`d1322f6`（本完了記録）
+  - 注: 範囲内 `7a9ae65 feat(settings): add 'using-superpowers' skill to permissions` は `.claude/settings.local.json` への権限追記のみのスコープ外コミット（実装外のサブエージェント副作用。Phase 1.5 コード/テストには無関係）
 - 全テスト結果: **78 passed**（unit / integration / golden / smoke すべて PASS。0 failed / 0 error）
 
 ### spec §15 フェーズ1.5 → 実装 対応表
