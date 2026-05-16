@@ -1,0 +1,20 @@
+{
+  "name": "grep_helpers2",
+
+  "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
+
+  "workspaceFolder": "/workspaces/grep_helpers2",
+
+  "features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:latest": {}
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ]
+    }
+  }
+}
