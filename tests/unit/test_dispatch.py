@@ -83,3 +83,26 @@ def test_拡張子で言語が確定するかを判定できる():
     assert extension_resolves_language("bin/tool", {}) is False          # 拡張子なし
     assert extension_resolves_language("a/x.inc", {".inc": "shell"}) is True  # lang_map
     assert extension_resolves_language("a/unknown.xyz", {}) is False
+
+
+from grep_analyzer.dispatch import detect_shell_dialect
+
+
+def test_csh拡張子はcshell方言():
+    assert detect_shell_dialect("a/run.csh", "set X = 1\n") == "cshell"
+    assert detect_shell_dialect("a/run.tcsh", "") == "cshell"
+
+
+def test_sh系拡張子はbourne方言():
+    assert detect_shell_dialect("a/run.sh", "X=1\n") == "bourne"
+    assert detect_shell_dialect("a/run.ksh", "") == "bourne"
+
+
+def test_シェバンは拡張子より優先される():
+    # 既知シェル拡張子でもシェバンが方言を上書きする（spec §5.1「言語判定と独立」）
+    assert detect_shell_dialect("a/run.sh", "#!/bin/csh\nset X = 1\n") == "cshell"
+    assert detect_shell_dialect("a/run.csh", "#!/bin/sh\nX=1\n") == "bourne"
+
+
+def test_拡張子なしシェバンなしはbourne既定():
+    assert detect_shell_dialect("bin/deploy", "X=1\n") == "bourne"

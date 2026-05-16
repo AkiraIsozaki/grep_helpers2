@@ -72,3 +72,18 @@ def extension_resolves_language(path: str, lang_map: dict[str, str]) -> bool:
     """
     ext = os.path.splitext(path)[1].lower()
     return ext in lang_map or ext in _EXT_MAP
+
+
+def detect_shell_dialect(path: str, content_sample: str) -> str:
+    """言語が Shell のとき方言（"bourne"/"cshell"）を決定的に返す（spec §5.1）。
+
+    ① シェル系シェバンがあればそれを優先 ② 無ければ拡張子 ③ どちらも無ければ bourne。
+    本関数は言語判定とは独立に呼ばれ、既知シェル拡張子でも第1物理行のシェバンを必ず見る。
+    """
+    sd = shebang_dialect(content_sample)
+    if sd in ("bourne", "cshell"):
+        return sd
+    ext = os.path.splitext(path)[1].lower()
+    if ext in (".csh", ".tcsh"):
+        return "cshell"
+    return "bourne"
