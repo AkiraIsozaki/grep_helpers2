@@ -155,3 +155,13 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 - Task 12 で `src/grep_analyzer/__main__.py` と `cli.py` を実装。`python -m grep_analyzer --help` がパッケージング契約として smoke で検証済み（`tests/test_smoke.py`）。
 - Task 13 の実際のコミットメッセージは `test: golden基盤と6言語direct代表ケース`（golden コミット規約 `chore(golden): <理由>` と異なる）。既存 git 履歴は変更しない。**今後の golden 更新コミットは `chore(golden): <理由>` 形式を使用すること**（`.claude/skills/writing-tests.md` Golden 節の規約に準拠。`docs/superpowers/plans/2026-05-16-grep-analyzer-phase1.md` の Task 13 Step 5 例示コマンドを同規約に修正済み）。
 - **Phase 2 以降の着手前提**: `pyahocorasick`（多シンボル同時走査）の wheel 実証が未完了（G1 懸念・申し送り参照）。Phase 2 開始前に G1 相当の検証が必要。
+
+---
+
+## Phase 1.5 着手ゲート記録
+
+- 記録日 (UTC): 2026-05-16
+- Step1: `python -m pytest -q` → 43 passed / 0 failed / 0 error
+- Step2: spec `v7（現行）` 反映確認 → PASS（grep ヒット 1 行）
+- 判定: **PASS**（Phase 1 ベースライン緑 ＆ spec v7 反映済み。Task 1 以降へ着手可）
+- 注: `pyahocorasick` の wheel 実証は Phase 2 着手前提（本ゲート対象外）
