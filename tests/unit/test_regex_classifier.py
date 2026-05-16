@@ -38,3 +38,22 @@ def test_OracleのCASE_WHENは分岐と判定する():
 def test_既存のWHERE比較とINSERT代入はOracle規則でも不変():
     assert classify_sql("WHERE col = 'X'") == ("比較", "medium")
     assert classify_sql("INSERT INTO t VALUES ('X')") == ("代入", "medium")
+
+
+def test_cshellのset代入は代入と判定する():
+    assert classify_shell("set CODE = \"X\"", "cshell") == ("代入", "medium")
+    assert classify_shell("setenv PATH /usr/bin", "cshell") == ("代入", "medium")
+    assert classify_shell("@ i = 1", "cshell") == ("代入", "medium")
+
+
+def test_cshellのif括弧比較は比較と判定する():
+    assert classify_shell('if ( "$x" == "X" ) then', "cshell") == ("比較", "medium")
+
+
+def test_cshellのswitchは分岐と判定する():
+    assert classify_shell("switch ( $x )", "cshell") == ("分岐", "medium")
+
+
+def test_dialect既定bourneは従来挙動と同一():
+    assert classify_shell('CODE="X"') == ("代入", "medium")
+    assert classify_shell('[ "$x" = "X" ]') == ("比較", "medium")
