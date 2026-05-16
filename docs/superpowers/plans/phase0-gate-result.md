@@ -165,3 +165,27 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 - Step2: spec `v7（現行）` 反映確認 → PASS（grep ヒット 1 行）
 - 判定: **PASS**（Phase 1 ベースライン緑 ＆ spec v7 反映済み。Task 1 以降へ着手可）
 - 注: `pyahocorasick` の wheel 実証は Phase 2 着手前提（本ゲート対象外）
+
+---
+
+## Phase 1.5 完了記録（spec §15 フェーズ1.5）
+
+- 完了確認日 (UTC): 2026-05-16
+- コミット範囲: `9dc82b0`（Task0 着手ゲート）..`7a9ae65`（Task8 golden）
+- 全テスト結果: **78 passed**（unit / integration / golden / smoke すべて PASS。0 failed / 0 error）
+
+### spec §15 フェーズ1.5 → 実装 対応表
+
+| 要件 | 実装タスク | モジュール / テスト |
+|---|---|---|
+| §5.1 シェバン検出＋`.csh`/`.tcsh`・方言独立判定 | Task 1〜3 | `dispatch.py`（`shebang_dialect`/`detect_language`/`detect_shell_dialect`/`extension_resolves_language`）/ `tests/unit/test_dispatch.py` |
+| §7 SQL=Oracle 方言精密化 | Task 4 | `classifiers/regex_classifier.py`（`_SQL_RULES`）/ `tests/unit/test_regex_classifier.py` |
+| §7 Shell bourne/cshell 二方言 | Task 5 | `classifiers/regex_classifier.py`（`classify_shell`）/ 同上 |
+| §8.1 用 Oracle/csh 追跡シンボル抽出規則（非配線・Phase2 入力） | Task 6 | `chase.py`（`extract_var_symbols`）/ `tests/unit/test_chase.py` |
+| パイプライン方言伝播・§8.4 `unsupported_shebang`（手順3限定） | Task 7 | `pipeline.py` / `tests/integration/test_pipeline_dialect.py` |
+| golden 決定的拡張（Oracle/csh/拡張子なし4ケース）・既存6不変 | Task 8 | `tests/golden/cases/{oracle_direct,csh_direct,csh_noext_shebang,sh_noext_shebang}` |
+| direct のみ・完全決定性維持 | Task 1〜8 全体 | 既存6 golden 不変＋全体テスト緑 |
+
+### 補足・申し送り
+- `chase.py` は本 Phase ではパイプライン非配線（unit 固定のみ）。Phase 2 不動点エンジンが消費する。
+- **Phase 2 着手前提（未了）**: `pyahocorasick` の §4.2 G1 相当 wheel オフライン実証（spec §15 フェーズ2 / 本書「懸念・申し送り」）。Phase 1.5 は tree-sitter＋chardet＋標準ライブラリのみで完結。
