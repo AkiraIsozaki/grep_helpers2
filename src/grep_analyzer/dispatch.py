@@ -7,6 +7,7 @@ _EXT_MAP = {
     ".java": "java",
     ".sql": "sql",
     ".sh": "shell", ".ksh": "shell", ".bash": "shell",
+    ".csh": "shell", ".tcsh": "shell",
     ".pc": "proc",
     ".c": "c", ".h": "c",
 }
@@ -39,15 +40,35 @@ def shebang_dialect(content_sample: str) -> str | None:
 
 
 def detect_language(path: str, content_sample: str, lang_map: dict[str, str]) -> str:
-    """拡張子マップ＋内容ヒューリスティックで言語を返す。判定不能は "c"。"""
+    """spec §5.1 の決定的優先順位で言語を返す。
+
+    1) --lang-map 上書き 2) 拡張子マップ 3) 拡張子未知/無ならシェバン検出
+    4) EXEC SQL ヒューリスティック 5) C にフォールバック。
+    """
     ext = os.path.splitext(path)[1].lower()
     if ext in lang_map:
         return lang_map[ext]
     lang = _EXT_MAP.get(ext)
+    if lang == "shell":
+        return "shell"
     if lang in ("c", "proc") or ext == ".h":
         if _EXEC_SQL_RE.search(content_sample):
             return "proc"
         return lang or "c"
-    if lang is not None:
+    if lang is not None:  # java / sql
         return lang
+    # 拡張子が未知または無い: シェバン検出（手順3）→ EXEC SQL（手順4）→ c（手順5）
+    if shebang_dialect(content_sample) in ("bourne", "cshell"):
+        return "shell"
+    if _EXEC_SQL_RE.search(content_sample):
+        return "proc"
     return "c"
+
+
+def extension_resolves_language(path: str, lang_map: dict[str, str]) -> bool:
+    """拡張子（または --lang-map）だけで言語が確定するなら True（spec §5.1 手順1〜2）。
+
+    False のときのみ手順3（シェバン検出）に到達する。
+    """
+    ext = os.path.splitext(path)[1].lower()
+    return ext in lang_map or ext in _EXT_MAP
