@@ -7,7 +7,9 @@
       "Edit",
       "Glob",
       "Grep",
-      "Bash(python -m pytest tests/ -q --tb=line)"
+      "Bash(python -m pytest tests/ -q --tb=line)",
+      "Skill(superpowers:brainstorming)",
+      "WebSearch"
     ]
   }
 }
