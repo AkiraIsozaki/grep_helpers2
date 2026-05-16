@@ -1,0 +1,8 @@
+# オフライン配備用 wheel 群（ローカル生成・コミット対象外。phase0-gate-result.md に再現手順記録）
+wheelhouse/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
