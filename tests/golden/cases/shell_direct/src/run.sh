@@ -1,0 +1,2 @@
+CODE="X"
+echo "$CODE"

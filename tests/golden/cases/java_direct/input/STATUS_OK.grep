@@ -1,0 +1,2 @@
+A.java:2:  static final String STATUS_OK = "STATUS_OK";
+A.java:4:    if (s.equals("STATUS_OK")) {}

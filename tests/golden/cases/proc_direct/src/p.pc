@@ -1,0 +1,5 @@
+int f(){
+ EXEC SQL SELECT CODE
+   INTO :x FROM t;
+ char *p = "X";
+}
