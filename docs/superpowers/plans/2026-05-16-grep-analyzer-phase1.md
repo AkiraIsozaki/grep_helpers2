@@ -29,12 +29,15 @@ python3.12 -c "import sysconfig; print(sysconfig.get_platform())"
 開発環境（オンライン可）で、ターゲットの platform タグに対して:
 ```bash
 mkdir -p wheelhouse
-pip download --dest wheelhouse --only-binary=:all: --python-version 3.12 \
+# <PLAT> は Step 1 の sysconfig.get_platform() を pip タグ化したもの
+# （例 linux-x86_64 → manylinux2014_x86_64 / 対象が musl なら musllinux_*）
+pip download --dest wheelhouse --only-binary=:all: \
+  --implementation cp --python-version 3.12 --abi cp312 --platform <PLAT> \
   "tree-sitter==0.21.3" "tree-sitter-java==0.21.0" "tree-sitter-c==0.21.4" "chardet==5.2.0" \
   pytest
 ls wheelhouse
 ```
-Expected: 上記すべて（推移依存含む）の `.whl` が `wheelhouse/` に揃う。1つでも sdist しか取れない／取得不能なら、spec §4.2 の (a) sdistビルド同梱 or (b) 代替 を本計画着手前に意思決定し、`phase0-gate-result.md` に記録。
+Expected: 上記すべて（推移依存含む）の cp312・対象 `<PLAT>` 向け `.whl` が `wheelhouse/` に揃う。1つでも sdist しか取れない／取得不能なら、spec §4.2 の (a) sdistビルド同梱 or (b) 代替 を本計画着手前に意思決定し、`phase0-gate-result.md` に記録。
 
 - [ ] **Step 3: ゲート判定を記録**
 
@@ -324,7 +327,13 @@ git commit -m "feat: grep行パーサ(最左数字コロン境界)"
 
 `tests/unit/test_encoding.py`:
 ```python
-"""文字コード判定とフォールバック（spec §10.1）。"""
+"""文字コード判定とフォールバック（spec §10.1）。
+
+chardet の検出は短い/曖昧な入力で結果が揺れる（実測: 短い cp932 を Windows-1252、
+`\\xff\\xfe..` を UTF-16 と誤検出）。決定的に検証するため、フォールバック経路の
+テストは chardet.detect を stub する（chardet は外部の検出オラクル＝外部I/O境界。
+writing-tests.md のモック線引きに合致）。実 chardet 経路は「決して落ちない」契約のみ検証。
+"""
 
 from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
 
@@ -332,19 +341,34 @@ from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
 def test_UTF8は置換なしで復号される():
     text, enc, replaced = decode_bytes("あいう".encode("utf-8"), DEFAULT_FALLBACK)
     assert text == "あいう"
+    assert enc == "utf-8"
     assert replaced is False
 
 
-def test_CP932はフォールバック鎖で復号される():
+def test_検出不発時はフォールバック鎖のcp932で復号される(monkeypatch):
+    monkeypatch.setattr(
+        "grep_analyzer.encoding.chardet.detect", lambda b: {"encoding": None}
+    )
     text, enc, replaced = decode_bytes("日本語".encode("cp932"), DEFAULT_FALLBACK)
     assert text == "日本語"
+    assert enc == "cp932"
     assert replaced is False
 
 
-def test_未知バイトでも例外を投げずlatin1置換で要確認になる():
-    text, enc, replaced = decode_bytes(b"\xff\xfe\x00\x01abc", DEFAULT_FALLBACK)
+def test_どの厳格復号も不可ならlatin1置換で要確認になる(monkeypatch):
+    monkeypatch.setattr(
+        "grep_analyzer.encoding.chardet.detect", lambda b: {"encoding": None}
+    )
+    # \xff は utf-8 / cp932 / euc-jp すべてで不正 → latin-1 置換へ確定
+    text, enc, replaced = decode_bytes(b"\xff\xff\xff", DEFAULT_FALLBACK)
     assert isinstance(text, str)
+    assert enc == "latin-1"
     assert replaced is True
+
+
+def test_実chardet経路でも例外を投げない():
+    text, enc, replaced = decode_bytes("日本語".encode("cp932"), DEFAULT_FALLBACK)
+    assert isinstance(text, str)  # 誤検出し得るが「決して落ちない」契約のみ検証
 ```
 
 - [ ] **Step 2: 失敗を確認**
@@ -369,6 +393,10 @@ def decode_bytes(data: bytes, fallback_chain: list[str]) -> tuple[str, str, bool
 
     手順: ① utf-8 厳格 → ② chardet 検出（全バイト1回）→ ③ fallback_chain 順に厳格 →
     ④ latin-1 + replace（必ず成功・置換フラグ True）。
+
+    短い/曖昧な入力では chardet が誤検出し得る（spec §10.1 の既知の限界）。
+    その場合も例外は出さず、置換発生時は encoding 列＋diagnostics の「要確認」で
+    顕在化させる（呼び出し側責務）。
     """
     try:
         return data.decode("utf-8"), "utf-8", False
@@ -738,8 +766,10 @@ from tree_sitter import Language, Parser
 from grep_analyzer.classifiers.base import ClassifyResult
 from grep_analyzer.proc_preprocess import mask_exec_sql
 
-_JAVA = Language(tree_sitter_java.language())
-_C = Language(tree_sitter_c.language())
+# py-tree-sitter 0.21.3 の Language.__init__ は (ptr, name) の2引数必須。
+# tree_sitter_<lang>.language() は int ポインタを返す（spec §4.1 ロード規約）。
+_JAVA = Language(tree_sitter_java.language(), "java")
+_C = Language(tree_sitter_c.language(), "c")
 
 # ノード型 → 共通上位カテゴリ（spec §7 の判定軸の最小集合）。
 # Phase 1 は決定的基盤が目的（分類精度は handcrafted の領分・spec §11）。
@@ -765,18 +795,21 @@ def _parser(language: str) -> Parser:
 
 
 def _node_at_line(root, lineno: int):
-    """指定行（0始まり=lineno-1）に開始/内包される最小の named ノードを返す。"""
+    """対象行（0始まり=lineno-1）を内包する最小ノードを決定的に返す。
+
+    同スパンの曖昧さを除くため、`(行スパン, start_byte)` の最小で一意に選ぶ
+    （走査順に依存しない・spec §9 決定性）。
+    """
     target = lineno - 1
     best = None
+    best_key = None
     cursor = [root]
     while cursor:
         node = cursor.pop()
         if node.start_point[0] <= target <= node.end_point[0]:
-            if best is None or (
-                (node.end_point[0] - node.start_point[0])
-                <= (best.end_point[0] - best.start_point[0])
-            ):
-                best = node
+            key = (node.end_point[0] - node.start_point[0], node.start_byte)
+            if best_key is None or key < best_key:
+                best, best_key = node, key
             cursor.extend(node.children)
     return best
 
@@ -1178,10 +1211,12 @@ def test_必須引数で実行しexit0とTSVを返す(tmp_path: Path):
 def test_CLIのhelpがexit0を返す():
     import subprocess
     import sys
+    from pathlib import Path
 
+    src_dir = Path(__file__).resolve().parents[1] / "src"
     r = subprocess.run(
         [sys.executable, "-m", "grep_analyzer", "--help"],
-        capture_output=True, cwd="src",
+        capture_output=True, cwd=str(src_dir),
     )
     assert r.returncode == 0
 
@@ -1253,10 +1288,15 @@ git commit -m "feat: CLIエントリとsmoke強化"
 
 **Files:**
 - Create: `tests/golden/conftest.py`
-- Create: `tests/golden/cases/java_direct/src/A.java`
-- Create: `tests/golden/cases/java_direct/input/STATUS_OK.grep`
-- Create: `tests/golden/cases/java_direct/expected/STATUS_OK.tsv`
 - Create: `tests/golden/test_golden.py`
+- Create: `tests/golden/cases/java_direct/{src/A.java,input/STATUS_OK.grep,expected/STATUS_OK.tsv}`
+- Create: `tests/golden/cases/c_direct/{src/m.c,input/CODE.grep,expected/CODE.tsv}`
+- Create: `tests/golden/cases/proc_direct/{src/p.pc,input/X.grep,expected/X.tsv}`（Pro\*C行番号保存の必須回帰）
+- Create: `tests/golden/cases/sql_direct/{src/q.sql,input/X.grep,expected/X.tsv}`
+- Create: `tests/golden/cases/shell_direct/{src/run.sh,input/CODE.grep,expected/CODE.tsv}`
+- Create: `tests/golden/cases/encoding_utf8/{src/jp.java,input/コード.grep,expected/コード.tsv}`（文字コード判定値 pin）
+
+> spec §11 必須回帰のうち「言語×ref_kind 必須網羅」「Pro\*C `EXEC SQL`＋行番号保存」「文字コード期待値 pin」を Phase 1（direct のみ）で満たす。`category_sub` は空固定。**非UTF-8 の golden pin は chardet 短入力誤検出により非決定的になり得るため Phase 1 では採用せず、フォールバック決定性は Task 4 の chardet stub 済み unit で担保する**（多ホップ/host-var追跡と非UTF-8 golden 強化は Phase 2/3）。
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -1326,7 +1366,74 @@ STATUS_OK	java	A.java	2	direct	宣言		宣言 (java)		STATUS_OK@A.java:2	  stati
 STATUS_OK	java	A.java	4	direct	比較		比較 (java)		STATUS_OK@A.java:4	    if (s.equals("STATUS_OK")) {}	utf-8	high
 ```
 
-実際の期待ファイルは初回に `python -m grep_analyzer --input tests/golden/cases/java_direct/input --output /tmp/g --source-root tests/golden/cases/java_direct/src` を実行し、`git diff` で目視レビューのうえ `cp /tmp/g/STATUS_OK.tsv tests/golden/cases/java_direct/expected/STATUS_OK.tsv` で確定（spec §11「必ず git diff で目視レビューしてから regen」）。
+**追加ケース（spec §11 必須網羅・すべて direct）**
+
+`tests/golden/cases/c_direct/src/m.c`:
+```c
+#define CODE "X"
+int main(){ return 0; }
+```
+`tests/golden/cases/c_direct/input/CODE.grep`:
+```
+m.c:1:#define CODE "X"
+```
+期待 `expected/CODE.tsv`（ヘッダ＋）: `CODE	c	m.c	1	direct	宣言		宣言 (c)		CODE@m.c:1	#define CODE "X"	utf-8	high`
+
+`tests/golden/cases/proc_direct/src/p.pc`（EXEC SQL は2〜3行目を跨ぐ。行番号保存で4行目のC宣言が lineno 4 のまま分類されることを固定）:
+```c
+int f(){
+ EXEC SQL SELECT CODE
+   INTO :x FROM t;
+ char *p = "X";
+}
+```
+`tests/golden/cases/proc_direct/input/X.grep`:
+```
+p.pc:4: char *p = "X";
+```
+期待 `expected/X.tsv`: `X	proc	p.pc	4	direct	宣言		宣言 (proc)		X@p.pc:4	 char *p = "X";	utf-8	high`
+
+`tests/golden/cases/sql_direct/src/q.sql`:
+```sql
+SELECT * FROM t WHERE col = 'X';
+```
+`tests/golden/cases/sql_direct/input/X.grep`:
+```
+q.sql:1:SELECT * FROM t WHERE col = 'X';
+```
+期待 `expected/X.tsv`: `X	sql	q.sql	1	direct	比較		比較 (sql)		X@q.sql:1	SELECT * FROM t WHERE col = 'X';	utf-8	medium`
+
+`tests/golden/cases/shell_direct/src/run.sh`:
+```bash
+CODE="X"
+echo "$CODE"
+```
+`tests/golden/cases/shell_direct/input/CODE.grep`:
+```
+run.sh:1:CODE="X"
+```
+期待 `expected/CODE.tsv`: `CODE	shell	run.sh	1	direct	代入		代入 (shell)		CODE@run.sh:1	CODE="X"	utf-8	medium`
+
+`tests/golden/cases/encoding_utf8/src/jp.java`（UTF-8 日本語。utf-8 厳格経路で encoding=utf-8 が決定的に固定される）:
+```java
+class J {
+  static final String コード = "コード";
+}
+```
+`tests/golden/cases/encoding_utf8/input/コード.grep`:
+```
+jp.java:2:  static final String コード = "コード";
+```
+期待 `expected/コード.tsv`: `コード	java	jp.java	2	direct	宣言		宣言 (java)		コード@jp.java:2	  static final String コード = "コード";	utf-8	high`
+
+**期待TSVの確定手順（全ケース共通・spec §11「必ず git diff で目視レビューしてから regen」）**:
+```bash
+for c in java_direct c_direct proc_direct sql_direct shell_direct encoding_utf8; do
+  python -m grep_analyzer --input "tests/golden/cases/$c/input" \
+    --output "/tmp/g/$c" --source-root "tests/golden/cases/$c/src"
+done
+```
+生成された各 `/tmp/g/<case>/*.tsv` を上表の内容と目視照合し、一致を確認できたら `expected/` に配置（diagnostics.txt は expected に含めない＝conftest は `*.tsv` のみ照合）。差異があれば実装バグなので Task 該当箇所を修正してから確定する。
 
 - [ ] **Step 4: テストが通ることを確認**
 
