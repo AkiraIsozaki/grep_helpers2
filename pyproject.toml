@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grep_analyzer"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "tree-sitter==0.21.3",
+    "tree-sitter-java==0.21.0",
+    "tree-sitter-c==0.21.4",
+    "chardet==5.2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "perf: 性能ダッシュボード（非ゲート・CI停止しない。spec §11）",
+    "requires_ripgrep: 実ripgrepバイナリを要する隔離テスト（spec §11）",
+]
