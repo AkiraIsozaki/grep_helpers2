@@ -10,7 +10,10 @@
       "Bash(python -m pytest tests/ -q --tb=line)",
       "Skill(superpowers:brainstorming)",
       "WebSearch",
-      "Skill(superpowers:writing-plans)"
+      "Skill(superpowers:writing-plans)",
+      "Skill(superpowers:subagent-driven-development)",
+      "Skill(superpowers:test-driven-development)",
+      "Skill(superpowers:receiving-code-review)"
     ]
   }
 }
