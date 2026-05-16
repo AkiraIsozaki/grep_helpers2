@@ -126,3 +126,32 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 - **`pyahocorasick` 未検証**: spec §4.1 は必須依存に `pyahocorasick`（ネイティブ）を列挙するが、当 Task 0 の確定依存リスト（tree-sitter系＋chardet＋pytest）に含まれないため本ゲートでは wheel 実証していない。`pyahocorasick` を実際に使う後続フェーズ（多シンボル同時走査＝主にフェーズ2 §8.2）に着手する前に、同等の G1 相当検証（cp312・対象 platform の prebuilt wheel 取得可否、sdist-only の場合は §4.2 (a)/(b) 意思決定）を別途実施すること。フェーズ1（決定的コア）は tree-sitter＋chardet で完結するため本懸念は Task 1 着手をブロックしない。
 - `wheelhouse/` は未コミット（`.gitignore` 登録）。配備時は本書 Step 2 のコマンドでネット接続環境にて再生成し持ち込む運用。
 - 採用 platform タグは `manylinux_2_17_x86_64`（glibc 2.17+ 互換）。稼働先 glibc がこれ未満（極端に古い／musl）の場合は再検証が必要だが、稼働先想定「モダンLinux」では十分。
+
+---
+
+## Phase 1 完了記録（spec §15 フェーズ1）
+
+- 完了確認日 (UTC): 2026-05-16
+- コミット範囲: `3fb8595`（Task 1 雛形）..`HEAD`（Task 14 完了）
+- 全テスト結果: **43 passed**（unit / integration / golden / smoke すべて PASS。0 failed、0 error）
+
+### spec §15 フェーズ1 → 実装モジュール 対応表
+
+| spec §15 フェーズ1 要件 | 実装タスク | モジュール / テスト |
+|---|---|---|
+| **Ingest**（`input/*.grep` 読込） | Task 3 / Task 11 | `src/grep_analyzer/ingest.py` / `tests/unit/test_ingest.py` |
+| **grep行パース**（最左 `:<数字>:` 境界） | Task 3 | `src/grep_analyzer/ingest.py` / `tests/unit/test_ingest.py` |
+| **文字コード**（chardet + 決定的フォールバック鎖・落とさない） | Task 4 | `src/grep_analyzer/encoding.py` / `tests/unit/test_encoding.py` |
+| **言語ディスパッチ**（拡張子マップ + `EXEC SQL` ヒューリスティック + `--lang-map` 上書き） | Task 5 | `src/grep_analyzer/dispatch.py` / `tests/unit/test_dispatch.py` |
+| **分類器 - tree-sitter**（Java / C の AST 分類・confidence=high） | Task 8 | `src/grep_analyzer/classifiers/ts_classifier.py` / `tests/unit/test_ts_classifier.py` |
+| **分類器 - Pro\*C 行番号保存**（`EXEC SQL` 区間をプレースホルダ置換・行数不変） | Task 6 + Task 8 | `src/grep_analyzer/proc_preprocess.py` + `classifiers/ts_classifier.py` / `tests/unit/test_proc_preprocess.py` + `test_ts_classifier.py` |
+| **分類器 - SQL / Shell 正規表現**（confidence=medium） | Task 7 | `src/grep_analyzer/classifiers/regex_classifier.py` / `tests/unit/test_regex_classifier.py` |
+| **TSV スキーマ**（spec §9 列順・決定的全順序ソート・BOM 規則・原子的書込） | Task 2 + Task 10 | `src/grep_analyzer/model.py` + `tsv.py` / `tests/unit/test_model.py` + `test_tsv.py` |
+| **golden 基盤**（6 言語 × direct 代表ケース・完全一致回帰・`category_sub` 空固定） | Task 13 | `tests/golden/` 全体（6 ケース: java\_direct / c\_direct / proc\_direct / sql\_direct / shell\_direct / encoding\_utf8） |
+| **direct のみ完全決定性**（多ホップなし・golden が常に安定） | Tasks 1–13 全体 | パイプライン `pipeline.py`、全 unit/integration/golden テスト |
+
+### 補足事項
+
+- Task 12 で `src/grep_analyzer/__main__.py` と `cli.py` を実装。`python -m grep_analyzer --help` がパッケージング契約として smoke で検証済み（`tests/test_smoke.py`）。
+- Task 13 の実際のコミットメッセージは `test: golden基盤と6言語direct代表ケース`（golden コミット規約 `chore(golden): <理由>` と異なる）。既存 git 履歴は変更しない。**今後の golden 更新コミットは `chore(golden): <理由>` 形式を使用すること**（`.claude/skills/writing-tests.md` Golden 節の規約に準拠。`docs/superpowers/plans/2026-05-16-grep-analyzer-phase1.md` の Task 13 Step 5 例示コマンドを同規約に修正済み）。
+- **Phase 2 以降の着手前提**: `pyahocorasick`（多シンボル同時走査）の wheel 実証が未完了（G1 懸念・申し送り参照）。Phase 2 開始前に G1 相当の検証が必要。

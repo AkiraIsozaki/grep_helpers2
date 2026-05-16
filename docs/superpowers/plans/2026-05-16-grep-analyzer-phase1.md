@@ -1449,7 +1449,7 @@ Expected: PASS
 
 ```bash
 git add tests/golden/
-git commit -m "test: golden基盤とjava_direct代表ケース"
+git commit -m "chore(golden): golden基盤と6言語direct代表ケース"
 ```
 
 ---

@@ -117,6 +117,6 @@ description: テストの新規作成・修正時に適用する方針。pytest 
 ## Smoke (`tests/test_smoke.py`)
 
 - `import grep_analyzer` が通る
-- `python -m grep_analyzer.cli --help` が exit 0 を返す（packaging 契約。subprocess を許可する唯一の場所）
+- `python -m grep_analyzer --help` が exit 0 を返す（packaging 契約。subprocess を許可する唯一の場所）
 - tree-sitter バインディングと言語 grammar の **ABI 整合**（ロード成功）を確認（spec §4.1）
 - 以上。実走査は integration / golden に任せる
