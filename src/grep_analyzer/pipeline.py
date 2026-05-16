@@ -17,6 +17,8 @@ def _classify(language: str, file_text: str, lineno: int, content: str):
         return classify_ts(language, file_text, lineno)
     if language == "sql":
         return classify_sql(content)
+    # shell および未知言語は正規表現(shell)分類にフォールバック
+    # （Phase 2 で言語追加時は dispatch と本関数の両方を更新すること）
     return classify_shell(content)
 
 

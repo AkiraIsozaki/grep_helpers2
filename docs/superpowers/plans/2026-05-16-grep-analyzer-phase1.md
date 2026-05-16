@@ -1088,6 +1088,7 @@ def test_壊れたgrep行は捨てず診断に回る(tmp_path: Path):
     rc = run(input_dir=inp, output_dir=out, source_root=tmp_path / "src")
     assert rc == 0
     assert "bad_grep_line" in (out / "diagnostics.txt").read_text("utf-8")
+    assert (out / "K.tsv").exists()
 ```
 
 - [ ] **Step 2: 失敗を確認**
@@ -1118,6 +1119,8 @@ def _classify(language: str, file_text: str, lineno: int, content: str):
         return classify_ts(language, file_text, lineno)
     if language == "sql":
         return classify_sql(content)
+    # shell および未知言語は正規表現(shell)分類にフォールバック
+    # （Phase 2 で言語追加時は dispatch と本関数の両方を更新すること）
     return classify_shell(content)
 
 

@@ -42,3 +42,4 @@ def test_壊れたgrep行は捨てず診断に回る(tmp_path: Path):
     rc = run(input_dir=inp, output_dir=out, source_root=tmp_path / "src")
     assert rc == 0
     assert "bad_grep_line" in (out / "diagnostics.txt").read_text("utf-8")
+    assert (out / "K.tsv").exists()
