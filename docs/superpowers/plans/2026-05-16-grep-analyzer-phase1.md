@@ -790,6 +790,7 @@ _CATEGORY_BY_NODE = {
 
 
 def _parser(language: str) -> Parser:
+    # "proc" を含む非 Java 言語は tree-sitter-c で解析する（spec §7 Pro*C 前処理方式）。
     p = Parser()
     p.set_language(_JAVA if language == "java" else _C)
     return p
@@ -798,8 +799,8 @@ def _parser(language: str) -> Parser:
 def _node_at_line(root, lineno: int):
     """対象行（0始まり=lineno-1）を内包する最小ノードを決定的に返す。
 
-    同スパンの曖昧さを除くため、`(行スパン, start_byte)` の最小で一意に選ぶ
-    （走査順に依存しない・spec §9 決定性）。
+    同スパンの曖昧さを除くため、`(行スパン, start_byte, end_byte, ノード型)` の最小で
+    一意に選ぶ（走査順に依存しない決定的な全順序・spec §9 決定性）。
     """
     target = lineno - 1
     best = None
@@ -808,7 +809,7 @@ def _node_at_line(root, lineno: int):
     while cursor:
         node = cursor.pop()
         if node.start_point[0] <= target <= node.end_point[0]:
-            key = (node.end_point[0] - node.start_point[0], node.start_byte)
+            key = (node.end_point[0] - node.start_point[0], node.start_byte, node.end_byte, node.type)
             if best_key is None or key < best_key:
                 best, best_key = node, key
             cursor.extend(node.children)
