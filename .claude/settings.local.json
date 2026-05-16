@@ -9,7 +9,8 @@
       "Grep",
       "Bash(python -m pytest tests/ -q --tb=line)",
       "Skill(superpowers:brainstorming)",
-      "WebSearch"
+      "WebSearch",
+      "Skill(superpowers:writing-plans)"
     ]
   }
 }
