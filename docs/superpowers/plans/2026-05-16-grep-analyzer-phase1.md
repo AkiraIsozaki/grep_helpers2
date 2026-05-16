@@ -359,8 +359,9 @@ def test_どの厳格復号も不可ならlatin1置換で要確認になる(monk
     monkeypatch.setattr(
         "grep_analyzer.encoding.chardet.detect", lambda b: {"encoding": None}
     )
-    # \xff は utf-8 / cp932 / euc-jp すべてで不正 → latin-1 置換へ確定
-    text, enc, replaced = decode_bytes(b"\xff\xff\xff", DEFAULT_FALLBACK)
+    # 単独の \x81 は cp932/euc-jp の不完全リード byte かつ utf-8 不正 →
+    # latin-1 置換へ確定（注: \xff は Python の cp932 が PUA に写すため不可）
+    text, enc, replaced = decode_bytes(b"\x81", DEFAULT_FALLBACK)
     assert isinstance(text, str)
     assert enc == "latin-1"
     assert replaced is True
