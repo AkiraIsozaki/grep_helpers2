@@ -1,0 +1,2 @@
+run.csh:1:set CODE = "X"
+run.csh:2:if ( "$CODE" == "X" ) then

@@ -1,0 +1,2 @@
+o.sql:2:v_code := 'X';
+o.sql:3:SELECT DECODE(st,1,'OK','NG') FROM dual;

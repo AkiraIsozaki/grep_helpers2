@@ -1,0 +1,3 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+CODE	shell	run.csh	1	direct	代入		代入 (shell)		CODE@run.csh:1	set CODE = "X"	utf-8	medium
+CODE	shell	run.csh	2	direct	比較		比較 (shell)		CODE@run.csh:2	if ( "$CODE" == "X" ) then	utf-8	medium
