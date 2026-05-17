@@ -271,3 +271,15 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 - Phase 3: 60GB perf ベースライン、`--resume`、diagnostics 縮約（§10.3）、規模分割 `<keyword>.partNN.tsv`（§9）、`requirements.lock`（§4.1・ユーザ決定）、`--output-encoding`/`--encoding-fallback`/`--use-ripgrep`/`--memory-limit`/`--progress`。
 - Phase 2a 既知境界: 字句正規表現抽出（型解決なし＝§8.3 前提）、ASCII 識別子前提（`encoding_utf8` 非ASCII非追跡）、意味的同一性は human 判断（§8.4・intro＋is_seed で偽直結/自己汚染排除）、マスク非対称（抽出=マスク／走査=raw・§7+§8 根拠）、getter 報告量 vs PRD は `--stoplist`/`min-specificity`＋2b で緩和。
 - 成果物: 「direct＋多ホップ indirect を偽陽性抑止しつつ `--jobs` 並列でも完全決定的に出し、chain 複数経路を真ダイヤモンド golden で固定した動くツール」。単体でテスト可能・出荷可能。
+
+---
+
+## Phase 2b 着手ゲート記録
+
+- 検証日 (UTC): 2026-05-17 05:24:59 UTC
+- 検証者: Claude Code（Phase 2b 着手ゲート Task 0）
+- **Step 1**: `python -m pytest -q` → **130 passed**（0 failed / 0 error）。Phase 2a ベースライン全緑確認。
+- **Step 2**: Phase 2a 完了記録の存在確認 → `grep -nF '## Phase 2a 完了記録'` → 1 行ヒット（243行目）。spec §15 フェーズ2a 完了済。
+- **Step 3**: ripgrep 任意性確認 → `shutil.which('rg')` = `None`（本環境 rg 不在）。ripgrep は任意（`--use-ripgrep` 任意・既定無効・`requires_ripgrep` 隔離）。新規必須依存なし。
+  - 注: rg 不在環境では ripgrep 経路テスト skip（CI 等 rg 実体のある環境で `pytest -m requires_ripgrep` を別途必ず実行が Task 11 受入条件）。
+- **判定: PASS**（Phase 2a 緑 ＋ ripgrep 任意確認 ＋ 新規必須依存なし）。Phase 2b Task 1 以降へ着手可。
