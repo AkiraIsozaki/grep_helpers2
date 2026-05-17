@@ -19,14 +19,17 @@ def is_complete(out_dir: Path, keyword: str, opts) -> bool:
         return False
     enc = m.get("encoding", "utf-8-sig")
     data_rows: list[str] = []
-    for part in m.get("parts", []):
-        f = out_dir / part["name"]
-        if not f.is_file():                                   # 条件2
-            return False
-        rows = _rows_from_part_text(f.read_text(enc))
-        if len(rows) != part.get("rows"):                     # 条件3
-            return False
-        data_rows += rows
+    try:
+        for part in m.get("parts", []):
+            f = out_dir / part["name"]
+            if not f.is_file():                                   # 条件2
+                return False
+            rows = _rows_from_part_text(f.read_text(enc))
+            if len(rows) != part.get("rows"):                     # 条件3
+                return False
+            data_rows += rows
+    except (KeyError, TypeError, UnicodeDecodeError, OSError):
+        return False
     sha = hashlib.sha256(_blob_from_data_rows(data_rows)).hexdigest()
     if sha != m.get("data_sha256"):                           # 条件4（書込側と同一関数）
         return False

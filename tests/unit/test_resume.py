@@ -56,3 +56,19 @@ def test_utf8sig_複数part_行数保存改竄で未完了_BOM再構成経路(tm
     p = tmp_path / "K.part02.tsv"
     p.write_bytes(p.read_bytes().replace(b"s3", b"sZ", 1))  # 行数不変
     assert resume.is_complete(tmp_path, "K", _opts()) is False
+
+
+def test_name欠落manifestは未完了(tmp_path):
+    finalize(tmp_path, "K", _mk(2), _opts())
+    m = json.loads((tmp_path / "K.manifest.json").read_text("utf-8"))
+    m["parts"] = [{"rows": 2}]   # "name" キーを意図的に欠落させる
+    (tmp_path / "K.manifest.json").write_text(
+        json.dumps(m, sort_keys=True, separators=(",", ":")), "utf-8")
+    assert resume.is_complete(tmp_path, "K", _opts()) is False
+
+
+def test_part不正バイトで復号失敗は未完了(tmp_path):
+    finalize(tmp_path, "K", _mk(2), _opts())
+    # utf-8-sig（既定）では無効なバイト列で UnicodeDecodeError を起こす
+    (tmp_path / "K.tsv").write_bytes(b"\xff\xfe\xff\xfe")
+    assert resume.is_complete(tmp_path, "K", _opts()) is False
