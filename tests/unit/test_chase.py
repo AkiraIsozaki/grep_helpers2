@@ -41,3 +41,72 @@ def test_Oracleのトリガ相関名とレコードフィールドはv1既知境
     assert extract_var_symbols("sql", "", ":new.col := 1") == ["col"]
     assert extract_var_symbols("sql", "", ":old.col := 1") == ["col"]
     assert extract_var_symbols("sql", "", "rec.field := 1") == ["field"]
+
+
+from grep_analyzer.chase import ChaseSymbols, extract_chase_symbols, mask_literals
+
+
+def test_文字列とコメントをマスクし行長を保つ():
+    src = 'String s = "x=1"; // y=2'
+    out = mask_literals("java", src)
+    assert out == 'String s =      ;       '   # "x=1"=5字→空白5, // y=2=6字→空白6
+    assert len(out) == len(src) == 24
+    assert len(mask_literals("c", 'a=1; /* z=9 */ b=2')) == len('a=1; /* z=9 */ b=2')
+
+
+def test_文字列内の代入様字句は追跡シンボルにしない():
+    cs = extract_chase_symbols("java", "", 'String s = "url=/x"; int n = 1;')
+    assert "url" not in cs.vars and cs.vars == ("s", "n")
+
+
+def test_Java定数はstaticかつfinalのみでgenericと配列を許容する():
+    assert extract_chase_symbols(
+        "java", "", "private static final Map<String, Integer> CODE_MAP = init();"
+    ).constants == ("CODE_MAP",)
+    assert extract_chase_symbols("java", "", "static final int[] CODES = a;").constants == ("CODES",)
+    cs = extract_chase_symbols("java", "", "final int X = 1;")
+    assert cs.constants == () and cs.vars == ("X",)
+    assert extract_chase_symbols("java", "", "public static int Y = 1;").constants == ()
+
+
+def test_Javaのgetterとsetterとvarをマスクのうえ分類抽出する():
+    cs = extract_chase_symbols("java", "", "int count = svc.getName(); obj.setValue(count);")
+    assert cs.vars == ("count",)
+    assert cs.getters == ("getName",) and cs.setters == ("setValue",)
+
+
+def test_C定義とconst定数を抽出しProCホスト変数は追跡投入しない():
+    assert extract_chase_symbols("c", "", "#define MAX_LEN 10").constants == ("MAX_LEN",)
+    assert extract_chase_symbols("c", "", "const int FOO = 1;").constants == ("FOO",)
+    assert extract_chase_symbols("c", "", "int n = 3;").vars == ("n",)
+    # spec §8.1 手順1（8c21227 で本体明確化）: Pro*C ホスト変数 :host は
+    # 外部・ホスト境界＝追跡投入しない。手順5 は停止性の字句形のみで投入是非でない。
+    cs = extract_chase_symbols("proc", "", "EXEC SQL SELECT c INTO :host FROM t;")
+    assert "host" not in cs.vars and cs.vars == () and cs.constants == ()
+
+
+def test_ref_kind言語表の禁止セルは空を返す():
+    # spec §9 ref_kind×言語表の `—` セルを負の契約で固定（将来改修の回帰防御）。
+    pc = extract_chase_symbols("proc", "", "int n = 3; #define M 1")
+    assert pc.getters == () and pc.setters == ()                 # C/Pro*C: getter/setter 無
+    sq = extract_chase_symbols("sql", "", "v := 1;")
+    assert sq.constants == () and sq.getters == () and sq.setters == ()  # SQL: const/getter/setter 無
+    cs = extract_chase_symbols("shell", "cshell", "set CODE = 1")
+    assert cs.constants == () and cs.getters == () and cs.setters == ()  # cshell: const 無
+    bo = extract_chase_symbols("shell", "bourne", 'NAME="x"')
+    assert bo.constants == () and bo.getters == () and bo.setters == ()  # bourne 非readonly: const 無
+
+
+def test_bourneのreadonlyは定数SQLとcshellはvarのみ():
+    assert extract_chase_symbols("shell", "bourne", "readonly CODE=1").constants == ("CODE",)
+    assert extract_chase_symbols("shell", "bourne", 'NAME="x"').vars == ("NAME",)
+    cs = extract_chase_symbols("sql", "", "v_code := 'X';")
+    assert cs.vars == ("v_code",) and cs.getters == () and cs.constants == ()
+    assert extract_chase_symbols("shell", "cshell", "set CODE = 1").vars == ("CODE",)
+
+
+def test_var抽出は既存extract_var_symbolsと一致する():
+    from grep_analyzer.chase import extract_var_symbols
+    line = 'CODE="X"'
+    assert list(extract_chase_symbols("shell", "bourne", line).vars) == extract_var_symbols(
+        "shell", "bourne", line)
