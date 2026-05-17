@@ -225,3 +225,15 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 - `wheelhouse/` に `pyahocorasick-2.1.0-…whl` を集約済み（Phase 0 G1 の他 wheel と同居）。`.gitignore` 登録のため**未コミット**（Phase 0 G1 と同一運用＝配備時はネット接続環境で再生成し持ち込み）。
 - 採用 platform タグは Phase 0 G1 と統一の `manylinux_2_17_x86_64`（glibc 2.17+ 互換）。稼働先想定「モダンLinux」（glibc 2.36 実測）で十分。
 - **spec-vs-実装ギャップ（Phase 2 非ブロッカー・要追認）**: spec §4.1 は「`requirements.lock` で版/ハッシュ固定」を規定するが当該ファイルは未作成（Phase 0/1/1.5 を通じ未整備。実際のピンは `pip download` の明示 `==` ＋ wheelhouse 内容で担保）。spec §15 フェーズ2 の明示着手前提は「pyahocorasick の G1 相当 wheel 実証」であり `requirements.lock` 整備ではないため本ゲートはブロックしないが、配備正式化（ハッシュ固定の供給網完全性）には別途整備が必要。Phase 2 計画化時にスコープ判断する。
+
+---
+
+## Phase 2a 着手ゲート記録
+
+- 記録日 (UTC): 2026-05-17
+- 検証者: Claude Code（Phase 2a 実装 Task 0）
+- Step1: `python -m pytest -q` → **78 passed**（0 failed / 0 error。Phase 1.5 ベースライン緑）
+- Step2: `grep -nF 'G1 相当判定: **PASS**'` → 1 行ヒット（本書「Phase 2 着手ゲート（pyahocorasick G1 相当）記録」PASS。spec §4.2 充足）
+- Step3: `pyahocorasick 2.1.0` import 可（現環境）
+- 判定: **PASS**（Phase 1.5 緑 ＋ pyahocorasick G1 PASS。spec §15 フェーズ2 着手前提充足。Task 1 以降へ着手可）
+- 注: `requirements.lock`（spec §4.1）は Phase 3 へ送る（ユーザ決定）。`--memory-limit`/オートマトン分割/`ripgrep`/経路爆発 degrade は Phase 2b。spec §9 は `07e81bb`、§8.1 手順5 は `8c21227` で明確化済（Phase 2a 計画 v4 の入力）。
