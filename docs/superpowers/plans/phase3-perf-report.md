@@ -54,16 +54,25 @@ CALIB peak_bytes=1612149 max_items=200000 bytes_per_item=8.1 ITEMS_PER_MB=130084
 ```
 bytes_per_item = peak_bytes / max_items
              = 1612149 / 200000
-             = 8.06...  ≈ 8.1
+             = 8.060745...
 
 items_per_mb  = floor(1_048_576 / max(1.0, bytes_per_item))
-             = floor(1_048_576 / 8.1)
+             = floor(1_048_576 / 8.060745...)
              = 130084 (整数)
 ```
 
+注: `CALIB` 行が出力する `bytes_per_item=8.1` はテストの `f"bytes_per_item={bytes_per_item:.1f}"` による
+表示丸め（小数点以下1桁）であり、コードは丸め前の浮動小数点値をそのまま使用する。
+丸め後の `8.1` で再計算すると `floor(1_048_576 / 8.1) = 129453` となり実際の採用値と一致しない。
+権威ある入力は `peak_bytes=1612149`・`max_items=200000` の2値であり、`8.1` は表示専用の値。
+
 `tracemalloc.get_traced_memory()` のピーク値（peak）を使用。
 `estimate_items` スパイは 21 回呼ばれ（`seen` 非空確認済み）、max(seen) = 200000 を
-`max_items` として採用。
+`max_items` として採用。この `max_items=200000` は corpus の実追跡シンボル数ではなく、
+最初の `_apply_global_cap` 呼出における
+`estimate_items(n_symbols=max_symbols, n_edges=0, n_intro=max_symbols)` の結果
+（`max_symbols=100000` 既定 → 100000+0+100000=200000）であり、
+シンボルキャップに由来する較正基準点である。
 
 ### 採用値
 

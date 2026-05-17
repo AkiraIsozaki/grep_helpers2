@@ -402,7 +402,10 @@ CALIB peak_bytes=1612149 max_items=200000 bytes_per_item=8.1 ITEMS_PER_MB=130084
 ```
 
 - 計測: corpus_gen seed=7 n_files=600、`--memory-limit 100000`（budget 経路有効化）
-- 公式: `floor(1_048_576 / max(1.0, bytes_per_item))` = `floor(1_048_576 / 8.1)` = 130084
+- 公式: `bytes_per_item = peak_bytes / max_items = 1612149 / 200000 = 8.060745...`
+  → `items_per_mb = floor(1_048_576 / max(1.0, bytes_per_item)) = floor(1_048_576 / 8.060745...) = 130084`
+- 注: `CALIB` 行の `bytes_per_item=8.1` はテスト出力の `:.1f` 表示丸めであり、`floor(1_048_576 / 8.1) = 129453` と採用値は一致しない。権威ある入力は `peak_bytes=1612149`・`max_items=200000` の2値。
+- `max_items=200000` は corpus の実追跡シンボル数ではなく、最初の `_apply_global_cap` 呼出における `estimate_items(n_symbols=max_symbols, n_edges=0, n_intro=max_symbols)`（`max_symbols=100000` 既定 → 100000+0+100000=200000）に由来する較正基準点。
 - 採用: `src/grep_analyzer/budget.py:9` → `_ITEMS_PER_MB = 130084`（較正前 4096）
 - tracemalloc peak を利用。estimate_items スパイ 21 回呼出。`assert seen` 安全弁（0回なら FAIL）
 
