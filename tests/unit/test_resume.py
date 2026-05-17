@@ -50,6 +50,14 @@ def test_破損manifestは未完了(tmp_path):
     assert resume.is_complete(tmp_path, "K", _opts()) is False
 
 
+def test_valid_json非dict_manifestは未完了_例外送出しない(tmp_path):
+    finalize(tmp_path, "K", _mk(2), _opts())
+    # 有効JSONだが dict でない（[] / 123 / "x" / null / true 等の破損形）
+    for bad in ("[]", "123", '"x"', "null", "true"):
+        (tmp_path / "K.manifest.json").write_text(bad, "utf-8")
+        assert resume.is_complete(tmp_path, "K", _opts()) is False
+
+
 def test_utf8sig_複数part_行数保存改竄で未完了_BOM再構成経路(tmp_path):
     # utf-8-sig × 2part の再構成（各 part BOM/ヘッダ除去）が data_sha256 と
     # 同一関数で照合されること＝書込側/完了判定側の正規形一致を踏む。

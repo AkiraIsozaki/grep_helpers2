@@ -17,6 +17,8 @@ def is_complete(out_dir: Path, keyword: str, opts) -> bool:
         m = json.loads(mpath.read_text("utf-8"))
     except (ValueError, OSError):
         return False
+    if not isinstance(m, dict):                                # valid JSON だが dict でない破損形（spec §6）
+        return False
     enc = m.get("encoding", "utf-8-sig")
     data_rows: list[str] = []
     try:
