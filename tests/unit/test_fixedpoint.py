@@ -10,7 +10,9 @@ from grep_analyzer.model import Hit
 def _opts(**kw):
     base = dict(max_depth=5, min_specificity=2, stoplist_path=None, lang_map={},
                 include=[], exclude=[], jobs=1, follow_symlinks=False,
-                max_file_bytes=1_000_000, max_symbols=1000, max_paths=100)
+                max_file_bytes=1_000_000, max_symbols=1000, max_paths=100,
+                memory_limit_mb=None, use_ripgrep=False, max_passes=8,
+                progress="off", spill_dir=None, force_chunks=0)
     base.update(kw)
     return EngineOptions(**base)
 
@@ -154,3 +156,48 @@ def test_事前収集filesでも内部walkと同一(tmp_path):
     b = run_fixedpoint([seed], src, _opts(), Diagnostics(), files=files)
     k = lambda h: (h.file, h.lineno, h.ref_kind, h.via_symbol, h.chain)
     assert a and sorted(map(k, a)) == sorted(map(k, b))
+
+
+def test_memory_limit_Noneは無制限でPhase2aと同一_priority1不変(tmp_path):
+    src = _mk(tmp_path, {"A.java": "class A{ static final int K1 = 1; }\n",
+                         "B.java": "class B{ static final int K2 = K1; }\n",
+                         "C.java": "class C{ int z2 = K2; }\n"})
+    seed = _seed("K1", "java", "A.java", 1, "static final int K1 = 1;")
+    chains = {(h.file, h.via_symbol): h.chain
+              for h in run_fixedpoint([seed], src,
+                                      _opts(memory_limit_mb=None), Diagnostics())}
+    assert chains[("C.java", "K2")] == "K1@A.java:1 -> K1@B.java:1 -> K2@C.java:1"
+
+
+def test_max_symbolsキャップは従来通り出力変更_priority1常設(tmp_path):
+    src = _mk(tmp_path, {"A.java": "class A{ int aa=bb; int bb=cc; int cc=1; }\n",
+                         "B.java": "class B{ int zz=aa; }\n"})
+    seed = _seed("aa", "java", "A.java", 1, "int aa=bb;")
+    diag = Diagnostics()
+    run_fixedpoint([seed], src, _opts(min_specificity=1, max_symbols=1), diag)
+    assert "symbol_rejected\tcapped" in diag.render()
+
+
+def test_memory_limit0はpriority1で決定的に切り捨て全件記録_directは不変(tmp_path):
+    src = _mk(tmp_path, {"C.java": 'class C { static final String S_OK = "x"; }\n',
+                         "U.java": "class U { String x = S_OK; }\n"})
+    seed = _seed("S_OK", "java", "C.java", 1, 'static final String S_OK = "x";')
+    base = run_fixedpoint([seed], src, _opts(), Diagnostics())
+    diag = Diagnostics()
+    deg = run_fixedpoint([seed], src,
+                         _opts(memory_limit_mb=0, spill_dir=tmp_path), diag)
+    assert "symbol_rejected\tcapped" in diag.render()      # priority-1 連動発火・全件
+    assert deg == [] and base                              # memory0=keep0 で indirect 全切り
+    # direct は fixedpoint の責務外＝呼出側 pipeline 不変（本 unit は indirect のみ検証）
+
+
+def test_memory_limit0は2回実行で決定的(tmp_path):
+    src = _mk(tmp_path, {"A.java": "class A{ static final int K1=1; }\n",
+                         "B.java": "class B{ static final int K2=K1; }\n"})
+    seed = _seed("K1", "java", "A.java", 1, "static final int K1=1;")
+    k = lambda hs: sorted((h.file, h.via_symbol, h.chain) for h in hs)
+    r1 = run_fixedpoint([seed], src, _opts(memory_limit_mb=0, spill_dir=tmp_path),
+                        Diagnostics())
+    r2 = run_fixedpoint([seed], src, _opts(memory_limit_mb=0, spill_dir=tmp_path),
+                        Diagnostics())
+    assert k(r1) == k(r2)
