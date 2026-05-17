@@ -118,3 +118,39 @@ def test_max_depth0は間接を出さずprov_max_depthを記録(tmp_path):
     diag = Diagnostics()
     assert run_fixedpoint([seed], src, _opts(max_depth=0), diag) == []
     assert "prov_max_depth" in diag.render()
+
+
+def test_ストリーミング化後も多ホップ出力はPhase2aと同一(tmp_path):
+    src = _mk(tmp_path, {"A.java": "class A{ static final int K1 = 1; }\n",
+                         "B.java": "class B{ static final int K2 = K1; }\n",
+                         "C.java": "class C{ int z2 = K2; }\n"})
+    seed = _seed("K1", "java", "A.java", 1, "static final int K1 = 1;")
+    chains = {(h.file, h.via_symbol): h.chain
+              for h in run_fixedpoint([seed], src, _opts(), Diagnostics())}
+    assert chains[("B.java", "K1")] == "K1@A.java:1 -> K1@B.java:1"
+    assert chains[("C.java", "K2")] == "K1@A.java:1 -> K1@B.java:1 -> K2@C.java:1"
+
+
+def test_多行構文の分類が確定全文読みでPhase2aと同一(tmp_path):
+    src = _mk(tmp_path, {
+        "A.java": "class A{ static final int K1 = 1; }\n",
+        "B.java": "class B {\n  void m(int s) {\n    if (s ==\n        K1) {\n"
+                  "      return;\n    }\n  }\n}\n"})
+    seed = _seed("K1", "java", "A.java", 1, "static final int K1 = 1;")
+    hits = run_fixedpoint([seed], src, _opts(), Diagnostics())
+    b = next(h for h in hits if h.file == "B.java")
+    assert b.category == "比較" and b.confidence == "high"
+
+
+def test_事前収集filesでも内部walkと同一(tmp_path):
+    from grep_analyzer.walk import DEFAULT_EXCLUDE, collect_files
+    src = _mk(tmp_path, {"C.java": 'class C { static final String S_OK = "x"; }\n',
+                         "U.java": "class U { String x = S_OK; }\n"})
+    seed = _seed("S_OK", "java", "C.java", 1, 'static final String S_OK = "x";')
+    a = run_fixedpoint([seed], src, _opts(), Diagnostics())
+    files = collect_files(src, include=[], exclude=list(DEFAULT_EXCLUDE),
+                          follow_symlinks=False, max_file_bytes=1_000_000,
+                          diag=Diagnostics())
+    b = run_fixedpoint([seed], src, _opts(), Diagnostics(), files=files)
+    k = lambda h: (h.file, h.lineno, h.ref_kind, h.via_symbol, h.chain)
+    assert a and sorted(map(k, a)) == sorted(map(k, b))

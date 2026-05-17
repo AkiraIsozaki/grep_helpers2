@@ -55,14 +55,16 @@ def _file_meta(rel: str, raw: bytes, lang_map: dict[str, str]):
 
 
 def _scan_file(args):
-    """1 ファイルを走査しヒット素片を返す純関数（並列ワーカ・picklable のみ）。
+    """1 ファイルをワーカ内で読み走査しヒット素片を返す純関数。
 
-    automaton 走査は raw 行（spec 解釈の明示・マスク非対称根拠）。
+    ストリーミング化＝親に bytes 非常駐・abspath から読む（spec §8.2）。
+    automaton 走査は raw 行。出力は Phase 2a と byte 不変。
     """
-    rel, raw, sym_list, lang_map = args
+    rel, abspath, sym_list, lang_map = args
+    raw = Path(abspath).read_bytes()
     text, enc, replaced, language, dialect = _file_meta(rel, raw, lang_map)
     au = automaton.build(sym_list)
-    found = []  # (sym, lineno, line)
+    found = []
     if au is not None:
         for i, line in enumerate(text.split("\n"), start=1):
             for sym in automaton.scan_line(au, line):
@@ -82,9 +84,13 @@ def _kinds_of(language: str, dialect: str, line: str) -> dict[str, str]:
 
 
 def run_fixedpoint(
-    seed_hits: list[Hit], source_root: Path, opts: EngineOptions, diag: Diagnostics
+    seed_hits: list[Hit], source_root: Path, opts: EngineOptions, diag: Diagnostics,
+    *, files=None
 ) -> list[Hit]:
-    """seed から不動点まで多ホップ追跡し indirect Hit を決定的に返す（spec §8.1）。"""
+    """seed から不動点まで多ホップ追跡し indirect Hit を決定的に返す（spec §8.1）。
+
+    files 指定時は内部 walk を省き事前収集 (rel, abspath) 列を使う（同値）。
+    """
     source_root = Path(source_root)
     policy = SymbolPolicy(opts.min_specificity, load_stoplist(opts.stoplist_path))
     graph = ProvenanceGraph()
@@ -154,12 +160,12 @@ def run_fixedpoint(
             lang, dia = s.language, "bourne"
         _ingest(occ, lang, dia, s.snippet, hop=1, is_seed=True)
 
-    files: list[tuple[str, bytes]] = [
-        (rel, abspath.read_bytes())
-        for rel, abspath in walk.walk_files(
+    if files is None:
+        files = list(walk.walk_files(
             source_root, include=opts.include, exclude=opts.exclude,
             follow_symlinks=opts.follow_symlinks,
-            max_file_bytes=opts.max_file_bytes, diag=diag)]
+            max_file_bytes=opts.max_file_bytes, diag=diag))
+    rel_to_abs = {rel: abspath for rel, abspath in files}
 
     def _apply_global_cap():
         live = sorted(chase_active | chase_done | term_active | term_done,
@@ -186,7 +192,7 @@ def run_fixedpoint(
         term_active = set()
         if not scan_syms or hop > opts.max_depth:
             break
-        args = [(rel, raw, scan_syms, opts.lang_map) for rel, raw in files]
+        args = [(rel, str(abspath), scan_syms, opts.lang_map) for rel, abspath in files]
         if opts.jobs > 1:
             with multiprocessing.Pool(opts.jobs) as pool:
                 results = pool.map(_scan_file, args)
@@ -220,15 +226,14 @@ def run_fixedpoint(
     seen: set[Occurrence] = set()
     line_cache: dict[str, list[str]] = {}
     meta_of: dict[str, tuple[str, str, str]] = {}
-    raw_of = dict(files)
     for _, c in sorted(set(edges)):
         if c in seen or c.symbol not in (chase_done | term_done):
             continue
         if graph.is_seed_location(c.relpath, c.lineno):
-            continue  # direct 既出
+            continue
         seen.add(c)
         if c.relpath not in line_cache:
-            raw = raw_of.get(c.relpath, b"")
+            raw = rel_to_abs[c.relpath].read_bytes() if c.relpath in rel_to_abs else b""
             text, enc, replaced, lang, dia = _file_meta(c.relpath, raw, opts.lang_map)
             line_cache[c.relpath] = text.split("\n")
             meta_of[c.relpath] = (text, lang, dia)
@@ -239,7 +244,7 @@ def run_fixedpoint(
         kind = sym_kind.get(c.symbol, "var")
         cat, conf = classify_hit(language, dialect, text, c.lineno, line)
         if kind in ("getter", "setter"):
-            conf = "low"  # spec §8.4 型解決不能 getter/setter は全件 low
+            conf = "low"
         enc, replaced = enc_of.get(c.relpath, ("utf-8", False))
         for chain in graph.chains_to(c, max_depth=opts.max_depth,
                                      max_paths=opts.max_paths, diag=diag):
