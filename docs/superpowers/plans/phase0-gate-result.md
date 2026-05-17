@@ -283,3 +283,56 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 - **Step 3**: ripgrep 任意性確認 → `shutil.which('rg')` = `None`（本環境 rg 不在）。ripgrep は任意（`--use-ripgrep` 任意・既定無効・`requires_ripgrep` 隔離）。新規必須依存なし。
   - 注: rg 不在環境では ripgrep 経路テスト skip（CI 等 rg 実体のある環境で `pytest -m requires_ripgrep` を別途必ず実行が Task 11 受入条件）。
 - **判定: PASS**（Phase 2a 緑 ＋ ripgrep 任意確認 ＋ 新規必須依存なし）。Phase 2b Task 1 以降へ着手可。
+
+---
+
+## Phase 2b 完了記録（spec §15 フェーズ2 のうち 2b 範囲）
+
+- 完了日 (UTC): 2026-05-17 06:20:20 UTC
+- コミット範囲: `41fa1b7`（Task0 着手ゲート）..`c39cfad`（Task10 不変条件契約）の **11 コミット**（gate / budget 50f261d / spill 979ad4f / ripgrep 7627853 / progress 7633b05 / walk 6849937 / Task6 ストリーミング ba204b0 / Task7 degrade p1+p2 24cb02c / Task8 分割 6baf05c / Task9 配線 661a628 / Task10 契約 c39cfad）。本 Task11 完了記録コミットを末尾に追加。なお計画 v5 改訂コミット `ebbda1f` は実装前のプラン改訂（4巡目レビュー反映）で実装範囲外。
+- 全テスト結果: **163 passed, 4 skipped**（Phase 2a ベースライン 130 + Phase 2b 追加 33 passed + 4 skipped）、0 failed / 0 error。
+  - `python -m pytest -q` → 集計行: `163 passed, 4 skipped in 1.65s`
+  - `python -m grep_analyzer --help` → exit 0
+  - `python -m pytest tests/golden -q` → 14 passed（不変）
+- 4 skipped は全て `@pytest.mark.requires_ripgrep`（`tests/unit/test_ripgrep.py` 3本 + `tests/integration/test_phase2b_invariants.py` 1本）。本環境は `shutil.which('rg')` = None（rg 不在）。
+
+### spec §8.2 L164／Inv 充足チェックリスト対応表
+
+- §8.2 ストリーミング走査（bytes 親非常駐・確定全文1回読み＝C1根治）→ Task6
+- §8.2 walk 一回化（重複解消・複数kw決定性・§8.4全件性は kw 毎独立で不変）→ Task5/9/10
+- §8.2 任意 ripgrep（walk 上位集合・-a でバイナリ境界統一）→ Task3/9/10（rg 環境受入）
+- §8.2 L164 priority-1（§8.3 切り捨て＝唯一の出力変更・max_symbols常設＋--memory-limit連動）→ Task7
+- §8.2 L164 priority-2 来歴スピル（生存集合に出力透過）→ Task2/7（graph_spilled）
+- §8.2 L164 最終手段オートマトン分割多パス（出力透過＝C2根治）+ --max-passes 上限・実パス数診断 → Task8（automaton_split）
+- §8.2 --progress 標準エラー進捗 → Task4/9
+
+### Inv-1〜4 充足の明記
+
+- Inv-1（既定 byte 不変）: `--memory-limit=None` で既存 golden 14・既存 130 byte 完全不変
+- Inv-2（priority-1 のみ出力変更で決定的記録）: `--memory-limit` 超過で indirect 決定的減。priority-2/分割透過・出力変更なし
+- Inv-3（jobs/memory/ripgrep/複数kw 決定性）: `--memory-limit` 値や `--jobs`・ripgrep 有無等で「出力シンボル集合が変動しうる」が集合内の記録（相対順序含む）は完全決定的
+- Inv-4（複数 kw diagnostics 決定性）: 複数 kw walk 重複 dedup の意図変化は spec 仕様・出力 TSV/終了コード/diagnostics（sum）に無影響。個別kw diagnostics も同規則
+
+### rg 環境受入の状態
+
+本環境は rg 不在のため `requires_ripgrep` 4本 skip。**受入条件未充足の申し送り**＝`shutil.which('rg')` が None でない環境（CI 等）で `pytest -m requires_ripgrep` を別途実行し全 PASS を確認・記録すること（Phase 2b 既知境界・Task0/Task11 受入条件）。
+
+### レビュー経緯
+
+計画 v1→v5（4巡の独立3並行批判的レビュー：spec適合/アルゴリズム決定性/TDD実行可能性。v5 で 4巡目の Critical1/High2＝fixedpoint連鎖パッチ置換範囲一意化を根治、5巡目で収束確認）。subagent-driven-development で Task0→11 実装、Task6/7/8/9 は各々 spec準拠レビュー＋コード品質レビューの2段 APPROVED。
+
+### レビューで確認した既知 Minor（非ブロッカー・計画 verbatim 由来）
+
+- Task8 nchunks-grow の off-by-one：best-effort degrade のチャンク数推定がやや少なめになり得るが byte 不変性・決定性に無影響＝spec §9 決定性優先・実バイト厳密化は Phase 3
+- Task8 テスト名 `test_memory_limit0は分割スピル切り捨て併発でも…`：memory0 で keep=0→scan_syms 空となり分割不発火だがアサート（2回実行決定性）は有効
+- 可読性 Minor：`keep` 変数名重複等。計画の収束済 verbatim 仕様由来で実害なし
+
+### Phase 3 申し送り（計画「Phase 2b の境界」節準拠）
+
+- 60GB perf ベースライン
+- 近似 budget の実バイト厳密化
+- `--resume` 機能
+- diagnostics §10.3 縮約
+- 規模分割 `<keyword>.partNN.tsv`
+- `requirements.lock` 整備
+- `--output-encoding` / `--encoding-fallback`
