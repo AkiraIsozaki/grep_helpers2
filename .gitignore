@@ -1,5 +1,5 @@
-# オフライン配備用 wheel 群（ローカル生成・コミット対象外。phase0-gate-result.md に再現手順記録）
-wheelhouse/
+# wheelhouse/ はクローン即オフライン再現のため Git にコミットする
+# （方針改訂 2026-05-17。再生成手順は phase0-gate-result.md / README.md）
 
 # Python
 __pycache__/
