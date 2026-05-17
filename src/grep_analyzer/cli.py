@@ -17,8 +17,8 @@ def _parse_lang_map(spec: str | None) -> dict[str, str]:
     return out
 
 
-def main(argv: list[str] | None = None) -> int:
-    """引数をパースし direct＋不動点パイプラインを実行する（spec §10.4）。"""
+def _make_parser() -> argparse.ArgumentParser:
+    """共通 ArgumentParser を組み立てて返す。"""
     p = argparse.ArgumentParser(prog="grep_analyzer")
     p.add_argument("--input", required=True)
     p.add_argument("--output", required=True)
@@ -38,8 +38,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--use-ripgrep", action="store_true", dest="use_ripgrep")
     p.add_argument("--max-passes", type=int, default=8, dest="max_passes")
     p.add_argument("--progress", default="off")
-    args = p.parse_args(argv)
-    opts = EngineOptions(
+    p.add_argument("--resume", action="store_true")
+    p.add_argument("--output-encoding", default="utf-8-sig", dest="output_encoding")
+    p.add_argument("--encoding-fallback", default="cp932,euc-jp,latin-1",
+                   dest="encoding_fallback")
+    p.add_argument("--max-rows-per-part", type=int, default=1_048_575,
+                   dest="max_rows_per_part")
+    p.add_argument("--diagnostics-detail-limit", type=int, default=1000,
+                   dest="diagnostics_detail_limit")
+    return p
+
+
+def _opts_from(args: argparse.Namespace) -> EngineOptions:
+    """parse 済み Namespace から EngineOptions を生成する。"""
+    return EngineOptions(
         max_depth=args.max_depth, min_specificity=args.min_specificity,
         stoplist_path=Path(args.stoplist) if args.stoplist else None,
         lang_map=_parse_lang_map(args.lang_map), include=args.include,
@@ -49,6 +61,24 @@ def main(argv: list[str] | None = None) -> int:
         max_paths=args.max_paths,
         memory_limit_mb=args.memory_limit_mb, use_ripgrep=args.use_ripgrep,
         max_passes=args.max_passes, progress=args.progress,
+        resume=args.resume,
+        output_encoding=args.output_encoding,
+        encoding_fallback=tuple(
+            s for s in args.encoding_fallback.split(",") if s),
+        max_rows_per_part=args.max_rows_per_part,
+        diagnostics_detail_limit=args.diagnostics_detail_limit,
     )
+
+
+def _build_opts(argv: list[str] | None = None) -> EngineOptions:
+    """argv をパースし EngineOptions を返す公開 API（テスト用）。"""
+    args = _make_parser().parse_args(argv)
+    return _opts_from(args)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """引数をパースし direct＋不動点パイプラインを実行する（spec §10.4）。"""
+    args = _make_parser().parse_args(argv)
+    opts = _opts_from(args)
     return run(input_dir=Path(args.input), output_dir=Path(args.output),
                source_root=Path(args.source_root), opts=opts)

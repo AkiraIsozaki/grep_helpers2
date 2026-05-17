@@ -50,6 +50,11 @@ class EngineOptions:
     progress: str = "off"
     spill_dir: Path | None = None
     force_chunks: int = 0
+    resume: bool = False
+    output_encoding: str = "utf-8-sig"
+    encoding_fallback: tuple[str, ...] = ("cp932", "euc-jp", "latin-1")
+    max_rows_per_part: int = 1_048_575
+    diagnostics_detail_limit: int = 1000
 
 
 _REF_KIND = {"constant": "indirect:constant", "var": "indirect:var",
