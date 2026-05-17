@@ -184,17 +184,17 @@ def run_fixedpoint(
     def _apply_global_cap():
         live = sorted(chase_active | chase_done | term_active | term_done,
                       key=lambda s: (sym_hop.get(s, 0), len(s), s))
-        keep = opts.max_symbols
+        keep_count = opts.max_symbols
         if not budget.unlimited:
             # spec §8.2 L164 優先1: --memory-limit 超過時の §8.3 決定的切り捨て。
             # edges は priority-2 spill で退避(n_edges=0)、intro はシンボル連動
-            # (n_intro≈keep)。キー不変・単調縮小・決定的。keep=0 は memory 0 等。
-            while keep > 0 and budget.exceeded(estimate_items(
-                    n_symbols=keep, n_edges=0, n_intro=keep)):
-                keep -= 1
-        if len(live) <= keep:
+            # (n_intro≈keep_count)。キー不変・単調縮小・決定的。keep_count=0 は memory 0 等。
+            while keep_count > 0 and budget.exceeded(estimate_items(
+                    n_symbols=keep_count, n_edges=0, n_intro=keep_count)):
+                keep_count -= 1
+        if len(live) <= keep_count:
             return
-        for s in live[keep:]:
+        for s in live[keep_count:]:
             if s not in capped:
                 diag.add("symbol_rejected", f"capped\t{s}")
                 capped.add(s)
@@ -227,9 +227,9 @@ def run_fixedpoint(
                 break
             scan_files = files
             if opts.use_ripgrep:
-                keep = _rg.prefilter(source_root, rel_to_abs, scan_syms)
-                if keep is not None:
-                    scan_files = [(r, a) for r, a in files if r in keep]
+                keep_rels = _rg.prefilter(source_root, rel_to_abs, scan_syms)
+                if keep_rels is not None:
+                    scan_files = [(r, a) for r, a in files if r in keep_rels]
             n_intro = sum(len(v) for v in intro.values())
             n_live = len(chase_active | chase_done | term_active | term_done)
             nchunks = 1
