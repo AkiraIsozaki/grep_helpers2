@@ -30,7 +30,7 @@ def is_complete(out_dir: Path, keyword: str, opts) -> bool:
             if len(rows) != part.get("rows"):                     # 条件3
                 return False
             data_rows += rows
-    except (KeyError, TypeError, UnicodeDecodeError, OSError):
+    except (KeyError, TypeError, UnicodeDecodeError, OSError, LookupError):
         return False
     sha = hashlib.sha256(_blob_from_data_rows(data_rows)).hexdigest()
     if sha != m.get("data_sha256"):                           # 条件4（書込側と同一関数）

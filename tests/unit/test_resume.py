@@ -85,6 +85,15 @@ def test_part不正バイトで復号失敗は未完了(tmp_path):
     assert resume.is_complete(tmp_path, "K", _opts()) is False
 
 
+def test_未登録encoding_codec改竄manifestは未完了_例外送出しない(tmp_path):
+    finalize(tmp_path, "K", _mk(2), _opts())
+    m = json.loads((tmp_path / "K.manifest.json").read_text("utf-8"))
+    m["encoding"] = "no-such-codec-xyz"      # 有効dict・有効文字列だが未登録codec
+    (tmp_path / "K.manifest.json").write_text(
+        json.dumps(m, sort_keys=True, separators=(",", ":")), "utf-8")
+    assert resume.is_complete(tmp_path, "K", _opts()) is False
+
+
 def test_manifest確定直前クラッシュ_未完了かつ再処理で同値(tmp_path, monkeypatch):
     rows = _mk(5)
     # まず無故障で生成し基準 sha を取得
