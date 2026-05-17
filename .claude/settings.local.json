@@ -15,7 +15,9 @@
       "Skill(superpowers:test-driven-development)",
       "Skill(superpowers:receiving-code-review)",
       "Skill(superpowers:finishing-a-development-branch)",
-      "Skill(superpowers:using-superpowers)"
+      "Skill(superpowers:using-superpowers)",
+      "Skill(superpowers:executing-plans)",
+      "Skill(superpowers:dispatching-parallel-agents)"
     ]
   }
 }
