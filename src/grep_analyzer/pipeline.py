@@ -2,8 +2,9 @@
 
 from pathlib import Path
 
+from grep_analyzer import output_writer, resume
 from grep_analyzer.classify import classify_hit
-from grep_analyzer.diagnostics import Diagnostics
+from grep_analyzer.diagnostics import Diagnostics, SECTION_8_4_CATEGORIES
 from grep_analyzer.dispatch import (
     detect_language,
     detect_shell_dialect,
@@ -14,7 +15,6 @@ from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
 from grep_analyzer.fixedpoint import EngineOptions, run_fixedpoint
 from grep_analyzer.ingest import parse_grep_line
 from grep_analyzer.model import Hit
-from grep_analyzer.tsv import write_tsv
 from grep_analyzer.walk import DEFAULT_EXCLUDE, collect_files
 
 
@@ -42,6 +42,9 @@ def run(
 
     for grep_file in sorted(Path(input_dir).glob("*.grep")):
         keyword = grep_file.stem
+        if opts.resume and resume.is_complete(output_dir, keyword, opts):
+            diag.add("resume_skipped", keyword)
+            continue
         text, _, _ = decode_bytes(grep_file.read_bytes(), DEFAULT_FALLBACK)
         hits: list[Hit] = []
 
@@ -77,7 +80,10 @@ def run(
             ))
 
         indirect = run_fixedpoint(hits, Path(source_root), opts, diag, files=files)
-        write_tsv(output_dir / f"{keyword}.tsv", hits + indirect, "utf-8-sig")
+        output_writer.finalize(output_dir, keyword, hits + indirect, opts)
 
-    (output_dir / "diagnostics.txt").write_text(diag.render(), encoding="utf-8")
+    (output_dir / "diagnostics.txt").write_text(
+        diag.render(detail_limit=opts.diagnostics_detail_limit,
+                    exempt=SECTION_8_4_CATEGORIES),
+        encoding="utf-8")
     return 0
