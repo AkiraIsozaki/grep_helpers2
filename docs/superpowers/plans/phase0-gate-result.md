@@ -341,3 +341,90 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 - 規模分割 `<keyword>.partNN.tsv`
 - `requirements.lock` 整備
 - `--output-encoding` / `--encoding-fallback`
+
+---
+
+## Phase 3 完了記録（2026-05-17）
+
+- 完了日 (UTC): 2026-05-17
+- コミット範囲: `c1b7143`（Task1 EngineOptions 末尾既定追加＋CLIフラグ5本）から本コミット（Task11 perf計測＋_ITEMS_PER_MB実測較正＋Inv-1能動ガード＋Phase3完了記録）まで
+
+### 全テスト結果
+
+- `python -m pytest -q` → **205 passed, 5 skipped**（0 failed / 0 error）
+  - Phase 2b ベースライン 167 passed（rg 実走後） → Phase 3 追加 38 passed
+  - 5 skipped: 全て `@pytest.mark.perf`（非ゲート・デフォルト除外）
+    - `tests/perf/test_perf.py::test_scale[200]`
+    - `tests/perf/test_perf.py::test_scale[400]`
+    - `tests/perf/test_perf.py::test_scale[800]`
+    - `tests/perf/test_perf.py::test_calibrate_items_per_mb`
+    - `tests/unit/test_requirements_lock_offline.py::test_クリーンvenvで_require_hashes_install成功`
+- `python -m pytest tests/golden -q` → **14 passed**（不変。_ITEMS_PER_MB 較正後も byte-identical）
+- `python -m pytest -q -m perf -s` 実走: 全 5 perf tests PASS
+
+### WS1〜6 対応表
+
+| WS | 内容 | 実装コミット（Task） | 充足根拠 |
+|---|---|---|---|
+| WS1 | 耐クラッシュ・直列化・マニフェスト原子確定・孤児クリーン | Task2/4（output_writer.finalize 分割）/ Task5（クラッシュ注入テスト） | `test_phase3::test_...` 系 + `test_crash_*` 系 PASS |
+| WS2 | resume（is_complete 5条件・diagnostics 持越し） | Task3（resume.is_complete）/ Task4（配線） | `test_resume.py`（8本）PASS + golden 不変 |
+| WS3 | diagnostics §10.3 縮約・§8.4 全件免除 | Task6（diagnostics）| `test_diagnostics_phase3.py` PASS |
+| WS4 | encoding 配線（--output-encoding / --encoding-fallback 3経路） | Task8（encoding 配線） | `test_encoding_wiring.py` PASS + golden 不変 |
+| WS5 | requirements.lock + wheelhouse オフライン再現 | Task10（requirements.lock）/ Task11（test_requirements_lock_offline） | `-m perf` 実走 1 passed（15s） |
+| WS6 | perf ベースライン・corpus_gen・_ITEMS_PER_MB 較正・Inv-1 能動ガード | Task9（conftest）/ Task10（corpus_gen）/ Task11（test_scale/calibrate/Inv-1 ガード） | 4 perf tests PASS；test_inv1 PASS |
+
+### Inv-1/5/6/7 充足根拠
+
+| Inv | 内容 | 根拠 |
+|---|---|---|
+| Inv-1（既定 byte 不変） | `--memory-limit` 未指定時 `budget.unlimited=True` → `estimate_items` 非呼出 → `_ITEMS_PER_MB` 定数不感 | `test_既定出力は_items_per_mb値に不感`（monkeypatch 極値 1/10^9 で sha256 一致）+ golden 14 byte-identical PASS |
+| Inv-5（マニフェスト原子確定） | finalize 分割：部分書込→tmp→原子 rename→manifest 記録の順を保証 | `test_pipeline_phase3.py::test_finalize_*` 系 PASS |
+| Inv-6（§8.4 全件診断免除） | SECTION_8_4_CATEGORIES に属する診断は detail_limit 縮約から免除 | `test_diagnostics_phase3.py` PASS |
+| Inv-7（クラッシュ耐久） | クラッシュ注入後も前回完了済み keyword の TSV は破損しない | `test_phase3::test_crash_injection_*` 系 PASS |
+
+### perf スケール証跡（PERF 行要約）
+
+計測環境: Python 3.12.13 / x86_64 / kernel 6.17.0-29-generic
+
+```
+PERF n=200 dt=0.095s rss_kb=38240
+PERF n=400 dt=0.209s rss_kb=38496
+PERF n=800 dt=0.547s rss_kb=39392
+```
+
+- 時間スケーリング: ほぼ O(n)（n×2 でおよそ dt×2〜2.6）
+- メモリスケーリング: O(1)（rss_kb はほぼ一定＝ストリーミング処理による）
+
+### `_ITEMS_PER_MB` 較正値と根拠
+
+```
+CALIB peak_bytes=1612149 max_items=200000 bytes_per_item=8.1 ITEMS_PER_MB=130084
+```
+
+- 計測: corpus_gen seed=7 n_files=600、`--memory-limit 100000`（budget 経路有効化）
+- 公式: `floor(1_048_576 / max(1.0, bytes_per_item))` = `floor(1_048_576 / 8.1)` = 130084
+- 採用: `src/grep_analyzer/budget.py:9` → `_ITEMS_PER_MB = 130084`（較正前 4096）
+- tracemalloc peak を利用。estimate_items スパイ 21 回呼出。`assert seen` 安全弁（0回なら FAIL）
+
+### `requirements.lock` オフライン再現結果
+
+`python -m pytest tests/unit/test_requirements_lock_offline.py -q -m perf -s` 実走:
+
+```
+. (1 passed in 8.40s)
+```
+
+クリーン venv への `--no-index --require-hashes -r requirements.lock` インストール成功。
+`tree_sitter`, `tree_sitter_java`, `tree_sitter_c`, `ahocorasick`, `chardet`, `pytest` の import 確認済み。
+
+### v1 出荷判定
+
+**出荷可能（GREEN）**
+
+- 稼働先想定: モダンLinux / glibc ≥ 2.17（実測 glibc 2.36）/ Python 3.12 / x86_64
+- 全テスト 205 passed（perf 5 skipped＝非ゲート）
+- golden 14 byte-identical（Phase 1〜3 通算不変）
+- Inv-1/5/6/7 充足、WS1〜6 全充足
+- `requirements.lock` + wheelhouse によるオフライン再現実証済み
+- perf スケール O(n) 時間・O(1) メモリ確認済み
+- `_ITEMS_PER_MB` 実測較正済み（degrade トリガ定数の実環境根拠確立）
