@@ -15,7 +15,7 @@ from grep_analyzer.fixedpoint import EngineOptions, run_fixedpoint
 from grep_analyzer.ingest import parse_grep_line
 from grep_analyzer.model import Hit
 from grep_analyzer.tsv import write_tsv
-from grep_analyzer.walk import DEFAULT_EXCLUDE
+from grep_analyzer.walk import DEFAULT_EXCLUDE, collect_files
 
 
 def _default_opts() -> EngineOptions:
@@ -35,6 +35,10 @@ def run(
     if opts is None:
         opts = _default_opts()
     lang_map = opts.lang_map
+    files = collect_files(
+        Path(source_root), include=opts.include, exclude=opts.exclude,
+        follow_symlinks=opts.follow_symlinks,
+        max_file_bytes=opts.max_file_bytes, diag=diag)
 
     for grep_file in sorted(Path(input_dir).glob("*.grep")):
         keyword = grep_file.stem
@@ -72,7 +76,7 @@ def run(
                 encoding=enc + (" 要確認" if replaced else ""), confidence=confidence,
             ))
 
-        indirect = run_fixedpoint(hits, Path(source_root), opts, diag)
+        indirect = run_fixedpoint(hits, Path(source_root), opts, diag, files=files)
         write_tsv(output_dir / f"{keyword}.tsv", hits + indirect, "utf-8-sig")
 
     (output_dir / "diagnostics.txt").write_text(diag.render(), encoding="utf-8")

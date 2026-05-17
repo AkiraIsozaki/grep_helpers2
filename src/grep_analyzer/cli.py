@@ -34,6 +34,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-file-bytes", type=int, default=5_000_000, dest="max_file_bytes")
     p.add_argument("--max-symbols", type=int, default=100_000, dest="max_symbols")
     p.add_argument("--max-paths", type=int, default=1000, dest="max_paths")
+    p.add_argument("--memory-limit", type=int, default=None, dest="memory_limit_mb")
+    p.add_argument("--use-ripgrep", action="store_true", dest="use_ripgrep")
+    p.add_argument("--max-passes", type=int, default=8, dest="max_passes")
+    p.add_argument("--progress", default="off")
     args = p.parse_args(argv)
     opts = EngineOptions(
         max_depth=args.max_depth, min_specificity=args.min_specificity,
@@ -42,6 +46,9 @@ def main(argv: list[str] | None = None) -> int:
         exclude=args.exclude if args.exclude is not None else list(DEFAULT_EXCLUDE),
         jobs=args.jobs, follow_symlinks=args.follow_symlinks,
         max_file_bytes=args.max_file_bytes, max_symbols=args.max_symbols,
-        max_paths=args.max_paths)
+        max_paths=args.max_paths,
+        memory_limit_mb=args.memory_limit_mb, use_ripgrep=args.use_ripgrep,
+        max_passes=args.max_passes, progress=args.progress,
+    )
     return run(input_dir=Path(args.input), output_dir=Path(args.output),
                source_root=Path(args.source_root), opts=opts)

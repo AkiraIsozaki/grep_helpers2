@@ -22,6 +22,8 @@ from grep_analyzer.diagnostics import Diagnostics
 from grep_analyzer.dispatch import detect_language, detect_shell_dialect
 from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
 from grep_analyzer.model import Hit
+from grep_analyzer.progress import Progress
+from grep_analyzer import ripgrep as _rg
 from grep_analyzer.provenance import Occurrence, ProvenanceGraph
 from grep_analyzer.spill import EdgeStore
 from grep_analyzer.stoplist import SymbolPolicy, load_stoplist, partition
@@ -176,6 +178,8 @@ def run_fixedpoint(
             follow_symlinks=opts.follow_symlinks,
             max_file_bytes=opts.max_file_bytes, diag=diag))
     rel_to_abs = {rel: abspath for rel, abspath in files}
+    prog = Progress(opts.progress)
+    prog.start(len(files))
 
     def _apply_global_cap():
         live = sorted(chase_active | chase_done | term_active | term_done,
@@ -221,7 +225,11 @@ def run_fixedpoint(
             term_active = set()
             if not scan_syms or hop > opts.max_depth:
                 break
-            scan_files = files  # Task9 で ripgrep 絞り込みに差し替え
+            scan_files = files
+            if opts.use_ripgrep:
+                keep = _rg.prefilter(source_root, rel_to_abs, scan_syms)
+                if keep is not None:
+                    scan_files = [(r, a) for r, a in files if r in keep]
             n_intro = sum(len(v) for v in intro.values())
             n_live = len(chase_active | chase_done | term_active | term_done)
             nchunks = 1
@@ -284,6 +292,7 @@ def run_fixedpoint(
                             no_expand_logged.add(sym)
                         continue
                     _ingest(child, language, dialect, line, hop + 1)
+            prog.hop(hop, len(scan_syms), len(scan_files))
             hop += 1
 
         for p, c in estore.sorted_unique():
@@ -321,6 +330,7 @@ def run_fixedpoint(
                     usage_summary=f"{cat} ({language})", via_symbol=c.symbol,
                     chain=chain, snippet=line,
                     encoding=enc + (" 要確認" if replaced else ""), confidence=conf))
+        prog.done()
         return indirect
     finally:
         estore.close()
