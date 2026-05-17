@@ -2,13 +2,19 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`). **全コミット末尾に `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` を付す。`git add` は各 Task 記載ファイルのみ（明示パス・`.claude/settings.local.json` 等を含めない）。テスト関数名に全角丸カッコ `（）` を使わない（Python SyntaxError。区切りは `_`）。**
 
-> **改訂履歴:** v1 → v2（1巡目反映）→ v3（2巡目反映）→ **v4（本書・3巡目3並行レビュー反映）**。3巡目で「2巡目収束 Critical 4件は v3 で機構解消（Reviewer 実走 161 passed・既存 byte 不変・temp リークなし）」確認。ただし spec §8.2 L164 を逐語精読した結果、**v3 が priority-1 を `--memory-limit` 超過応答から外した再構成は spec 誤読**（L164 の主語節「`--memory-limit` 超過時は」は優先1〜最終手段の3段すべてを統べる＝memory 超過の第一応答は §8.3 シンボル切り捨て）と確定。v4 で是正:
+> **改訂履歴:** v1 → v2（1巡目反映）→ v3（2巡目反映）→ v4（3巡目3並行レビュー反映）→ **v5（本書・4巡目3並行レビュー反映）**。3巡目で「2巡目収束 Critical 4件は v3 で機構解消（Reviewer 実走 161 passed・既存 byte 不変・temp リークなし）」確認。ただし spec §8.2 L164 を逐語精読した結果、**v3 が priority-1 を `--memory-limit` 超過応答から外した再構成は spec 誤読**（L164 の主語節「`--memory-limit` 超過時は」は優先1〜最終手段の3段すべてを統べる＝memory 超過の第一応答は §8.3 シンボル切り捨て）と確定。v4 で是正:
 > - **degrade ラダー spec §8.2 L164 厳密化（最重要・C1/C2/H1/H2/M3 連鎖解消）**: priority-1（§8.3 決定的シンボル切り捨て）を **`max_symbols`（常設・Phase 2a）と `--memory-limit`（超過時の連動駆動）の両方**で動かす。memory 超過時は決定的キー `(発見ホップ,長さ,辞書順)` 不変のまま keep を単調縮小（edges は priority-2 spill で退避＝budget 計算は in-memory edges、intro はシンボルに連動縮小）。**シンボル切り捨ては唯一の出力変更で spec §8.4 全件 diagnostics に記録**（spec §8.3 L176・§1「絶対的ゼロ見落としは保証しない」＝memory degrade で出力が決定的に変わるのを spec は許容・記録で可視化）。`--memory-limit=None`（既定）でのみ Phase 2a TSV/diagnostics byte 不変。intro はシンボル切り捨てに連動して縮小＝§8.2 L163「来歴グラフのメモリ」退避を充足（C2 解消）。
 > - **`memory_limit_mb=0` の意味確定**: 「最小メモリ＝priority-1 を最大限決定的に切り捨て＋来歴スピル＋オートマトン最大分割」。切り捨ては §8.4 全件記録・決定的・direct 行不変＝v2 の「silent 全滅」とは異なる**記録付き決定的 degrade**（spec §8.2/§8.4/§1 整合・ユーザが 0 を明示選択した結果）。出力透過ではない（priority-1 で indirect が決定的に減る）。
 > - Reviewer1 H-1 是正: `EdgeStore` に内部 `_spill_now()` を切り出し、engine の priority-2 は `maybe_spill_now()`→`_spill_now()`（`_force_spill_threshold` を本番経路で**設定しない**）。`_force_spill_threshold` は Task2 unit 専用。
 > - Reviewer1 H-2 是正: `run_fixedpoint` の走査〜確定を `try/finally: estore.close()` で包み例外時 temp リーク防止。
 > - Reviewer3 M2 是正: 全テスト関数名から全角丸カッコを除去（SyntaxError 回避・区切りは `_`）。
 > - M-1（automaton_split 診断を実パス数 `len(chunks)` に）・M-2（spill/split の budget n_symbols 意味を `n_live` に統一）・複数 keyword の §8.4 全件性が walk dedup に巻き込まれない契約テスト追加・`automaton.scan_line` 昇順ユニーク前提固定テスト。
+>
+> **v5（4巡目3並行レビュー反映）:** 4巡目で spec適合・アルゴリズム決定性の2軸は「収束（Critical/High なし）」を確認。一方 **TDD実行可能性軸が Critical 1・High 2 を検出**（いずれも `fixedpoint.py` 連鎖パッチ Task6→7→8→9 の「置換範囲の一意性」欠落＝v4 Self-Review が候補⑤を出力面のみ裁定し diff 機械適用性を裁定漏れ）。v5 で**実体コードの内容アンカ（連鎖編集で行番号が drift するため絶対行番号でなく一意な行テキストで指定）**により全て一意化:
+> - **C(4巡目)-1 是正（Task7 Step3 (6) try/finally 範囲一意化）**: try は確定群 `enc_of: dict[str, tuple[str, bool]] = {}` 行（関数本体・seed ループ／`files`確定・rel_to_abs／`_apply_global_cap` 定義より後の唯一の出現）から関数末尾 `return indirect` までの連続行のみを +4 インデントで包む。`def _apply_global_cap()` ブロックと Task6 置換後の `files`確定／`rel_to_abs` ブロックは（より前にあるため）自然に try 外。`finally: estore.close()` は `return indirect` の後・関数本体4スペース。Task9 の `prog.done()` 位置（try 内・finally 前）もこれで一意確定。
+> - **H(4巡目)-1 是正（Task6 Step3 (4) 置換起点一意化）**: 確定フェーズ先頭 `indirect: list[Hit] = []` 行から関数末尾 `return indirect` までの連続ブロック全体（`raw_of = dict(files)`・`for _, c in sorted(set(edges)):` 確定ループを含む）を置換、と起点・終点を明示。
+> - **H(4巡目)-2 是正（Task8 Step3 被置換ブロック起点一意化）**: 走査ループ内 `args = [(rel, str(abspath), scan_syms, opts.lang_map) for rel, abspath in files]` 行（Task6/7 適用後の形・`if not scan_syms ... break` の後）から `hop += 1` 行までを置換、`scan_chase`/`scan_term`/`scan_syms`/`chase_done|=`/`chase_active=set()`/`term_done|=`/`term_active=set()`/`break` 前段と Task7(5) priority-2 spill 判定ブロックは不変保持（Task8 ブロックへ `scan_syms`/`scan_chase`/`scan_term` を供給）と明記。
+> - **Minor 反映**: (a) Task9 Step3 CLI `EngineOptions(...)` 末尾を `max_paths=args.max_paths)` → `max_paths=args.max_paths,` ＋新4フィールド＋`)` と逐語化（Reviewer1/3 Minor-1）。(b) Task7 Step2 注「`_opts` 共通ヘルパ更新で当該ファイル全テストが TypeError で一斉 FAIL（新規4含む）」追記（Reviewer3 Minor-1）。(c) Task8 実装注に「`(lineno,symbol)` の第一キー lineno が Phase 2a 行順走査と一致＝行跨ぎでも透過」1文追記（Reviewer1 M-4）。(d) Task7(5)/Task8 注に「`chase_active|chase_done|term_active|term_done` の和集合は `chase_done|=chase_active;chase_active=set()` の merge に対し不変＝Task7(5)（merge 前）と Task8(3)（merge 後）の `n_live` は同値・整合は決定的」明記（Reviewer2 Minor-2／Reviewer3 Low-1 を merge 不変性で根治）。
 
 **Goal:** Phase 2a の正しさ・決定性コアの**出力を `--memory-limit=None`（既定）で一切変えずに**、spec §8.2 の資源設計—ストリーミング走査（全 bytes 親常駐の廃止）／keyword 横断 walk 一回化／任意 `ripgrep` 一次粗フィルタ／`--memory-limit` 会計と degrade ラダー（**spec §8.2 L164: 優先1 §8.3 決定的シンボル切り捨て→優先2 来歴グラフのディスクスピル→最終手段オートマトン分割多パス・最大パス上限**）／`--progress` 標準エラー進捗—を実装する。
 
@@ -717,7 +723,7 @@ def _scan_file(args):
 
 (3) 走査ループの `args` を abspath（str）に: `args = [(rel, str(abspath), scan_syms, opts.lang_map) for rel, abspath in files]`
 
-(4) 確定フェーズの `raw_of = dict(files)` 行と再読込ブロックを次へ置換（全文1回デコード・per-rel キャッシュ・Phase 2a byte 同値）:
+(4) **置換範囲（H(4巡目)-1 一意化）**: グラフ構築 `for p, c in edges:` / `graph.add_edge(p, c)` の**直後**にある確定フェーズ先頭行 `    indirect: list[Hit] = []` から関数末尾 `    return indirect` までの連続ブロック全体（実体で `indirect`/`seen`/`line_cache`/`meta_of` 初期化→`raw_of = dict(files)`→`for _, c in sorted(set(edges)):` 確定ループ→`return indirect` の一塊・他に同一起点なし）を次へ置換（全文1回デコード・per-rel キャッシュ・Phase 2a byte 同値）:
 ```python
     indirect: list[Hit] = []
     seen: set[Occurrence] = set()
@@ -830,7 +836,7 @@ def test_memory_limit0は2回実行で決定的(tmp_path):
     assert k(r1) == k(r2)
 ```
 
-- [ ] **Step 2: 失敗を確認** — `python -m pytest tests/unit/test_fixedpoint.py -q` → FAIL（`EngineOptions … unexpected keyword argument 'memory_limit_mb'`）
+- [ ] **Step 2: 失敗を確認** — `python -m pytest tests/unit/test_fixedpoint.py -q` → FAIL（`EngineOptions … unexpected keyword argument 'memory_limit_mb'`）。**注: Step1 で `_opts` 共通ヘルパに新6フィールドを足した時点で `EngineOptions` は未拡張のため、新規4テストだけでなく `_opts(...)` を呼ぶ当該ファイルの全テスト（Task6 追加分含む）が同 `TypeError` で一斉 FAIL する（想定どおり＝Step3 で `EngineOptions` 拡張後に全 PASS へ復帰）。**
 
 - [ ] **Step 3: 実装** — `src/grep_analyzer/fixedpoint.py` を編集。
 
@@ -904,7 +910,11 @@ from grep_analyzer.spill import EdgeStore
                     spill_logged = True
 ```
 
-(6) グラフ構築 `for p, c in edges:` → `for p, c in estore.sorted_unique():`、確定ループ `for _, c in sorted(set(edges)):`（Task6 (4)）→ `for _, c in estore.sorted_unique():`。**`run_fixedpoint` の seed ループ後（`files` 確定以降）から `return indirect` までを `try:` で包み、`finally: estore.close()` を置く**（例外時 temp リーク防止）。`return indirect` は try 内・`finally` で close。
+(6) グラフ構築 `for p, c in edges:` → `for p, c in estore.sorted_unique():`（実体に1箇所）、確定ループ `for _, c in sorted(set(edges)):`（Task6 (4) 置換後ブロック内に1箇所）→ `for _, c in estore.sorted_unique():`。
+
+**`try/finally` 範囲（C(4巡目)-1 一意化・最小範囲）**: `estore` は状態初期化群（Task7 (3) で `edges: list[...] = []` を置換した位置）で生成済。`try:` は確定群の先頭行 `    enc_of: dict[str, tuple[str, bool]] = {}`（関数本体4スペース・seed ループと Task6 置換後の `files`確定／`rel_to_abs` ブロックと `def _apply_global_cap()` 定義より**後**にある唯一の出現＝一意）の**直前**に関数本体インデント（4スペース）で挿入。`enc_of = {}` 行から関数末尾 `    return indirect` までの連続行を**一括 +4 インデント**して `try:` 配下へ。`return indirect` の直後・関数本体4スペースで `finally:`、その配下8スペースで `estore.close()`。
+
+> **包囲境界（実装者向け・推測不要）:** `try:` 配下＝`enc_of = {}` → `hop = 1` → `while chase_active or term_active:` ループ全体 → グラフ構築 `for p, c in estore.sorted_unique():` → 確定フェーズ（`indirect`〜`return indirect`）。`def _apply_global_cap()` ブロック・Task6 置換後の `files`確定／`rel_to_abs`／（Task9 で入る）`prog = Progress(...)`/`prog.start(...)` は `try:` より**前**にあるため範囲外（自然に try 外）。`_apply_global_cap` は try 外で定義され while 内（try 内）で呼ばれる＝例外は finally へ伝播。Task9 の `prog.done()` は確定ループ完了後・`return indirect` の直前（try 内・`finally` の前）で一意。例外時も `finally: estore.close()` で temp 削除（Reviewer1 H-2）。`try:` 化は実行命令列を変えずインデントのみ＝`--memory-limit=None` 既定 byte 不変（各 Step4 実測で最終担保）。
 
 > **実装注（spec §8.2 L164 整合・Inv-2・C1/C2/H1/H2 解消）:** `--memory-limit=None`→`budget.unlimited`→(4) の while スキップで `keep=opts.max_symbols`＝Phase 2a `_apply_global_cap` と**命令同値**（既存 golden 14・既存 130 byte 不変）。memory 超過時は (4) が keep を決定的単調縮小（edges は (5) priority-2 spill で退避＝budget 計算 `n_edges=0`、intro はシンボル連動＝`n_intro≈keep`）＝spec §8.2 L164 優先1。落とした全シンボルは `symbol_rejected\tcapped` で §8.4 全件記録（spec §8.3 L176）。memory 0 は keep=0 まで切り捨て＝indirect 決定的に全切り（記録付き・direct は pipeline 側で不変）＝spec §8.2/§8.4/§1 整合の記録付き決定的 degrade（v2 silent 全滅と異なる）。priority-2 spill は `maybe_spill_now()`（内部 `_spill_now()`・`_force_spill_threshold` 非経由＝本番混入なし＝Reviewer1 H-1）で edges 退避＝`in_memory_len()` が以後 0＝budget 圧解消反映。`sorted_unique()`＝`sorted(set())` で graph/確定が順序非依存＝生存集合に対し出力透過。intro はシンボル切り捨て連動縮小＝§8.2 L163 充足（C2 解消）。`try/finally: estore.close()` で例外時 temp 削除（Reviewer1 H-2）。
 
@@ -964,7 +974,7 @@ def test_memory_limit0は分割スピル切り捨て併発でも2回実行決定
 
 - [ ] **Step 2: 失敗を確認** — `python -m pytest tests/unit/test_fixedpoint.py -q` → 新規3本 FAIL（force_chunks/分割未実装）
 
-- [ ] **Step 3: 実装** — `src/grep_analyzer/fixedpoint.py` の走査ループを「nchunks==1 は Phase 2a 逐語・nchunks>1 のみ集約」に変更。Task6/7 の走査ブロック（`args=[...]; if jobs>1 ... else ...; for rel,...,found in sorted(results,key=r[0]): (estore.add/_ingest...)`）を次へ置換:
+- [ ] **Step 3: 実装** — `src/grep_analyzer/fixedpoint.py` の走査ループを「nchunks==1 は Phase 2a 逐語・nchunks>1 のみ集約」に変更。**置換範囲（H(4巡目)-2 一意化）**: while ループ内、`if not scan_syms or hop > opts.max_depth:` / `break` 段の**直後**にある `        args = [(rel, str(abspath), scan_syms, opts.lang_map) for rel, abspath in files]` 行（Task6 (3) で abspath 化済の形）から `        hop += 1` 行までの連続ブロック（実体で `args=...`→`if opts.jobs>1: pool.map / else: 逐次`→`for rel,enc,replaced,language,dialect,found in sorted(results,key=lambda r:r[0]):` 集約本体→`hop += 1` の一塊）を次へ置換。**前段の `scan_chase = {...}` / `scan_term = {...}` / `scan_syms = sorted(...)` / `chase_done |= chase_active` / `chase_active = set()` / `term_done |= term_active` / `term_active = set()` / `if not scan_syms ...: break`、および Task7 (5) で `_apply_global_cap()` 直後に挿入した priority-2 spill 判定ブロックは置換対象外＝不変保持**（これらが Task8 ブロックの参照する `scan_syms`/`scan_chase`/`scan_term` を供給。起点を `scan_chase=` 等まで遡って置換すると `scan_syms` 未定義で破綻するため起点は厳密に `args = [...]` 行）。次へ置換:
 ```python
         scan_files = files  # Task9 で ripgrep 絞り込みに差し替え
         n_intro = sum(len(v) for v in intro.values())
@@ -1032,7 +1042,7 @@ def test_memory_limit0は分割スピル切り捨て併発でも2回実行決定
         hop += 1
 ```
 
-> **実装注（C2 根治・出力透過の証明・M-1/M-2）:** `nchunks==1`（既定 `memory_limit_mb=None`／`force_chunks=0`）は Phase 2a 走査ループと逐語同一。`nchunks>1` のみ `agg` 集約し `sorted(agg[rel], key=(t[1],t[0]))`＝`(lineno,symbol)` 昇順。`automaton.scan_line` は行内 symbol 昇順ユニーク（`test_automatonのscan_lineは…` で固定）＝Phase 2a per-file 反復順＝`(lineno,symbol)` 昇順そのもの＝`_ingest`/`estore.add` 投入順が Phase 2a と同一＝`sym_kind/sym_hop` first-write-wins 同値＝**生存シンボル集合に対し出力 byte 透過**。`automaton_split` 診断は実パス数 `len(chunks)`（`nchunks` でなく＝Reviewer1 M-1。`while nchunks < len(scan_syms)` クランプで `nchunks` も実分割可能数を超えない）。priority-2 spill（Task7 (5)）と本分割の budget 判定 `n_symbols` は共に `n_live`＝整合（Reviewer1 M-2）。`memory_limit_mb=0` は priority-1（Task7）が先に keep=0 まで切り捨てるため分割発火時の scan_syms は空に近いが、決定性（2回一致）は保たれる。
+> **実装注（C2 根治・出力透過の証明・M-1/M-2）:** `nchunks==1`（既定 `memory_limit_mb=None`／`force_chunks=0`）は Phase 2a 走査ループと逐語同一。`nchunks>1` のみ `agg` 集約し `sorted(agg[rel], key=(t[1],t[0]))`＝`(lineno,symbol)` 昇順。`automaton.scan_line` は行内 symbol 昇順ユニーク（`test_automatonのscan_lineは…` で固定）＝Phase 2a per-file 反復順＝`(lineno,symbol)` 昇順そのもの＝`_ingest`/`estore.add` 投入順が Phase 2a と同一＝`sym_kind/sym_hop` first-write-wins 同値＝**生存シンボル集合に対し出力 byte 透過**。**行跨ぎでも透過（Reviewer1 M-4）**: ソートキー `(t[1],t[0])=(lineno,symbol)` の第一キーは lineno。Phase 2a 単一オートマトンの `found` は走査が行順なので lineno 昇順・行内は scan_line が symbol 昇順＝`(lineno,symbol)` 昇順。分割版は chunk が `scan_syms` の重複なし分割ゆえ同一 `(lineno,symbol)` が2 chunk から出ず安定ソートの同キー曖昧性も発生しない＝行を跨いでも両者の反復順は `(lineno,symbol)` 昇順で厳密一致。`automaton_split` 診断は実パス数 `len(chunks)`（`nchunks` でなく＝Reviewer1 M-1。`while nchunks < len(scan_syms)` クランプで `nchunks` も実分割可能数を超えない）。priority-2 spill（Task7 (5)）と本分割の budget 判定 `n_symbols` は共に `n_live`＝整合（Reviewer1 M-2）。**`n_live` の merge 不変性（Reviewer2 Minor-2／Reviewer3 Low-1 根治）**: `n_live = len(chase_active | chase_done | term_active | term_done)`。`chase_done |= chase_active; chase_active = set()`（term も同様）は和集合内で要素を active→done へ移すだけで**和集合自体は不変**。よって Task7 (5)（merge 前・`_apply_global_cap()` 直後）と本 Task8 ブロック（merge 後）の `n_live` は**同一値**＝「共に n_live で整合」は厳密に成立（評価タイミング差は値に影響しない・各々決定的）。`estore.in_memory_len()` のみ Task7(5) の spill 発火後に 0 へ変わるが、これは圧解消の意図反映（分割は spill 後の状態で nchunks を決める）。`memory_limit_mb=0` は priority-1（Task7）が先に keep=0 まで切り捨てるため分割発火時の scan_syms は空に近いが、決定性（2回一致）は保たれる。
 
 - [ ] **Step 4: 通る** — `python -m pytest tests/unit/test_fixedpoint.py -q` → PASS（既存15＋新規3。`test_force_chunks分割は…byte同値_memory非依存`＝split 透過＋`automaton_split` 実発火・`test_automatonのscan_lineは…`＝正規化前提固定・`test_memory_limit0は分割スピル切り捨て併発でも2回実行決定的`＝Inv-3）／`python -m pytest -q` → **全 PASS・既存 golden 14・既存 integration byte 不変**（既定 nchunks=1・estore 非スピル＝Phase 2a 逐語）。動いたら停止し構造を疑う。
 
@@ -1161,7 +1171,14 @@ def test_memory_limit0はdirect不変でindirectは決定的に減る(tmp_path: 
     p.add_argument("--max-passes", type=int, default=8, dest="max_passes")
     p.add_argument("--progress", default="off")
 ```
-`EngineOptions(...)` 構築に追記: `memory_limit_mb=args.memory_limit_mb, use_ripgrep=args.use_ripgrep, max_passes=args.max_passes, progress=args.progress,`（`spill_dir`/`force_chunks` は CLI 非公開＝既定 None/0＝Phase 2a 同一）
+`EngineOptions(...)` 構築の末尾を逐語変更（Minor-1 一意化）: 実体の閉じ括弧終端行 `        max_paths=args.max_paths)` を `        max_paths=args.max_paths,` に変え（カンマ付与・`)` 除去）、続けて次の4行を加え最後に `    )` で閉じる:
+```python
+        max_paths=args.max_paths,
+        memory_limit_mb=args.memory_limit_mb, use_ripgrep=args.use_ripgrep,
+        max_passes=args.max_passes, progress=args.progress,
+    )
+```
+（`spill_dir`/`force_chunks` は CLI 非公開＝既定 None/0＝Phase 2a 同一。インデントは既存 `EngineOptions(` 構築の継続行に合わせる）
 
 - [ ] **Step 4: 通る（不変条件総点検）** — `python -m pytest tests/integration/test_pipeline_phase2b.py -q` → PASS（4本）／`python -m pytest -q` → **全 PASS・0 failed/0 error・既存 golden 14・既存 integration（test_pipeline_fixedpoint/test_diagnostics_phase2/test_pipeline_dialect/test_pipeline/test_cli）byte 不変**。1ケースでも動いたら commit せず停止し構造を疑う。
 
@@ -1286,7 +1303,7 @@ git commit -m "chore: Phase 2b 完了（資源degrade・ストリーミング・
 
 ---
 
-## Self-Review（v4・本計画著者によるチェック）
+## Self-Review（v5・本計画著者によるチェック）
 
 **1. spec coverage（§8.2 全項目・L164 ラダー）:** ネイティブ AC＋ripgrep（`-a`）＋multiprocessing → Task3/9 ✓。差分走査限定効果（L162 逐語）→ Task6 ✓。来歴 memory を --memory-limit 対象（priority-1 でシンボル連動縮小＝intro 縮小・priority-2 で edges スピル）→ Task1/2/7 ✓。**degrade 優先順位（L164 逐語: 優先1 §8.3 決定的切り捨て〔max_symbols常設＋--memory-limit連動〕→優先2 スピル→最終手段分割・--max-passes 上限）** → Task7/8（v3 の priority-1 memory 非依存誤読を根治）✓。size/binary skip・include/exclude・symlink・realpath（既存 walk 不変）→ Task5 ✓。進捗 stderr → Task4/9 ✓。§15 フェーズ2 資源 degrade を 2b ✓。§10.4 CLI → Task9 ✓。Phase 3 送りは境界に spec §番号付き明記 ✓。
 
@@ -1296,4 +1313,6 @@ git commit -m "chore: Phase 2b 完了（資源degrade・ストリーミング・
 
 **4. 3巡目批判的レビュー（3並行）指摘の解消対応:** **Reviewer2 C1（v3 が priority-1 を --memory-limit 超過応答から外したのは spec §8.2 L164 誤読）根治**=priority-1 を `max_symbols`常設＋`--memory-limit`連動の §8.3 切り捨てに再設計（L164 主語節が3段統べる逐語準拠・既定 None は Phase 2a 命令同値）✓ / **Reviewer2 C2（intro が §8.2 L163 来歴メモリだが退避せず）根治**=priority-1 のシンボル切り捨て連動で intro 縮小（symbol 連動）＝§8.2 L163 充足 ✓ / **Reviewer2 H1（memory=0 が C2 で空証文）根治**=0 は priority-1 で keep=0 まで記録付き決定的切り捨て＋スピル＋分割（intro もシンボル連動で抑制）＝spec §8.2/§8.4/§1 整合の記録付き degrade ✓ / **Reviewer2 H2（Inv-2 が C1 解釈依存の循環）根治**=Inv-2 を「priority-1（§8.3・memory連動も）が唯一の出力変更で §8.4 全件記録・既定 None で byte 不変／spill・split は生存集合に §9 演繹で透過」と spec §8.2 L164 準拠で再記述 ✓ / **Reviewer1 H-1（maybe_spill_now が _force_spill_threshold を本番設定＝契約虚偽）根治**=`_spill_now()` 内部切り出し・`maybe_spill_now` は閾値非経由・契約も「unit 専用」明記 ✓ / **Reviewer1 H-2（estore 例外時 temp リーク）根治**=`try/finally: estore.close()` ✓ / **Reviewer3 M2（テスト名 全角カッコ SyntaxError）根治**=全テスト関数名から全角カッコ除去（区切り `_`）✓ / Reviewer1 M-1（automaton_split 診断＝nchunks vs 実パス数）→`len(chunks)` 記録＋`while nchunks<len(scan_syms)` クランプ ✓ / Reviewer1 M-2（spill/split の budget n_symbols 不整合）→共に `n_live` ✓ / Reviewer2 M2（複数kw §8.4 全件性 walk dedup 非巻き込み論証不足）→spec解釈/境界(5)に明記＋`test_複数keyword_diagnosticsは2回実行で決定的` ✓ / Reviewer1 H1（scan_line 昇順ユニーク前提固定）→`test_automatonのscan_lineは…分割正規化前提固定` ✓ / Reviewer2 M3/境界(7)（max_passes 上限後挙動）→境界(7) 設計判断格上げ＋Task8 注 ✓ / Reviewer3 M1（rg 環境 skip 受入）→Task0 Step3/Task11 受入条件 ✓ / Reviewer1/2 L（`or [[]]` 防御死コード・`--max-passes` spec文法外）→境界・実装注で既知明示（実害なし）✓。
 
-> 次レビュー重点候補: ① priority-1 連動 `while keep>0` の `estimate_items(n_symbols=keep, n_edges=0, n_intro=keep)` の `n_intro≈keep` 近似（intro は実際は symbol 毎の親 Occurrence リスト長和＝keep 比例の決定的近似で妥当か）。② `memory_limit_mb=0` で keep=0→indirect 全切りが PRD 網羅性目的と spec §1「最大限追跡（ただしポリシー範囲・絶対ゼロ見落とし非保証）」の許容範囲か（ユーザが 0 を明示選択＋§8.4 全件記録＋direct 不変＝記録付き決定的 degrade として spec 整合と判断）。③ priority-1 memory 連動切り捨て後の golden（`--memory-limit` 指定の新規 golden を Phase 2b で足すか／既定 None の既存 golden 不変のみで足り memory degrade は unit/integration の決定性テストで担保＝後者を採用）。④ `--memory-limit` 小 N>0（>0 だが小）で keep がわずかに縮小するケースの小規模決定的検証（_ITEMS_PER_MB=4096 で N=1→4096 予算＝小規模 fixture では発火せず＝memory0 で keep=0 と max_symbols 小値の双方で priority-1 連動/常設を担保し中間 N は Phase 3 perf で実測）。⑤ `try/finally` 導入で Phase 2a の関数構造（seed ループ・走査・確定）が逐語保持されインデント変更のみで既定 byte 不変が崩れないこと（実装時 diff 最小化）。
+**5. 4巡目3並行レビュー（収束確認）指摘の解消対応（v5）:** spec適合・アルゴリズム決定性の2軸は「収束（Critical/High なし・Minor/Low のみ＝spec違反でなく改善余地）」を独立に確認。**TDD実行可能性軸の Critical 1・High 2 を v5 で根治** = **C(4巡目)-1（Task7(6) try/finally 範囲が機械 diff 適用不能）根治**＝try を確定群 `enc_of = {}` 行〜`return indirect` の連続行最小範囲に限定し開始/終了を内容アンカで明示・`_apply_global_cap`/`files`確定/`prog.start` は自然に try 外・Task9 `prog.done()` 位置も連動一意化 ✓ / **H(4巡目)-1（Task6(4) 置換起点 L219/L223 非一意）根治**＝確定フェーズ先頭 `indirect: list[Hit] = []`〜`return indirect` の起点終点明示 ✓ / **H(4巡目)-2（Task8 Step3 被置換ブロック起点が要約表記で `scan_syms` 未定義破綻リスク）根治**＝起点を `args = [...]` 行に固定し前段＋Task7(5) spill 判定の不変保持を明記 ✓ / Reviewer1/3 Minor-1（CLI EngineOptions 末尾カンマ）→逐語化 ✓ / Reviewer3 Minor-1（Task7 Step2 失敗範囲）→注追記 ✓ / Reviewer1 M-4（分割透過の行跨ぎ論証）→Task8 注に第一キー lineno 一致を1文追記 ✓ / Reviewer2 Minor-2・Reviewer3 Low-1（spill/split の n_live 整合性）→**和集合の merge 不変性で根治**（merge は和集合内で要素を移すのみ＝Task7(5) merge 前と Task8 merge 後の `n_live` は同値＝厳密整合）と明記 ✓。
+
+> 次レビュー重点候補（4巡目で全裁定済・収束）: ①〜④ は spec適合・決定性レビュアが「spec §8.2 L163/§1/§8.4/§10.4・§9 と整合・実バイト厳密化と中間 N は Phase 3 perf 送りで spec §11（perf 非ゲート）と整合・決定性は純粋関数 budget で N 非依存に担保」と裁定し**収束**。⑤（`try/finally` の機械適用性）は v5 C(4巡目)-1 で内容アンカ最小範囲化により**根治**（出力 byte 不変は各 Task Step4 の実測が最終防壁）。**新たな次レビュー重点なし**＝spec適合・決定性・TDD実行可能性の3軸とも収束。5巡目は v5 が3ブロッカーを一意化し新規ブロッカーを混入していないかの集中再確認に限る。
