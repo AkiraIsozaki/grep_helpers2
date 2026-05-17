@@ -1,7 +1,10 @@
 """resume 完了判定5条件（spec v4 §4 WS1）。"""
 
+import hashlib
 import json
+import pytest
 
+from grep_analyzer import output_writer
 from grep_analyzer.output_writer import finalize
 from grep_analyzer import resume
 from tests.unit.test_output_writer import _hit, _mk, _opts
@@ -72,3 +75,28 @@ def test_part不正バイトで復号失敗は未完了(tmp_path):
     # utf-8-sig（既定）では無効なバイト列で UnicodeDecodeError を起こす
     (tmp_path / "K.tsv").write_bytes(b"\xff\xfe\xff\xfe")
     assert resume.is_complete(tmp_path, "K", _opts()) is False
+
+
+def test_manifest確定直前クラッシュ_未完了かつ再処理で同値(tmp_path, monkeypatch):
+    rows = _mk(5)
+    # まず無故障で生成し基準 sha を取得
+    ref = tmp_path / "ref"
+    output_writer.finalize(ref, "K", rows, _opts(max_rows_per_part=2))
+    ref_sha = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+               for p in sorted(ref.glob("K.part*.tsv"))}
+
+    out = tmp_path / "out"
+    monkeypatch.setattr(output_writer, "_write_manifest",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("crash")))
+    with pytest.raises(RuntimeError):
+        output_writer.finalize(out, "K", rows, _opts(max_rows_per_part=2))
+    assert list(out.glob("K.part*.tsv"))               # part は残る
+    assert not (out / "K.manifest.json").exists()      # manifest 不在
+    assert resume.is_complete(out, "K", _opts()) is False
+
+    monkeypatch.undo()
+    output_writer.finalize(out, "K", rows, _opts(max_rows_per_part=2))
+    assert resume.is_complete(out, "K", _opts()) is True
+    out_sha = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+               for p in sorted(out.glob("K.part*.tsv"))}
+    assert out_sha == ref_sha                          # Inv-7 再生成同値
