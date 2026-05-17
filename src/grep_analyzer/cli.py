@@ -71,7 +71,7 @@ def _opts_from(args: argparse.Namespace) -> EngineOptions:
 
 
 def _build_opts(argv: list[str] | None = None) -> EngineOptions:
-    """argv をパースし EngineOptions を返す公開 API（テスト用）。"""
+    """argv をパースし EngineOptions を返す（テスト・CLI 補助用）。"""
     args = _make_parser().parse_args(argv)
     return _opts_from(args)
 
