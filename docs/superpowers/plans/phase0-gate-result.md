@@ -237,3 +237,37 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 - Step3: `pyahocorasick 2.1.0` import 可（現環境）
 - 判定: **PASS**（Phase 1.5 緑 ＋ pyahocorasick G1 PASS。spec §15 フェーズ2 着手前提充足。Task 1 以降へ着手可）
 - 注: `requirements.lock`（spec §4.1）は Phase 3 へ送る（ユーザ決定）。`--memory-limit`/オートマトン分割/`ripgrep`/経路爆発 degrade は Phase 2b。spec §9 は `07e81bb`、§8.1 手順5 は `8c21227` で明確化済（Phase 2a 計画 v4 の入力）。
+
+---
+
+## Phase 2a 完了記録（spec §15 フェーズ2 のうち 2a 範囲）
+
+- 完了確認日 (UTC): 2026-05-17
+- コミット範囲: `325ec3e`（Task0 着手ゲート）..`69304a8`（Task11 golden 確定）。実装11コミット（chase/stoplist×2/automaton/walk/provenance/classify/fixedpoint/pipeline/diagnostics/golden）＋本完了記録。
+  - 注: 範囲外の `.claude/settings.local.json`（subagent 用スキル権限追記＝Phase 1.5 `7a9ae65` と同種の実装外副作用）は別コミット `feat(settings):` で分離。
+- 全テスト結果: **130 passed**（unit / integration / golden / smoke すべて PASS。0 failed / 0 error。Phase 1.5 の 78 ＋ Phase 2a 追加 52）。
+- spec 改訂（ユーザ承認・source of truth 維持）: §9 単純パスの「同一シンボル」明確化（`07e81bb`）、§8.1 手順5 ホスト変数文言を手順1/§8.4 と整合（`8c21227`）。
+- レビュー経緯: 計画 v1→v4。3巡の独立3並行批判的レビュー（spec適合／アルゴリズム決定性／TDD実行可能性）＋各反映。subagent-driven-development で全タスク実装＋タスク毎2段レビュー（spec準拠→コード品質）APPROVED。
+
+### spec §8/§9/§15（2a 範囲）→ 実装・テスト 対応表
+
+| spec 要件 | 実装 | テスト（緑） |
+|---|---|---|
+| §8.1 反復・停止性（有限母集合飽和） | `fixedpoint.run_fixedpoint` | `test_fixedpoint::test_相互参照でも有限母集合で飽和し停止する` |
+| §8.1 手順1 Pro\*C ホスト変数 非投入 | `chase.extract_chase_symbols`(proc) | `test_chase::test_C定義とconst定数を抽出しProCホスト変数は追跡投入しない` |
+| §8.3 静的採否／getter/setter 非投入 | `stoplist.admit`/`partition` | `test_stoplist`（7本） |
+| §8.3 大域決定的切り捨て（単調維持） | `fixedpoint._apply_global_cap`/`capped` | `test_fixedpoint::test_大域集合上限超過は決定的に切り捨て診断記録する` |
+| §8.2 来歴集約（intro 精密エッジ・偽chain根治） | `fixedpoint`（intro/`is_seed`） | `test_fixedpoint::test_多ホップ…偽直結を生まない`／`test_複数seedで無関係seedからの偽chainを生まない` |
+| §8.2 jobs 並列決定性 | `_scan_file`／rel昇順集約 | `test_fixedpoint::test_jobs1とjobsNでindirectキーが完全一致し非空` |
+| §8.2 走査・symlink 重複排除・生成コード除外 | `walk.walk_files` | `test_walk`（5本） |
+| §9 chain 正規形（07e81bb 明確化）／真の複数経路別行決定性 | `provenance`（単純パス） | `test_provenance`（7本）＋ golden `chain_multipath`（HUB@D 2行・厳密9行） |
+| §9 ref_kind×言語表 禁止セル | `chase.extract_chase_symbols` | `test_chase::test_ref_kind言語表の禁止セルは空を返す` |
+| §8.4 診断正本（全件性・決定性・max-depth到達記録） | `fixedpoint`/`diagnostics` | `test_diagnostics_phase2`（4本・2回実行一致・jobs決定性確認） |
+| §5.1 lang_map の direct/indirect 対称 | `pipeline`/`cli`/`fixedpoint` | `test_pipeline_fixedpoint::test_lang_mapはdirectとindirectで対称に効く` |
+| direct/indirect 併合の完全決定性 | `pipeline`（write_tsv 全順序ソート） | `test_pipeline_fixedpoint`（2回一致）＋既存8 golden 不変＋shell_direct/oracle_direct 意図regen（各 indirect:var 1行増・偽行ゼロ） |
+
+### Phase 2b/3 申し送り（spec §15 根拠付き）
+- Phase 2b: §8.2 資源 degrade（`--memory-limit` スピル・優先順位・オートマトン分割多パス）、`ripgrep` 一次フィルタ、chain 経路爆発 degrade、bytes ストリーミング化、キーワード横断 walk 診断重複の集約。
+- Phase 3: 60GB perf ベースライン、`--resume`、diagnostics 縮約（§10.3）、規模分割 `<keyword>.partNN.tsv`（§9）、`requirements.lock`（§4.1・ユーザ決定）、`--output-encoding`/`--encoding-fallback`/`--use-ripgrep`/`--memory-limit`/`--progress`。
+- Phase 2a 既知境界: 字句正規表現抽出（型解決なし＝§8.3 前提）、ASCII 識別子前提（`encoding_utf8` 非ASCII非追跡）、意味的同一性は human 判断（§8.4・intro＋is_seed で偽直結/自己汚染排除）、マスク非対称（抽出=マスク／走査=raw・§7+§8 根拠）、getter 報告量 vs PRD は `--stoplist`/`min-specificity`＋2b で緩和。
+- 成果物: 「direct＋多ホップ indirect を偽陽性抑止しつつ `--jobs` 並列でも完全決定的に出し、chain 複数経路を真ダイヤモンド golden で固定した動くツール」。単体でテスト可能・出荷可能。
