@@ -14,10 +14,16 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
+    import re
     import shutil
-    if shutil.which("rg") is not None:
-        return
-    skip = pytest.mark.skip(reason="ripgrep 不在のため skip（任意機能）")
+    rg = shutil.which("rg") is not None
+    markexpr = config.getoption("markexpr") or ""        # -m の式（"-m" でなく markexpr）
+    # "perf" がトークンとして式に現れるか（"not perf" 等の部分文字列誤判定回避）。
+    perf_selected = bool(re.search(r"\bperf\b", markexpr))
+    skip_rg = pytest.mark.skip(reason="ripgrep 不在のため skip（任意機能）")
+    skip_perf = pytest.mark.skip(reason="perf は非ゲート（既定除外）")
     for item in items:
-        if "requires_ripgrep" in item.keywords:
-            item.add_marker(skip)
+        if "requires_ripgrep" in item.keywords and not rg:
+            item.add_marker(skip_rg)
+        if "perf" in item.keywords and not perf_selected:
+            item.add_marker(skip_perf)
