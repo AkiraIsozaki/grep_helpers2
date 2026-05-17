@@ -55,3 +55,26 @@ def test_symlinkは既定で辿らず実体重複は辞書順代表のみ(tmp_pa
     os.symlink(tmp_path / "real.c", tmp_path / "link.c")
     rels, diag = _walk(tmp_path)
     assert rels == ["real.c"] and "symlink_skipped" in diag.render()
+
+
+from grep_analyzer.walk import collect_files
+
+
+def test_collect_filesは走査一度materializeしrelpath昇順(tmp_path):
+    (tmp_path / "b.c").write_text("x", "utf-8")
+    (tmp_path / "a.c").write_text("y", "utf-8")
+    diag = Diagnostics()
+    got = collect_files(tmp_path, include=[], exclude=list(DEFAULT_EXCLUDE),
+                        follow_symlinks=False, max_file_bytes=1_000_000, diag=diag)
+    assert [r for r, _ in got] == ["a.c", "b.c"]
+    assert all(hasattr(p, "is_file") for _, p in got)
+
+
+def test_collect_filesの診断は一回だけ(tmp_path):
+    (tmp_path / "build").mkdir()
+    (tmp_path / "build" / "G.c").write_text("x", "utf-8")
+    (tmp_path / "k.c").write_text("y", "utf-8")
+    d = Diagnostics()
+    collect_files(tmp_path, include=[], exclude=list(DEFAULT_EXCLUDE),
+                  follow_symlinks=False, max_file_bytes=1_000_000, diag=d)
+    assert d.render().count("walk_excluded\tbuild/G.c") == 1

@@ -84,3 +84,16 @@ def walk_files(
             continue
         seen_real[real] = rel
         yield rel, abspath
+
+
+def collect_files(
+    root: Path, *, include: list[str], exclude: list[str],
+    follow_symlinks: bool, max_file_bytes: int, diag: Diagnostics,
+) -> list[tuple[str, Path]]:
+    """walk_files を一度だけ materialize し relpath 昇順の list を返す。
+
+    走査・診断は1回（pipeline が keyword 横断で共有＝診断重複解消・§8.2）。
+    """
+    return list(walk_files(
+        root, include=include, exclude=exclude, follow_symlinks=follow_symlinks,
+        max_file_bytes=max_file_bytes, diag=diag))
