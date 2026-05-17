@@ -221,14 +221,52 @@ def run_fixedpoint(
             term_active = set()
             if not scan_syms or hop > opts.max_depth:
                 break
-            args = [(rel, str(abspath), scan_syms, opts.lang_map) for rel, abspath in files]
-            if opts.jobs > 1:
-                with multiprocessing.Pool(opts.jobs) as pool:
-                    results = pool.map(_scan_file, args)
+            scan_files = files  # Task9 で ripgrep 絞り込みに差し替え
+            n_intro = sum(len(v) for v in intro.values())
+            n_live = len(chase_active | chase_done | term_active | term_done)
+            nchunks = 1
+            if opts.force_chunks and opts.force_chunks > 1:
+                nchunks = min(opts.force_chunks, opts.max_passes,
+                              max(1, len(scan_syms)))
+            elif not budget.unlimited and budget.exceeded(estimate_items(
+                    n_symbols=n_live, n_edges=estore.in_memory_len(),
+                    n_intro=n_intro)):
+                while nchunks < opts.max_passes and nchunks < len(scan_syms) and \
+                        budget.exceeded(estimate_items(
+                            n_symbols=-(-len(scan_syms) // (nchunks + 1)),
+                            n_edges=estore.in_memory_len(), n_intro=n_intro)):
+                    nchunks += 1
+            if nchunks <= 1:
+                args = [(rel, str(abspath), scan_syms, opts.lang_map)
+                        for rel, abspath in scan_files]
+                if opts.jobs > 1:
+                    with multiprocessing.Pool(opts.jobs) as pool:
+                        results = pool.map(_scan_file, args)
+                else:
+                    results = [_scan_file(a) for a in args]
+                pass_results = sorted(results, key=lambda r: r[0])
             else:
-                results = [_scan_file(a) for a in args]
-            for rel, enc, replaced, language, dialect, found in sorted(
-                    results, key=lambda r: r[0]):
+                size = -(-len(scan_syms) // nchunks)
+                chunks = [scan_syms[i:i + size]
+                          for i in range(0, len(scan_syms), size)] or [[]]
+                diag.add("automaton_split", f"hop={hop} chunks={len(chunks)}")
+                agg: dict[str, list] = {}
+                meta: dict[str, tuple] = {}
+                for chunk in chunks:
+                    args = [(rel, str(abspath), chunk, opts.lang_map)
+                            for rel, abspath in scan_files]
+                    if opts.jobs > 1:
+                        with multiprocessing.Pool(opts.jobs) as pool:
+                            res = pool.map(_scan_file, args)
+                    else:
+                        res = [_scan_file(a) for a in args]
+                    for rel, enc, replaced, language, dialect, found in res:
+                        meta.setdefault(rel, (enc, replaced, language, dialect))
+                        agg.setdefault(rel, []).extend(found)
+                pass_results = [(rel, *meta[rel],
+                                 sorted(agg[rel], key=lambda t: (t[1], t[0])))
+                                for rel in sorted(agg)]
+            for rel, enc, replaced, language, dialect, found in pass_results:
                 enc_of.setdefault(rel, (enc, replaced))
                 if replaced and rel not in replaced_logged:
                     diag.add("decode_replaced", rel)
@@ -244,7 +282,7 @@ def run_fixedpoint(
                         if sym not in no_expand_logged:
                             diag.add("getter_setter_no_expand", sym)
                             no_expand_logged.add(sym)
-                        continue  # 横展開しない（spec §8.3 生命線）
+                        continue
                     _ingest(child, language, dialect, line, hop + 1)
             hop += 1
 

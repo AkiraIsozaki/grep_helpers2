@@ -201,3 +201,39 @@ def test_memory_limit0は2回実行で決定的(tmp_path):
     r2 = run_fixedpoint([seed], src, _opts(memory_limit_mb=0, spill_dir=tmp_path),
                         Diagnostics())
     assert k(r1) == k(r2)
+
+
+def test_automatonのscan_lineは行内シンボル昇順ユニーク_分割正規化前提固定():
+    from grep_analyzer.automaton import build, scan_line
+    au = build(["AA", "BB", "CC"])
+    assert scan_line(au, "BB CC AA AA BB") == ["AA", "BB", "CC"]
+
+
+def test_force_chunks分割は単一オートマトンと出力byte同値_memory非依存(tmp_path):
+    # split 透過性: memory=None で priority-1 非発火・分割のみ isolate
+    src = _mk(tmp_path, {"A.java": "class A{ static final int ZED=1; }\n",
+                         "T.java": "class T{ static final int ABE=2; }\n",
+                         "F.java": "class F{ static final int G1=ZED;"
+                                   " static final int G2=ABE; int u=G1; int w=G2; }\n"})
+    seeds = [_seed("ZED", "java", "A.java", 1, "static final int ZED=1;"),
+             _seed("ABE", "java", "T.java", 1, "static final int ABE=2;")]
+    k = lambda hs: sorted((h.file, h.lineno, h.ref_kind, h.via_symbol, h.chain)
+                          for h in hs)
+    one = run_fixedpoint(seeds, src, _opts(), Diagnostics())
+    diag = Diagnostics()
+    many = run_fixedpoint(seeds, src, _opts(force_chunks=3), diag)
+    assert one and k(one) == k(many)
+    assert "automaton_split" in diag.render()
+
+
+def test_memory_limit0は分割スピル切り捨て併発でも2回実行決定的(tmp_path):
+    src = _mk(tmp_path, {"A.java": "class A{ static final int K1=1; }\n",
+                         "B.java": "class B{ static final int K2=K1; }\n",
+                         "C.java": "class C{ int z2=K2; }\n"})
+    seed = _seed("K1", "java", "A.java", 1, "static final int K1=1;")
+    k = lambda hs: sorted((h.file, h.via_symbol, h.chain) for h in hs)
+    r1 = run_fixedpoint([seed], src, _opts(memory_limit_mb=0, spill_dir=tmp_path,
+                                           max_passes=8), Diagnostics())
+    r2 = run_fixedpoint([seed], src, _opts(memory_limit_mb=0, spill_dir=tmp_path,
+                                           max_passes=8), Diagnostics())
+    assert k(r1) == k(r2)
