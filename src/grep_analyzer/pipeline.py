@@ -11,7 +11,7 @@ from grep_analyzer.dispatch import (
     extension_resolves_language,
     shebang_dialect,
 )
-from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
+from grep_analyzer.encoding import decode_bytes
 from grep_analyzer.fixedpoint import EngineOptions, run_fixedpoint
 from grep_analyzer.ingest import parse_grep_line
 from grep_analyzer.model import Hit
@@ -40,12 +40,13 @@ def run(
         follow_symlinks=opts.follow_symlinks,
         max_file_bytes=opts.max_file_bytes, diag=diag)
 
+    fb = list(opts.encoding_fallback)
     for grep_file in sorted(Path(input_dir).glob("*.grep")):
         keyword = grep_file.stem
         if opts.resume and resume.is_complete(output_dir, keyword, opts):
             diag.add("resume_skipped", keyword)
             continue
-        text, _, _ = decode_bytes(grep_file.read_bytes(), DEFAULT_FALLBACK)
+        text, _, _ = decode_bytes(grep_file.read_bytes(), fb)
         hits: list[Hit] = []
 
         for raw_line in text.splitlines():
@@ -58,7 +59,7 @@ def run(
             if not target.is_file():
                 diag.add("missing_source", str(rel))
                 continue
-            file_text, enc, replaced = decode_bytes(target.read_bytes(), DEFAULT_FALLBACK)
+            file_text, enc, replaced = decode_bytes(target.read_bytes(), fb)
             if replaced:
                 diag.add("decode_replaced", str(rel))
             sample = file_text[:4096]

@@ -61,9 +61,10 @@ _REF_KIND = {"constant": "indirect:constant", "var": "indirect:var",
              "getter": "indirect:getter", "setter": "indirect:setter"}
 
 
-def _file_meta(rel: str, raw: bytes, lang_map: dict[str, str]):
+def _file_meta(rel: str, raw: bytes, lang_map: dict[str, str], fallback_chain=None):
     """1 度だけデコードし (text, enc, replaced, language, dialect) を返す。"""
-    text, enc, replaced = decode_bytes(raw, DEFAULT_FALLBACK)
+    chain = list(fallback_chain) if fallback_chain else DEFAULT_FALLBACK
+    text, enc, replaced = decode_bytes(raw, chain)
     language = detect_language(rel, text[:4096], lang_map)
     dialect = detect_shell_dialect(rel, text[:4096]) if language == "shell" else "bourne"
     return text, enc, replaced, language, dialect
@@ -75,9 +76,9 @@ def _scan_file(args):
     ストリーミング化＝親に bytes 非常駐・abspath から読む（spec §8.2）。
     automaton 走査は raw 行。出力は Phase 2a と byte 不変。
     """
-    rel, abspath, sym_list, lang_map = args
+    rel, abspath, sym_list, lang_map, fallback = args
     raw = Path(abspath).read_bytes()
-    text, enc, replaced, language, dialect = _file_meta(rel, raw, lang_map)
+    text, enc, replaced, language, dialect = _file_meta(rel, raw, lang_map, fallback_chain=fallback)
     au = automaton.build(sym_list)
     found = []
     if au is not None:
@@ -172,7 +173,7 @@ def run_fixedpoint(
         graph.add_seed(occ)
         sp = source_root / s.file
         if sp.is_file():
-            _, _, _, lang, dia = _file_meta(s.file, sp.read_bytes(), opts.lang_map)
+            _, _, _, lang, dia = _file_meta(s.file, sp.read_bytes(), opts.lang_map, fallback_chain=list(opts.encoding_fallback))
         else:
             lang, dia = s.language, "bourne"
         _ingest(occ, lang, dia, s.snippet, hop=1, is_seed=True)
@@ -250,7 +251,7 @@ def run_fixedpoint(
                             n_edges=estore.in_memory_len(), n_intro=n_intro)):
                     nchunks += 1
             if nchunks <= 1:
-                args = [(rel, str(abspath), scan_syms, opts.lang_map)
+                args = [(rel, str(abspath), scan_syms, opts.lang_map, list(opts.encoding_fallback))
                         for rel, abspath in scan_files]
                 if opts.jobs > 1:
                     with multiprocessing.Pool(opts.jobs) as pool:
@@ -266,7 +267,7 @@ def run_fixedpoint(
                 agg: dict[str, list] = {}
                 meta: dict[str, tuple] = {}
                 for chunk in chunks:
-                    args = [(rel, str(abspath), chunk, opts.lang_map)
+                    args = [(rel, str(abspath), chunk, opts.lang_map, list(opts.encoding_fallback))
                             for rel, abspath in scan_files]
                     if opts.jobs > 1:
                         with multiprocessing.Pool(opts.jobs) as pool:
@@ -315,7 +316,7 @@ def run_fixedpoint(
             seen.add(c)
             if c.relpath not in line_cache:
                 raw = rel_to_abs[c.relpath].read_bytes() if c.relpath in rel_to_abs else b""
-                text, enc, replaced, lang, dia = _file_meta(c.relpath, raw, opts.lang_map)
+                text, enc, replaced, lang, dia = _file_meta(c.relpath, raw, opts.lang_map, fallback_chain=list(opts.encoding_fallback))
                 line_cache[c.relpath] = text.split("\n")
                 meta_of[c.relpath] = (text, lang, dia)
                 enc_of.setdefault(c.relpath, (enc, replaced))
