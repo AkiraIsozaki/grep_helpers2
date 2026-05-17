@@ -1,0 +1,3 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+STATUS_OK	java	C.java	1	direct	その他		その他 (java)		STATUS_OK@C.java:1	static final String STATUS_OK = "S";	utf-8	high
+STATUS_OK	java	U.java	1	indirect:constant	その他		その他 (java)	STATUS_OK	STATUS_OK@C.java:1 -> STATUS_OK@U.java:1	class U { String x = STATUS_OK; }	utf-8	high

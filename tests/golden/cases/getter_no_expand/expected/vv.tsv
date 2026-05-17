@@ -1,0 +1,4 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+vv	java	S.java	1	direct	その他		その他 (java)		vv@S.java:1	int vv = a.getName();	utf-8	high
+vv	java	T.java	1	indirect:getter	その他		その他 (java)	getName	vv@S.java:1 -> getName@T.java:1	class T { String n = b.getName();	utf-8	low
+vv	java	T.java	2	indirect:getter	宣言		宣言 (java)	getName	vv@S.java:1 -> getName@T.java:2	 String m = c.getName(); }	utf-8	low

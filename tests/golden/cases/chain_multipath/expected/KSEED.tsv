@@ -1,0 +1,10 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+KSEED	java	A.java	1	direct	その他		その他 (java)		KSEED@A.java:1	static final int KSEED = 9;	utf-8	high
+KSEED	java	B.java	1	indirect:constant	その他		その他 (java)	HUB	KSEED@A.java:1 -> KSEED@B.java:1 -> HUB@B.java:1	class B { static final int HUB = KSEED; }	utf-8	high
+KSEED	java	B.java	1	indirect:constant	その他		その他 (java)	HUB	KSEED@A.java:1 -> KSEED@C.java:1 -> HUB@B.java:1	class B { static final int HUB = KSEED; }	utf-8	high
+KSEED	java	B.java	1	indirect:constant	その他		その他 (java)	KSEED	KSEED@A.java:1 -> KSEED@B.java:1	class B { static final int HUB = KSEED; }	utf-8	high
+KSEED	java	C.java	1	indirect:constant	その他		その他 (java)	HUB	KSEED@A.java:1 -> KSEED@B.java:1 -> HUB@C.java:1	class C { static final int HUB = KSEED; }	utf-8	high
+KSEED	java	C.java	1	indirect:constant	その他		その他 (java)	HUB	KSEED@A.java:1 -> KSEED@C.java:1 -> HUB@C.java:1	class C { static final int HUB = KSEED; }	utf-8	high
+KSEED	java	C.java	1	indirect:constant	その他		その他 (java)	KSEED	KSEED@A.java:1 -> KSEED@C.java:1	class C { static final int HUB = KSEED; }	utf-8	high
+KSEED	java	D.java	1	indirect:constant	その他		その他 (java)	HUB	KSEED@A.java:1 -> KSEED@B.java:1 -> HUB@D.java:1	class D { void run(){ check(HUB); } }	utf-8	high
+KSEED	java	D.java	1	indirect:constant	その他		その他 (java)	HUB	KSEED@A.java:1 -> KSEED@C.java:1 -> HUB@D.java:1	class D { void run(){ check(HUB); } }	utf-8	high

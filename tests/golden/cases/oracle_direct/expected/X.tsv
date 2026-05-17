@@ -1,3 +1,4 @@
 ﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+X	sql	o.sql	1	indirect:var	その他		その他 (sql)	v_code	X@o.sql:2 -> v_code@o.sql:1	v_code VARCHAR2(10);	utf-8	medium
 X	sql	o.sql	2	direct	代入		代入 (sql)		X@o.sql:2	v_code := 'X';	utf-8	medium
 X	sql	o.sql	3	direct	分岐		分岐 (sql)		X@o.sql:3	SELECT DECODE(st,1,'OK','NG') FROM dual;	utf-8	medium

@@ -1,0 +1,4 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+CODE	shell	other.sh	1	indirect:var	その他		その他 (shell)	CODE	CODE@run.sh:1 -> CODE@other.sh:1	log $CODE	utf-8	medium
+CODE	shell	run.sh	1	direct	代入		代入 (shell)		CODE@run.sh:1	CODE="X"	utf-8	medium
+CODE	shell	run.sh	2	indirect:var	その他		その他 (shell)	CODE	CODE@run.sh:1 -> CODE@run.sh:2	use $CODE	utf-8	medium
