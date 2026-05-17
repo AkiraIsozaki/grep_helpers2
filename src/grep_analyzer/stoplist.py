@@ -71,3 +71,30 @@ def admit(symbols: list[str], language: str, policy: SymbolPolicy) -> AdmissionR
         else:
             accepted.append(s)
     return AdmissionResult(accepted, rejected)
+
+
+from grep_analyzer.chase import ChaseSymbols
+
+
+@dataclass(frozen=True)
+class Partition:
+    """ChaseSymbols の決定的分割（spec §8.3）。
+
+    chase=横展開対象(constant/var採用)、terminal=報告専用(getter/setter採用・
+    横展開しない)、rejected=静的棄却(双方)。cap は非適用(大域=fixedpoint)。
+    """
+
+    chase: list[str]
+    terminal: list[str]
+    rejected: list[tuple[str, str]]
+
+
+def partition(cs: ChaseSymbols, language: str, policy: SymbolPolicy) -> Partition:
+    """ChaseSymbols を「横展開する chase／報告専用 terminal／棄却」に決定的分割。
+
+    spec §8.3 生命線: getter/setter は chase に入れない。keyword/too_short/
+    user_stoplist は双方に適用（cap は大域＝fixedpoint）。
+    """
+    chase_r = admit(list(cs.constants) + list(cs.vars), language, policy)
+    term_r = admit(list(cs.getters) + list(cs.setters), language, policy)
+    return Partition(chase_r.accepted, term_r.accepted, chase_r.rejected + term_r.rejected)
