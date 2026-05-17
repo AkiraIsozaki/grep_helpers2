@@ -351,8 +351,8 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 
 ### 全テスト結果
 
-- `python -m pytest -q` → **205 passed, 5 skipped**（0 failed / 0 error）
-  - Phase 2b ベースライン 167 passed（rg 実走後） → Phase 3 追加 38 passed
+- `python -m pytest -q` → **206 passed, 5 skipped**（0 failed / 0 error）
+  - Phase 2b ベースライン 167 passed（rg 実走後） → Phase 3 追加 39 passed
   - 5 skipped: 全て `@pytest.mark.perf`（非ゲート・デフォルト除外）
     - `tests/perf/test_perf.py::test_scale[200]`
     - `tests/perf/test_perf.py::test_scale[400]`
@@ -364,23 +364,27 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 
 ### WS1〜6 対応表
 
-| WS | 内容 | 実装コミット（Task） | 充足根拠 |
+（WS番号・内容はすべて設計 spec §1 の定義に準拠）
+
+| WS | 内容（spec §1） | 実装（Task） | 充足根拠（実テスト node ID） |
 |---|---|---|---|
-| WS1 | 耐クラッシュ・直列化・マニフェスト原子確定・孤児クリーン | Task2/4（output_writer.finalize 分割）/ Task5（クラッシュ注入テスト） | `test_phase3::test_...` 系 + `test_crash_*` 系 PASS |
-| WS2 | resume（is_complete 5条件・diagnostics 持越し） | Task3（resume.is_complete）/ Task4（配線） | `test_resume.py`（8本）PASS + golden 不変 |
-| WS3 | diagnostics §10.3 縮約・§8.4 全件免除 | Task6（diagnostics）| `test_diagnostics_phase3.py` PASS |
-| WS4 | encoding 配線（--output-encoding / --encoding-fallback 3経路） | Task8（encoding 配線） | `test_encoding_wiring.py` PASS + golden 不変 |
-| WS5 | requirements.lock + wheelhouse オフライン再現 | Task10（requirements.lock）/ Task11（test_requirements_lock_offline） | `-m perf` 実走 1 passed（15s） |
-| WS6 | perf ベースライン・corpus_gen・_ITEMS_PER_MB 較正・Inv-1 能動ガード | Task9（conftest）/ Task10（corpus_gen）/ Task11（test_scale/calibrate/Inv-1 ガード） | 4 perf tests PASS；test_inv1 PASS |
+| WS1 | `--resume` 原子性 ＋ kw 毎 manifest（spec §10.3） | Task2/4（output_writer.finalize part分割・manifest原子確定）/ Task3（resume.is_complete）/ Task5（pipeline配線） | `tests/unit/test_resume.py`（11本）PASS；`tests/integration/test_pipeline_phase3.py::test_resumeで完了kwをスキップ_バイト不変` PASS |
+| WS2 | 規模分割 `<keyword>.partNN.tsv`（spec §9） | Task2/4（output_writer.finalize part分割・孤児クリーン） | `tests/unit/test_output_writer.py`（10本）PASS；`tests/integration/test_pipeline_phase3.py::test_既定でmanifest生成されTSVは従来と同名` PASS |
+| WS3 | diagnostics §10.3 縮約・§8.4 全件性免除（spec §10.3・§8.4） | Task6（diagnostics.render detail_limit / exempt） | `tests/unit/test_diagnostics_phase3.py`（4本）PASS |
+| WS4 | `--output-encoding` / `--encoding-fallback` 配線 3経路（spec §10.1・§10.4） | Task7/8（fixedpoint._file_meta 引数追加・pipeline 2箇所注入） | `tests/integration/test_encoding_wiring.py`（5本）PASS + golden 14 不変 |
+| WS5 | `requirements.lock`（版＋ハッシュ固定）（spec §4.1） | Task10（requirements.lock 生成） | `tests/unit/test_requirements_lock.py`（2本）PASS；`tests/unit/test_requirements_lock_offline.py::test_クリーンvenvで_require_hashes_install成功`（非ゲート・`-m perf` 実走 PASS） |
+| WS6 | 60GB perf ベースライン ＋ `_ITEMS_PER_MB` 実バイト較正（spec §8.2・§11） | Task9（conftest perf除外分岐）/ Task10（corpus_gen）/ Task11（test_scale・test_calibrate・Inv-1 能動ガード） | `tests/unit/test_corpus_gen.py::test_同一シードで同一木` PASS；`tests/unit/test_perf_excluded.py::test_perfは既定でskip_reasonにperfを含む` PASS；`tests/integration/test_inv1_items_per_mb.py::test_既定出力は_items_per_mb値に不感` PASS；`tests/perf/test_perf.py`（4本 perf 非ゲート実走 PASS） |
 
 ### Inv-1/5/6/7 充足根拠
 
-| Inv | 内容 | 根拠 |
+（Inv番号・内容はすべて設計 spec §5 の定義に準拠）
+
+| Inv | 内容（spec §5） | 根拠（実テスト node ID） |
 |---|---|---|
-| Inv-1（既定 byte 不変） | `--memory-limit` 未指定時 `budget.unlimited=True` → `estimate_items` 非呼出 → `_ITEMS_PER_MB` 定数不感 | `test_既定出力は_items_per_mb値に不感`（monkeypatch 極値 1/10^9 で sha256 一致）+ golden 14 byte-identical PASS |
-| Inv-5（マニフェスト原子確定） | finalize 分割：部分書込→tmp→原子 rename→manifest 記録の順を保証 | `test_pipeline_phase3.py::test_finalize_*` 系 PASS |
-| Inv-6（§8.4 全件診断免除） | SECTION_8_4_CATEGORIES に属する診断は detail_limit 縮約から免除 | `test_diagnostics_phase3.py` PASS |
-| Inv-7（クラッシュ耐久） | クラッシュ注入後も前回完了済み keyword の TSV は破損しない | `test_phase3::test_crash_injection_*` 系 PASS |
+| Inv-1（既定 byte 不変） | 既定起動（行数 ≤ 上限・診断 ≤ 上限・UTF-8 BOM・`--resume` 無・`--memory-limit=None`）は Phase 2b golden 14・既存 167 と 1 バイト不変。manifest は追加生成物で TSV/diagnostics バイトに無影響 | `tests/integration/test_inv1_items_per_mb.py::test_既定出力は_items_per_mb値に不感`（monkeypatch 極値 1/10^9 で sha256 一致）+ `python -m pytest tests/golden -q` → 14 byte-identical PASS |
+| Inv-5（part 分割透過） | part 分割透過。比較手続きは §3 手順1 の `_canonical_data_blob` に一元定義（part 群再構成＝書込側と同一関数。`splitlines()` 不使用。BOM/ヘッダは part 数回現れるためデータ行のみで比較） | `tests/unit/test_output_writer.py::test_連結データ_単一同値_Inv5` PASS；`tests/unit/test_output_writer.py::test_書込側と完了判定側が同一関数_blob_from_data_rows_を共有` PASS；`tests/unit/test_resume.py::test_utf8sig_複数part_行数保存改竄で未完了_BOM再構成経路` PASS |
+| Inv-6（縮約は §8.4 全件性を侵さない） | `SECTION_8_4_CATEGORIES`（`symbol_rejected`・`getter_setter_no_expand`・`prov_*` プレフィックス）は常に全件出力。縮約は非 §8.4 カテゴリのみ。代表サンプルは既存決定順（add 列）先頭 K で決定的 | `tests/unit/test_diagnostics_phase3.py::test_84カテゴリは縮約しない_全件` PASS；`tests/unit/test_diagnostics_phase3.py::test_非84カテゴリは縮約_集約行` PASS；`tests/unit/test_diagnostics_phase3.py::test_detail_limit0は現行と完全同一` PASS |
+| Inv-7（resume 冪等） | 同一入力 かつ 同一ツール版（`tool_version`）かつ 同一 `_ITEMS_PER_MB` かつ 同一オプションの下で、`--resume` 有/無の最終出力（全 part＋manifest バイト）は同値。前提のいずれかが崩れる場合は完了判定5が未完了とし保守的再処理 | `tests/unit/test_resume.py::test_manifest確定直前クラッシュ_未完了かつ再処理で同値` PASS（クラッシュ注入→再処理→バイト同値）；`tests/unit/test_resume.py::test_items_per_mb不一致は未完了` PASS；`tests/integration/test_pipeline_phase3.py::test_resumeで完了kwをスキップ_バイト不変` PASS |
 
 ### perf スケール証跡（PERF 行要約）
 
@@ -425,7 +429,7 @@ CALIB peak_bytes=1612149 max_items=200000 bytes_per_item=8.1 ITEMS_PER_MB=130084
 **出荷可能（GREEN）**
 
 - 稼働先想定: モダンLinux / glibc ≥ 2.17（実測 glibc 2.36）/ Python 3.12 / x86_64
-- 全テスト 205 passed（perf 5 skipped＝非ゲート）
+- 全テスト 206 passed（perf 5 skipped＝非ゲート）
 - golden 14 byte-identical（Phase 1〜3 通算不変）
 - Inv-1/5/6/7 充足、WS1〜6 全充足
 - `requirements.lock` + wheelhouse によるオフライン再現実証済み
