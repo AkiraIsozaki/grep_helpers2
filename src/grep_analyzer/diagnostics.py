@@ -2,6 +2,16 @@
 
 from collections import Counter, defaultdict
 
+SECTION_8_4_CATEGORIES = frozenset({"symbol_rejected", "getter_setter_no_expand"})
+
+
+def _is_exempt(cat: str, exempt=SECTION_8_4_CATEGORIES) -> bool:
+    """§8.4 全件性カテゴリ（縮約免除）。prov_ プレフィックス一致を含む。
+
+    縮約免除判定の**唯一の実装**（render はこれに委譲＝prov_ ロジック非重複）。
+    """
+    return cat in exempt or cat.startswith("prov_")
+
 
 class Diagnostics:
     """カテゴリ別に診断メッセージを蓄積し、サマリ＋詳細で描画する。"""
@@ -15,13 +25,22 @@ class Diagnostics:
         self._counts[category] += 1
         self._detail[category].append(message)
 
-    def render(self) -> str:
-        """spec §10.3 のスキーマ（summary→detail）でテキスト化する。"""
+    def render(self, detail_limit: int = 0, exempt=None) -> str:
+        """spec §10.3 スキーマ。detail_limit=0 は無制限＝現行と完全同一。"""
+        is_exempt = (lambda c: _is_exempt(c, exempt)) \
+            if exempt is not None else (lambda c: False)  # prov_ ロジック単一源
         out = ["# summary"]
         for cat in sorted(self._counts):
-            out.append(f"{cat}\t{self._counts[cat]}")
+            out.append(f"{cat}\t{self._counts[cat]}")   # 常に真総数
         out.append("# detail")
         for cat in sorted(self._detail):
-            for msg in self._detail[cat]:
-                out.append(f"{cat}\t{msg}")
+            msgs = self._detail[cat]
+            if detail_limit > 0 and not is_exempt(cat) and len(msgs) > detail_limit:
+                for msg in msgs[:detail_limit]:
+                    out.append(f"{cat}\t{msg}")
+                extra = len(msgs) - detail_limit
+                out.append(f"{cat}\t(... {extra} more, {len(msgs)} total)")
+            else:
+                for msg in msgs:
+                    out.append(f"{cat}\t{msg}")
         return "\n".join(out) + "\n"
