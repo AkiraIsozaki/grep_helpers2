@@ -315,7 +315,12 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 
 ### rg 環境受入の状態
 
-本環境は rg 不在のため `requires_ripgrep` 4本 skip。**受入条件未充足の申し送り**＝`shutil.which('rg')` が None でない環境（CI 等）で `pytest -m requires_ripgrep` を別途実行し全 PASS を確認・記録すること（Phase 2b 既知境界・Task0/Task11 受入条件）。
+- 当初: 本環境は rg 不在のため `requires_ripgrep` 4本 skip（受入条件未充足の申し送り）。
+- **受入条件充足（2026-05-17・Phase 3 着手前の積み残し対処）**: `rg` を導入（`ripgrep 14.1.1`／`/usr/bin/rg`・apt）し受入条件を実走・記録。
+  - `python -m pytest -m requires_ripgrep -q` → **4 passed**（`tests/unit/test_ripgrep.py` 3本 + `tests/integration/test_phase2b_invariants.py` 1本＝全 PASS）
+  - `python -m pytest -q` → **167 passed**（skip 0。従前 163 passed + 4 skipped が解消）、0 failed / 0 error
+  - `python -m pytest tests/golden -q` → **14 passed**（既定出力 byte 不変・Inv-1 維持）
+- 結論: Task0/Task11 の rg 環境受入条件を **充足**。Phase 2b 既知境界 (2)（ripgrep は ASCII 識別子前提の walk 上位集合）は仕様固定のまま継続。
 
 ### レビュー経緯
 
