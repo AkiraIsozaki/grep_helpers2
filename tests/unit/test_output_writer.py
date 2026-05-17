@@ -1,6 +1,6 @@
 """output_writer の正規化関数（spec v4 §3 手順1・Inv-5）。"""
 
-from grep_analyzer.model import Hit
+from grep_analyzer.model import Hit, TSV_COLUMNS
 from grep_analyzer.output_writer import (
     _blob_from_data_rows, _canonical_data_blob, _data_line,
     _rows_from_part_text)
@@ -32,7 +32,6 @@ def test_canonical_blob_末尾改行を含めない_空はゼロ長():
 def test_書込側と完了判定側が同一関数_blob_from_data_rows_を共有():
     rows = [_hit("a", 1, "p"), _hit("b", 2, "q\tr")]
     blob = _canonical_data_blob(rows)
-    from grep_analyzer.model import TSV_COLUMNS
     # 先頭BOM＋ヘッダ＋sanitize後データ＋末尾改行（単一 part 相当）
     body = "﻿" + "\t".join(TSV_COLUMNS) + "\n" + "\n".join(
         _data_line(r) for r in rows) + "\n"

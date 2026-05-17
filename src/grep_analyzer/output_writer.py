@@ -4,7 +4,7 @@
 正規形は _canonical_data_blob に一元化（書込側=完了判定=Inv-5=テストが共有）。
 """
 
-from grep_analyzer.model import TSV_COLUMNS, Hit, sort_key
+from grep_analyzer.model import TSV_COLUMNS, Hit, sort_key  # TSV_COLUMNS/sort_key は Task3 で使用
 from grep_analyzer.tsv import _sanitize
 
 
@@ -29,12 +29,12 @@ def _canonical_data_blob(ordered: list[Hit]) -> bytes:
 def _rows_from_part_text(text: str) -> list[str]:
     """part 1 本のデコード済テキストからデータ行列を取り出す。
 
-    書込時 `"\\n".join(lines)+"\\n"` の厳密逆＝先頭 BOM 除去 → rstrip("\\n")
+    書込時 `"\\n".join([header]+data_lines)+"\\n"`（tsv.py:21-23 形式）の厳密逆＝先頭 BOM 除去 → rstrip("\\n")
     → split("\\n") → 先頭ヘッダ 1 行除去。splitlines() は使わない
     （_sanitize 非対象の U+2028/U+0085 等で水増しするため＝spec v4 §3 手順1）。
     decode 済 utf-8-sig は BOM 自動除去だが、防御的に先頭 U+FEFF も剥がす。
     """
-    if text and text[0] == "﻿":   # 防御的 BOM 除去（明示）
+    if text and text[0] == "\ufeff":   # 防御的 BOM 除去（明示）
         text = text[1:]
     lines = text.rstrip("\n").split("\n")
     return lines[1:]  # 先頭はヘッダ
