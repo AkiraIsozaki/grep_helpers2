@@ -108,6 +108,30 @@ def _run_split(tmp_path, fallback):
     return (out / "ZED.tsv").read_text("utf-8-sig")
 
 
+def test_空のencoding_fallbackは既定鎖に復帰しクラッシュしない(tmp_path, monkeypatch):
+    # --encoding-fallback "" → opts.encoding_fallback==() 。chardet None 固定で
+    # ③ 強制下、pipeline が [] を decode_bytes に渡すと IndexError クラッシュ。
+    # _file_meta は空→DEFAULT_FALLBACK へ静かに復帰する。両経路を一致させ
+    # （spec §10.1）、空指定でも既定鎖出力＝非クラッシュであることを検証。
+    _no_chardet(monkeypatch)
+    b = b"\x83\x65"
+    src = tmp_path / "src"; src.mkdir(parents=True, exist_ok=True)
+    (src / "A.java").write_bytes(b"class A{ String s=\"" + b + b"\"; }\n")
+    inp = tmp_path / "input"; inp.mkdir(parents=True, exist_ok=True)
+    (inp / "K.grep").write_text("A.java:1:String s\n", "utf-8")
+    out = tmp_path / "o"
+    # 空鎖でも例外を投げず 0 を返す
+    assert main(["--input", str(inp), "--output", str(out),
+                 "--source-root", str(src), "--encoding-fallback", ""]) == 0
+    empty = (out / "K.tsv").read_text("utf-8-sig")
+    # 既定鎖（DEFAULT_FALLBACK）と同一出力であること（_file_meta と一致）
+    out2 = tmp_path / "o2"
+    assert main(["--input", str(inp), "--output", str(out2),
+                 "--source-root", str(src),
+                 "--encoding-fallback", "cp932,euc-jp,latin-1"]) == 0
+    assert empty == (out2 / "K.tsv").read_text("utf-8-sig")
+
+
 def test_automaton分割発火構成でfallback鎖が届く(tmp_path, monkeypatch):
     # chardet 中立化で ③ 強制。force_chunks=3 で automaton_split を実発火
     # させた構成（test_fixedpoint.py:212 同型）で F.java を走査し、鎖が

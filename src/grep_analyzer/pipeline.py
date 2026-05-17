@@ -11,7 +11,7 @@ from grep_analyzer.dispatch import (
     extension_resolves_language,
     shebang_dialect,
 )
-from grep_analyzer.encoding import decode_bytes
+from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
 from grep_analyzer.fixedpoint import EngineOptions, run_fixedpoint
 from grep_analyzer.ingest import parse_grep_line
 from grep_analyzer.model import Hit
@@ -40,7 +40,7 @@ def run(
         follow_symlinks=opts.follow_symlinks,
         max_file_bytes=opts.max_file_bytes, diag=diag)
 
-    fb = list(opts.encoding_fallback)
+    fb = list(opts.encoding_fallback) or DEFAULT_FALLBACK
     for grep_file in sorted(Path(input_dir).glob("*.grep")):
         keyword = grep_file.stem
         if opts.resume and resume.is_complete(output_dir, keyword, opts):
