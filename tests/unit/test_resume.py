@@ -82,6 +82,7 @@ def test_manifest確定直前クラッシュ_未完了かつ再処理で同値(t
     # まず無故障で生成し基準 sha を取得
     ref = tmp_path / "ref"
     output_writer.finalize(ref, "K", rows, _opts(max_rows_per_part=2))
+    assert resume.is_complete(ref, "K", _opts()) is True   # 基準＝無故障完了の保証
     ref_sha = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                for p in sorted(ref.glob("K.part*.tsv"))}
 
@@ -90,7 +91,7 @@ def test_manifest確定直前クラッシュ_未完了かつ再処理で同値(t
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("crash")))
     with pytest.raises(RuntimeError):
         output_writer.finalize(out, "K", rows, _opts(max_rows_per_part=2))
-    assert list(out.glob("K.part*.tsv"))               # part は残る
+    assert len(list(out.glob("K.part*.tsv"))) == 3     # 全 part 保全（Inv-7）
     assert not (out / "K.manifest.json").exists()      # manifest 不在
     assert resume.is_complete(out, "K", _opts()) is False
 
