@@ -79,3 +79,12 @@ def test_proc_非EXEC_C文はmask後にCノード規則():
     # 生 EXEC が C パースを壊さない（mask_exec_sql 後・行番号保存）
     assert ts_span("proc", "int g = 1\n  + 2;\nEXEC SQL SELECT 1 ;\n", 1) \
         == (0, 1)
+
+
+from grep_analyzer.snippet import proc_exec_span
+
+
+def test_proc_exec_spanは原ソース行スパン():
+    src = "int x;\nEXEC SQL SELECT 1\n  INTO :a FROM dual ;\n"
+    assert proc_exec_span(src, 2) == (1, 2)
+    assert proc_exec_span(src, 1) is None

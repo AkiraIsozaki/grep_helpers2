@@ -198,3 +198,15 @@ def ts_span(language: str, file_text: str, lineno: int):
     if last_stmt is None or _err(last_stmt):
         return None
     return (last_stmt.start_point[0], last_stmt.end_point[0])
+
+
+from grep_analyzer.proc_preprocess import exec_spans
+
+
+def proc_exec_span(file_text: str, lineno: int):
+    """hit が EXEC 区間に含まれれば原ソース行スパン [s,e]、なければ None。"""
+    hit = lineno - 1
+    for s, e in exec_spans(file_text):
+        if s <= hit <= e:
+            return (s, e)
+    return None

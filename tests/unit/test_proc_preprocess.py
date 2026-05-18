@@ -16,3 +16,16 @@ def test_EXEC_SQL区間はC構文を壊さない中立行に置換される():
     out = mask_exec_sql(src)
     assert "SELECT" not in out
     assert out.endswith("\n")
+
+
+from grep_analyzer.proc_preprocess import exec_spans
+
+
+def test_文字列内セミコロンで誤切断しない():
+    src = "int x;\nEXEC SQL INSERT INTO t\n  VALUES (';', :y) ;\nint z;\n"
+    assert exec_spans(src) == [(1, 2)]
+
+
+def test_複数EXEC区間とEND_EXEC():
+    src = "EXEC SQL A ;\nmid;\nEXEC ORACLE OPTION\nEND-EXEC\n"
+    assert exec_spans(src) == [(0, 0), (2, 3)]
