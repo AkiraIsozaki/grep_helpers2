@@ -71,6 +71,29 @@ def test_複数seedで無関係seedからの偽chainを生まない(tmp_path):
     assert all("o.sql:3 -> v_code" not in h.chain for h in hits)
 
 
+def test_seed_chaseは原ソースヒット行で抽出し多行snippet混入を生まない(tmp_path):
+    # Task8 Step3b 回帰: seed Hit.snippet が build_snippet 由来の多行
+    # （SELECT 行の表示 snippet に隣接行 v_code := 'X'; が混入）でも、
+    # chase 抽出は spec §8.1 の原ソースヒット物理行で行われ、SELECT-line
+    # seed から偽の indirect:var v_code 行/chain を生まないこと。
+    src = _mk(tmp_path, {"o.sql": "v_code VARCHAR2(10);\nv_code := 'X';\n"
+                                   "SELECT DECODE(st,1,'OK','NG') FROM dual;\n"})
+    seeds = [
+        _seed("X", "sql", "o.sql", 2, "v_code := 'X';"),
+        # line 3 の seed snippet は build_snippet 相当の多行（line2 を含む）
+        _seed("X", "sql", "o.sql", 3,
+              "v_code := 'X'; \n SELECT DECODE(st,1,'OK','NG') FROM dual;"),
+    ]
+    hits = run_fixedpoint(seeds, src, _opts(), Diagnostics())
+    h1 = [h for h in hits if h.file == "o.sql" and h.lineno == 1]
+    # line1(v_code 宣言)の indirect は line2 seed 由来の単一 chain のみ
+    assert len(h1) == 1
+    assert h1[0].ref_kind == "indirect:var" and h1[0].via_symbol == "v_code"
+    assert h1[0].chain == "X@o.sql:2 -> v_code@o.sql:1"
+    # SELECT 行 seed から派生した偽 chain は存在しない
+    assert all("o.sql:3 -> v_code" not in h.chain for h in hits)
+
+
 def test_相互参照でも有限母集合で飽和し停止する(tmp_path):
     src = _mk(tmp_path, {"A.java": "class A{ static final int PP = QQ; }\n",
                          "B.java": "class B{ static final int QQ = PP; }\n"})

@@ -174,10 +174,15 @@ def run_fixedpoint(
         graph.add_seed(occ)
         sp = source_root / s.file
         if sp.is_file():
-            _, _, _, lang, dia = _file_meta(s.file, sp.read_bytes(), opts.lang_map, fallback_chain=list(opts.encoding_fallback))
+            text, _, _, lang, dia = _file_meta(
+                s.file, sp.read_bytes(), opts.lang_map,
+                fallback_chain=list(opts.encoding_fallback))
+            _ls = text.split("\n")
+            seed_line = _ls[s.lineno - 1] if 0 <= s.lineno - 1 < len(_ls) else ""
         else:
             lang, dia = s.language, "bourne"
-        _ingest(occ, lang, dia, s.snippet, hop=1, is_seed=True)
+            seed_line = ""
+        _ingest(occ, lang, dia, seed_line, hop=1, is_seed=True)
 
     if files is None:
         files = list(walk.walk_files(
