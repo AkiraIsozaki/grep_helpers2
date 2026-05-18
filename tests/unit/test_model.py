@@ -24,7 +24,7 @@ def test_Hitはタプル化でTSV列順に並ぶ():
     ]
 
 
-def test_sort_keyはfile_lineno_ref_kindの順で全順序を与える():
+def test_sort_keyはdirect同士でfile_lineno順を与える():
     a = Hit("K", "java", "a.java", 2, "direct", "比較", "", "", "", "K@a.java:2", "s", "utf-8", "high")
     b = Hit("K", "java", "a.java", 10, "direct", "比較", "", "", "", "K@a.java:10", "s", "utf-8", "high")
     assert sorted([b, a], key=sort_key) == [a, b]
@@ -64,3 +64,7 @@ def test_完全同値近傍はlanguage_encodingで全順序():
     p = _h(language="java")
     q = _h(language="shell")
     assert sorted([q, p], key=sort_key) == [p, q]
+    # encoding タイブレーク: "utf-16" < "utf-8" (昇順文字列比較: '1' < '8')
+    e1 = _h(encoding="utf-16")
+    e2 = _h(encoding="utf-8")
+    assert sorted([e2, e1], key=sort_key) == [e1, e2]
