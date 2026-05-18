@@ -774,6 +774,27 @@ from grep_analyzer.snippet import build_snippet
                     confidence=conf))
 ```
 
+- [ ] **Step 3b（v9 訂正・seed chase 抽出の層分離・必須）**: `pipeline` の seed Hit は `snippet=build_snippet(...)`（多行）になるが、`fixedpoint` の seed 取込 `_ingest(occ, lang, dia, s.snippet, hop=1, is_seed=True)`（`fixedpoint.py` seed ループ・`s.snippet` を `extract_chase_symbols` の入力に使用）は **spec §8.1（chase は原ソースの字句＝ヒット物理行）／spec §5.1・§7（snippet は出力専用・追跡入力に使わない）に違反**する。多行 snippet が隣接行の識別子（例 `v_code := 'X';`）を chase へ漏洩させ偽 indirect 行を生む（oracle_direct 3→4 行で実証）。**修正**: `fixedpoint.py` の seed ループで `s.snippet` ではなく**原ソースの当該物理行**を `_ingest` に渡す。seed ループは既に `sp.read_bytes()` で `_file_meta` を呼ぶので、その `text` を捕捉してヒット行を取り出す:
+
+```python
+    for s in seed_hits:
+        occ = Occurrence(s.keyword, s.file, s.lineno)
+        graph.add_seed(occ)
+        sp = source_root / s.file
+        if sp.is_file():
+            text, _, _, lang, dia = _file_meta(
+                s.file, sp.read_bytes(), opts.lang_map,
+                fallback_chain=list(opts.encoding_fallback))
+            _ls = text.split("\n")
+            seed_line = _ls[s.lineno - 1] if 0 <= s.lineno - 1 < len(_ls) else ""
+        else:
+            lang, dia = s.language, "bourne"
+            seed_line = ""
+        _ingest(occ, lang, dia, seed_line, hop=1, is_seed=True)
+```
+
+（`s.snippet` 参照を撤廃。これは spec §8.1 を正しく満たし、非 seed の `_ingest`（実走査行を渡す）と一貫。Task 8 で `snippet=build_snippet` 化したことの副作用を打ち消す。）回帰テスト `tests/unit/test_fixedpoint.py` に「多行 snippet 化後も seed chase は原ソースヒット行のみで隣接行を漏らさない（oracle_direct 相当の最小例で indirect 行数が増えない）」を1件追加。
+
 - [ ] **Step 4: pipeline で snippet 配線＋finalize 直前に file 絶対化** — `src/grep_analyzer/pipeline.py`:
 
 冒頭 import に追加:
