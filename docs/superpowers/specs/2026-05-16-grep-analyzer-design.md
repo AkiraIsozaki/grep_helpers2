@@ -8,7 +8,8 @@
   - v4: 2回目AIレビュー反映。Python3.12はターゲット既存（wheelhouseのみ）
   - v5: 3回目AIレビュー反映。停止性論証の修正／ストップリスト循環の解消（v1は静的のみ）／chain正規形／Pro\*C行番号保存／来歴グラフのメモリ／版ピン表現の是正／原子的TSV書込／実装フェーズ分割の追加／PRD版参照の版非依存化
   - v6: 4回目AIレビュー反映。型解決依存getter/setterは不動点投入しない静的規則（汎用getter爆発を構造的に抑止）／chain経路集合の有限化規則（単純パス・循環打切）／停止性前提文の厳密化／encoding正本一元化／part分割境界の決定性。これにより §15 全フェーズの writing-plans 着手ブロッカーを解消
-  - **v7（現行）: ユーザー補足反映（Phase 1 完了後）。SQL方言を Oracle に確定（Pro\*C 埋め込みSQLと一貫）。Shell に C系シェル方言（csh/tcsh）を追加（§2.3 の1言語内方言・TSV `language` 語彙は "shell" 不変）。§5.1 にシェバン検出を追加し拡張子なしスクリプトも決定的に判別。§7/§8.1 を Oracle方言・bourne/cshell 二方言に精密化。§12 に「Oracle確定で tree-sitter SQL の却下理由は弱まるが、Oracle/PL-SQL の公式オフライン prebuilt wheel が無く §3/§4 単一トラック前提が採否を決めるため v1 非採用」の再評価を明記、§14 に条件付き将来候補として記録。§15 にフェーズ1.5（決定的コアの方言精密化）を追加（Phase 2 不動点エンジンとは別計画）**
+  - v7: ユーザー補足反映（Phase 1 完了後）。SQL方言を Oracle に確定（Pro\*C 埋め込みSQLと一貫）。Shell に C系シェル方言（csh/tcsh）を追加（§2.3 の1言語内方言・TSV `language` 語彙は "shell" 不変）。§5.1 にシェバン検出を追加し拡張子なしスクリプトも決定的に判別。§7/§8.1 を Oracle方言・bourne/cshell 二方言に精密化。§12 に「Oracle確定で tree-sitter SQL の却下理由は弱まるが、Oracle/PL-SQL の公式オフライン prebuilt wheel が無く §3/§4 単一トラック前提が採否を決めるため v1 非採用」の再評価を明記、§14 に条件付き将来候補として記録。§15 にフェーズ1.5（決定的コアの方言精密化）を追加（Phase 2 不動点エンジンとは別計画）
+  - **v8（現行）: ユーザー補足反映（Phase 3 進行中）。出力可読性の3改訂。(1) §9 `file` 列を `--source-root` の `realpath` ＋正規化相対パスを連結した絶対パスへ（golden は比較時のみ `{SOURCE_ROOT}` テンプレ正規化で決定性・オフライン再現を維持。`chain` の relpath 表現は不変）。(2) §9 決定性ソートキーを `(ref_kind_rank, chain_group, file, lineno, …)` へ改訂し direct ブロック→indirect ブロック（indirect は chain＝値の流れごとに集約）。Phase1 は全行 direct で順序不変（churn ゼロ）。(3) §9 `snippet` を1行から構文単位・複数行へ（java/c/proc=tree-sitter 最小意味ノード、Pro\*C=原ソース物理行マップ、sql/shell=決定的ヒューリスティック）。物理行は §9 サニタイズ後 ` ⏎ ` 連結で1セル＝生改行ゼロ維持（output_writer/tsv/resume/manifest の決定性機構は不変）。ヒット行中心の上下対称拡張＋上限（既定 12 行/800 文字）両端省略マーカ。§7 に Pro\*C snippet 原ソース行マップ、§8.4 に sql/shell snippet ヒューリスティック境界、§11 に回帰ケース、§14 に opt-in RFC4180 セル内改行出力を将来候補として追記**
 - ステータス: ドラフト（ユーザー再レビュー待ち）
 - 位置づけ: `docs/product-requirements.md`（PRD）を受けた確定設計。本書が実装計画 (writing-plans) の入力。**§4.2 ゲートG1 と §15 フェーズ0 は writing-plans 着手前のブロッキング前提**。
 
@@ -140,6 +141,8 @@ Ingest → Seed化 → 言語ディスパッチ → 分類器(tree-sitter主軸)
 
 `category` は**二層**: 共通上位（比較/代入/引数/宣言/出力/分岐）＋言語固有サブ。サブ語彙の確定は §15 フェーズで段階導入（§9/§11 の churn 回避）。
 
+**snippet との §7 連携（v8）**: 分類で用いた tree-sitter AST（java/c/Pro\*C）はそのまま §9「snippet 切り出し規則」の最小意味ノード選択に再利用する。**Pro\*C は本 §7 の中立トークン置換・行番号保存規則に従い、選択ノード範囲を原ソースの物理行へ写像して原ソース行テキストを snippet とする**（中立プレースホルダ・トークンは snippet に出さない）。sql/shell は AST 非使用のため §9 の決定的ヒューリスティックで切り出す（限界は §8.4 を正本）。
+
 ---
 
 ## 8. 不動点・ターゲットスキャン・エンジン（網羅性優先・偽陽性は抑止）
@@ -189,6 +192,7 @@ Ingest → Seed化 → 言語ディスパッチ → 分類器(tree-sitter主軸)
 - **非シェルのシェバン**: `perl`/`python` 等（§14 将来言語）は Shell に分類せず `unsupported_shebang` として記録（§5.1）。
 - **生成コード**（既定除外。除外した旨を記録）。
 - **§8.3 で横展開を抑止／集合上限で切り捨てたシンボル**（全件列挙）。
+- **snippet 切り出しの境界（v8・§9「snippet 切り出し規則」を正本参照）**: sql/shell は AST 非使用ヒューリスティックのため、動的生成SQL・heredoc・`eval`・複数行マクロでは構文単位を正しく囲えず過大／過小になり得る（誤検出ではなく v1 仕様）。上限クランプ（既定 12 行／800 文字）超過で省略が生じた場合は snippet 内に決定的マーカ `…(+K行省略)` を残し取りこぼしを隠さない。
 
 diagnostics 出力規約は §10.3。
 
@@ -202,7 +206,7 @@ diagnostics 出力規約は §10.3。
 |---|---|
 | `keyword` | 調査対象の文言 |
 | `language` | 判定言語（Shell は方言不問で "shell" 固定。bourne/cshell は分類・追跡の内部属性＝§5.1/§7） |
-| `file` | **`--source-root` からの正規化相対パス・`/`区切り固定** |
+| `file` | **`--source-root` の `realpath` ＋正規化相対パスを連結した絶対パス・`/`区切り固定**（v8）。golden は比較時のみ source-root プレフィクスを `{SOURCE_ROOT}` テンプレへ正規化し決定性・オフライン再現を維持。`chain` 列の `<relpath>` 表現は変更しない（来歴ID簡潔化・golden安定） |
 | `lineno` | 行番号（Pro\*C も原ソース基準・§7 行番号保存） |
 | `ref_kind` | `direct` / `indirect:constant` / `indirect:getter` / `indirect:setter` / `indirect:var` |
 | `category` | 共通上位カテゴリ（§7） |
@@ -210,11 +214,17 @@ diagnostics 出力規約は §10.3。
 | `usage_summary` | ★ひと目要約 |
 | `via_symbol` | 経由シンボル（direct は空） |
 | `chain` | 来歴の正規形（下記） |
-| `snippet` | 該当行（タブ/改行除去） |
+| `snippet` | ★該当箇所の**構文単位・複数行**（v8。下記「snippet 切り出し規則」）。物理行は §9 サニタイズ後 ` ⏎ `（前後空白付き U+23CE）で連結し1セルに収める＝**フィールド内に生改行を持たない**（タブ区切り・原子書込・`--resume`・manifest の決定性機構は不変）。`lineno` はヒット行を指す（snippet 開始行ではない） |
 | `encoding` | 判定文字コード（置換時の「要確認」規約は §10.1 を正本とする） |
 | `confidence` | `high`/`medium`/`low`（ヒット単位） |
 
-**chain 正規形（決定性のため必須）**: 各ホップを `symbol@<relpath>:<lineno>` とし ` -> ` で連結（起点→経由→ヒット）。**経路集合の生成・有限化規則**: chain は来歴グラフ上の**単純パス**（同一エッジ・同一シンボルを二度通らない）に限り列挙する。**「同一シンボル」の定義（明確化）**: 不動点に投入された**追跡識別子（chase の constant/var・terminal の getter/setter）**を指す。起点 keyword（本 §9 `keyword` 列＝**調査対象の文言**であり追跡識別子ではない）は循環判定の対象外とし、keyword の文言が最初の追跡識別子と同名の場合（例: keyword が変数名で `CODE@def -> CODE@use`）も単純パスとして許容する（PRD 主目的＝当該シンボルの利用箇所列挙を満たすため。§8.1 手順1 の「seed/既存ヒットから追跡シンボルを抽出」と整合）。循環は最初の再訪エッジで打ち切り §8.4 正本として diagnostics 記録。`--max-depth` 超過パスも打ち切り。これにより経路集合は**有限かつ決定的**。**同一ヒット（同一snippet行）へ異なる単純パスで到達した場合は経路ごとに別行**（この場合の行重複を許容し、§9 決定性ソートで安定化。重複許容を本スキーマの仕様とする）。
+**chain 正規形（決定性のため必須）**: 各ホップを `symbol@<relpath>:<lineno>` とし ` -> ` で連結（起点→経由→ヒット）。**経路集合の生成・有限化規則**: chain は来歴グラフ上の**単純パス**（同一エッジ・同一シンボルを二度通らない）に限り列挙する。**「同一シンボル」の定義（明確化）**: 不動点に投入された**追跡識別子（chase の constant/var・terminal の getter/setter）**を指す。起点 keyword（本 §9 `keyword` 列＝**調査対象の文言**であり追跡識別子ではない）は循環判定の対象外とし、keyword の文言が最初の追跡識別子と同名の場合（例: keyword が変数名で `CODE@def -> CODE@use`）も単純パスとして許容する（PRD 主目的＝当該シンボルの利用箇所列挙を満たすため。§8.1 手順1 の「seed/既存ヒットから追跡シンボルを抽出」と整合）。循環は最初の再訪エッジで打ち切り §8.4 正本として diagnostics 記録。`--max-depth` 超過パスも打ち切り。これにより経路集合は**有限かつ決定的**。**同一ヒット（同一ヒット行＝同一 `file`:`lineno`。snippet 複数行化後も重複粒度はヒット行単位）へ異なる単純パスで到達した場合は経路ごとに別行**（この場合の行重複を許容し、§9 決定性ソートで安定化。重複許容を本スキーマの仕様とする）。
+
+**snippet 切り出し規則（v8・決定性必須）**: ヒット行を含む「処理がひと目で分かる最小単位」を決定的に切り出す。判定は対象ファイルの物理行のみに依存し走査順非依存（§9 決定性・golden 前提）。
+
+- **java / c / Pro\*C（tree-sitter・分類と同一 AST 経路）**: ヒット位置の祖先から**最小の意味あるノード**を選び、そのノードの物理行スパンを既定の選択範囲とする。粒度規則（決定的・上位を優先）: ① 最も近い祖先の statement（宣言文・代入文・式文・`return`/`throw`）、② それが `if`/`for`/`while`/`switch`/`try` の**ヘッダ／条件部**（複数行に渡る条件式を含む）に属するなら**当該ヘッダ／条件部のみ**を選択範囲とする（**本体ブロックは含めない**。本体は下記「上限と切り詰め」での拡張時にのみ部分的に入りうる）、③ `switch`/`case` 内なら当該 `case` ラベル節、④ アノテーション・修飾子は宣言ノードに含める。**Pro\*C は §7 の中立トークン置換後 AST の選択ノード範囲を原ソースの物理行へ写像し、原ソース行テキストを採用**（行番号保存と一貫。中立トークンは出力しない）。
+- **sql / shell（AST 非使用・決定的ヒューリスティック）**: ヒット行から、(a) 行末バックスラッシュ継続、(b) 未閉じ括弧 `() [] {}` のバランス、(c) 未終端クオート、(d) 文終端境界 — SQL は文末 `;` または直近の句境界（`WHERE`/`SET`/`VALUES`/`SELECT`/`FROM`/`GROUP BY`/`ORDER BY`/`HAVING`）、shell は `;`/`fi`/`done`/`esac`/`breaksw`/関数本体 `}` — を満たす範囲へ前後拡張した物理行スパンを既定の選択範囲とする。限界は §8.4 を正本。
+- **上限と切り詰め（決定的）**: snippet は**既定では上記の選択範囲（ノード／ヒューリスティック span）全体**とする。その span が行数上限 **既定 12 行** または文字数上限 **既定 800 文字**（` ⏎ ` 連結後・サニタイズ後・省略マーカ込みで測定）を**超える場合のみ**縮約する。縮約はヒット行を必ず含めたまま**ヒット行を中心に上下1物理行ずつ対称に**選択範囲内へ収め、いずれかの上限に達した時点で停止（選択範囲の端に先に到達した側はそれ以上採らず反対側のみ継続）。縮約で省略が生じた側に決定的マーカ `…(+K行省略)`（K=省略物理行数）を付す（上端・下端いずれも・両端可）。上限は v1 では spec 固定（CLI 可変は §14 将来候補）。
 
 **ref_kind × 言語マッピング:**
 
@@ -226,7 +236,7 @@ diagnostics 出力規約は §10.3。
 | Shell(bourne) | `readonly` 等 | `var=` 代入=`indirect:var` | — |
 | Shell(cshell) | — （確実な定数階層なし） | `set`／`setenv`／`@` 代入=`indirect:var` | — |
 
-**決定性（golden前提・必須）**: 出力は**全列を含む全順序**で安定ソート（キー順 `(file, lineno, ref_kind, via_symbol, chain, category, category_sub, confidence, usage_summary, snippet)`）。`multiprocessing` 完了順・走査順に依存しない。
+**決定性（golden前提・必須）**: 出力は**全列を含む全順序**で安定ソート。キー順（v8 改訂）`(ref_kind_rank, chain_group, file, lineno, ref_kind, via_symbol, category, category_sub, confidence, usage_summary, snippet)`。`ref_kind_rank`＝`direct`→0 / `indirect:*`→1（**direct ブロックを先に**）。`chain_group`＝`direct` のとき空文字 `""`（全 direct が同値となり file/lineno へ落ちる）／`indirect:*` のとき `chain` 文字列（**値の流れ＝chain ごとに塊**）。`lineno` は数値順。`multiprocessing` 完了順・走査順に依存しない。**Phase1 は全行 `direct` ゆえ `ref_kind_rank=0`・`chain_group=""` が一定で実質 `(file, lineno, …)` に縮退し、既存 Phase1 golden の順序は不変**（意図的スキーマ変更時を除き churn を出さない）。
 
 **規模対策**: 1キーワードが Excel 上限（約104万行）超見込みなら `<keyword>.partNN.tsv` 分割＋diagnostics警告。**分割は全順序安定ソート後の順次チャンク**で行う（境界は決定的。golden が割れない）。
 
@@ -273,7 +283,7 @@ grep_analyzer --input ./input --output ./output --source-root <tree> \
 
 - `tests/unit/`: 分類器（tree-sitterクエリ）・追跡シンボル抽出・シンボル採否（静的ストップリスト）・grep行パース・文字コードフォールバック・**不動点停止性（有限母集合で飽和）**・Pro\*C行番号保存・chain正規形。
 - `tests/integration/`: CLI契約・複数keyword・エラー経路・`--resume`原子性・オプション相互作用（in-process 既定）。
-- `tests/golden/`: 合成小規模代表ツリーで TSV 完全一致。**カバレッジ原則**: 言語×ref_kind は必須網羅、文字コード/多ホップは pairwise 直交。**必須回帰ケースを名指し**: 汎用名の横展開抑止、決定性タイブレーク（chain複数経路の別行）、Pro\*C `EXEC SQL` 内ホスト変数＋行番号保存、symlink重複排除、文字コード混在（**期待文字コード判定値を pin**）、**Oracle 方言（`:=` 代入・`DECODE`/`CASE WHEN`）**、**C系シェル（`set var =`・拡張子なし＋`#!/bin/csh` でのシェバン判別）**、**拡張子なし bourne（`#!/bin/sh` でのシェバン判別）**、**非シェルシェバンの `unsupported_shebang` 診断**。`category_sub` は初版**空固定**。
+- `tests/golden/`: 合成小規模代表ツリーで TSV 完全一致。**カバレッジ原則**: 言語×ref_kind は必須網羅、文字コード/多ホップは pairwise 直交。**必須回帰ケースを名指し**: 汎用名の横展開抑止、決定性タイブレーク（chain複数経路の別行）、Pro\*C `EXEC SQL` 内ホスト変数＋行番号保存、symlink重複排除、文字コード混在（**期待文字コード判定値を pin**）、**Oracle 方言（`:=` 代入・`DECODE`/`CASE WHEN`）**、**C系シェル（`set var =`・拡張子なし＋`#!/bin/csh` でのシェバン判別）**、**拡張子なし bourne（`#!/bin/sh` でのシェバン判別）**、**非シェルシェバンの `unsupported_shebang` 診断**、**（v8）絶対パス `file` 列（golden は `{SOURCE_ROOT}` テンプレ正規化で比較）**、**（v8）direct→indirect の chain 集約ソート（Phase1 は順序不変を回帰で固定／Phase2 は indirect が chain ごとに隣接）**、**（v8）複数行 snippet（複数行 if／複数条件 WHERE／長大 switch・case 節）**、**（v8）snippet 上限クランプの両端 `…(+K行省略)` マーカ（決定的）**、**（v8）Pro\*C snippet の原ソース物理行マップ（中立トークン非出力）**。`category_sub` は初版**空固定**。
 - `tests/handcrafted/`: 分類精度ダッシュボード（非ゲート）。
 - `tests/test_smoke.py`: `import` ＋ `--help` exit 0 ＋ **tree-sitter バインド/grammar ABI 整合確認**。
 - `tests/perf/`: 独自マーカ `@pytest.mark.perf`。handcrafted 同様**ダッシュボード（非ゲート・CI停止しない）**。§8.2 参照基準を回帰検知ベースラインとして記録（絶対SLAではない）。
@@ -309,6 +319,7 @@ grep_analyzer --input ./input --output ./output --source-root <tree> \
 - **tree-sitter Oracle/PL-SQL grammar 採用**（SQL 分類 medium→high・§8.1 複数行 PL/SQL 抽出精度向上）。**前提条件: §4.2 G1 相当の検証で、py-tree-sitter ピン版（0.21系）ABI と整合する Oracle/PL-SQL grammar の cp312・対象 manylinux prebuilt wheel がオフライン取得可能であること**。不可なら sdist ビルド可否を §3/§4.2 と合わせ意思決定（§12 の再評価を参照）。
 - **「プロジェクト頻出トップN」動的ストップリスト**（v1静的のみ。動的化は事前走査の決定的母数定義とともに v2+）。
 - キーワード内チェックポイント（再開粒度の精緻化）。
+- **opt-in RFC4180 セル内改行出力（v8 検討・条件付き将来候補）**: Excel でセル内改行を厳密に得たい場合の別出力モード。**前提**: タブ区切り＋クオートは Excel 版／ロケール依存で不安定なため CSV（カンマ）限定とし、§9「タブ/改行サニタイズ」前提と `_rows_from_part_text`／`data_sha256`／`--resume` 完了判定の決定性コアを RFC4180 対応へ作り替える別計画を要する。v1 は ` ⏎ ` 連結（生改行ゼロ）を維持＝決定性コア不変（§9 snippet 切り出し規則）。
 
 ---
 
