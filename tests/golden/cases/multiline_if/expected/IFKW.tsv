@@ -1,0 +1,2 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+IFKW	java	{SOURCE_ROOT}/A.java	2	direct	比較		比較 (java)		IFKW@A.java:2	  if (s \n       == 1) {	utf-8	high

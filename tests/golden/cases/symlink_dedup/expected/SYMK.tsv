@@ -1,0 +1,3 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+SYMK	java	{SOURCE_ROOT}/C.java	1	direct	その他		その他 (java)		SYMK@C.java:1	class C { static final String SYMK = "S"; }	utf-8	high
+SYMK	java	{SOURCE_ROOT}/a_user.java	1	indirect:constant	その他		その他 (java)	SYMK	SYMK@C.java:1 -> SYMK@a_user.java:1	class a_user { String x = SYMK; }	utf-8	high

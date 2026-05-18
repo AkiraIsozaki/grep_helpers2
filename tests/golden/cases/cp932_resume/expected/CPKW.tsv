@@ -1,0 +1,2 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+CPKW	sql	{SOURCE_ROOT}/q.sql	4	direct	比較		比較 (sql)		CPKW@q.sql:4	FROM tbl \n WHERE col=1 \n   AND flg=2;	cp932	medium

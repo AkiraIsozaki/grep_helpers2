@@ -1,0 +1,2 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+PKW	proc	{SOURCE_ROOT}/p.pc	2	direct	その他		その他 (proc)		PKW@p.pc:2	EXEC SQL INSERT INTO t \n   VALUES (';', :y) ;	utf-8	high

@@ -1,0 +1,4 @@
+int x;
+EXEC SQL INSERT INTO t
+  VALUES (';', :y) ;
+int z;
