@@ -10,7 +10,7 @@ from grep_analyzer.model import TSV_COLUMNS, Hit, sort_key
 # spec §9 サニタイズ規約①: 行/改ページ分割クラスを半角空白1個へ
 # （\t \r \n \v \f U+0085 U+2028 U+2029＝spec §11 名指し集合）。
 # split("\n")/data_sha256 の決定性コアは不変（U+000A は従来どおり空白化）。
-_SANITIZE_MAP = {ord(c): " " for c in "\t\r\n\x0b\x0c\x85  "}
+_SANITIZE_MAP = {ord(c): " " for c in "\t\r\n\x0b\x0c\x85\u2028\u2029"}
 
 
 def _sanitize(cell: str) -> str:
