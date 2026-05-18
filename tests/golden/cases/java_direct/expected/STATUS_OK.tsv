@@ -1,3 +1,3 @@
 ﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
-STATUS_OK	java	A.java	2	direct	宣言		宣言 (java)		STATUS_OK@A.java:2	  static final String STATUS_OK = "STATUS_OK";	utf-8	high
-STATUS_OK	java	A.java	4	direct	比較		比較 (java)		STATUS_OK@A.java:4	    if (s.equals("STATUS_OK")) {}	utf-8	high
+STATUS_OK	java	{SOURCE_ROOT}/A.java	2	direct	宣言		宣言 (java)		STATUS_OK@A.java:2	  static final String STATUS_OK = "STATUS_OK";	utf-8	high
+STATUS_OK	java	{SOURCE_ROOT}/A.java	4	direct	比較		比較 (java)		STATUS_OK@A.java:4	    if (s.equals("STATUS_OK")) {}	utf-8	high

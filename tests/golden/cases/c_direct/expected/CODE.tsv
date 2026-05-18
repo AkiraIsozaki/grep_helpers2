@@ -1,2 +1,2 @@
 ﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
-CODE	c	m.c	1	direct	宣言		宣言 (c)		CODE@m.c:1	#define CODE "X"	utf-8	high
+CODE	c	{SOURCE_ROOT}/m.c	1	direct	宣言		宣言 (c)		CODE@m.c:1	#define CODE "X"	utf-8	high

@@ -1,2 +1,2 @@
 ﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
-X	proc	p.pc	4	direct	宣言		宣言 (proc)		X@p.pc:4	 char *p = "X";	utf-8	high
+X	proc	{SOURCE_ROOT}/p.pc	4	direct	宣言		宣言 (proc)		X@p.pc:4	 char *p = "X";	utf-8	high
