@@ -67,3 +67,13 @@ def classify_ts(language: str, source: str, lineno: int) -> ClassifyResult:
             return (cat, "high")
         node = node.parent
     return ("その他", "high")
+
+
+def parse_tree(language: str, source: str):
+    """snippet 用: ソースを parse し root_node を返す（lang は "java"/"c"）。"""
+    return _parser(language).parse(source.encode("utf-8")).root_node
+
+
+def node_at_line(root, lineno: int):
+    """snippet 用公開ラッパ。lineno は1始まり（_node_at_line 互換・内部で-1）。"""
+    return _node_at_line(root, lineno)

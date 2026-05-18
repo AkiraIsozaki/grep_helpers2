@@ -37,3 +37,45 @@ def test_shell_文終端fiで停止():
 def test_境界未検出でも有限():
     s, e = heuristic_span(["x = ("] + ["  + 1"] * 50, 0, "sql")
     assert (e - s + 1) <= 12
+
+
+from grep_analyzer.snippet import ts_span
+
+
+def test_java_単純文は当該statement物理行スパン():
+    assert ts_span("java", "class A {\n  int x =\n    1 + 2;\n}\n", 2) == (1, 2)
+
+
+def test_java_if条件部のみ本体非包含():
+    src = "class A { void m(int s){\n  if (s\n      == 1) {\n    g();\n  }\n}}\n"
+    assert ts_span("java", src, 2) == (1, 2)
+
+
+def test_同一行複数statementは行頭statement_列非依存():
+    assert ts_span("java", "class A { void m(){\n a(); b(); c();\n}}\n", 2) == (1, 1)
+
+
+def test_if条件に文字列内括弧があっても条件部のみ():
+    src = ('class A{ void m(String s){\n if (s.equals(")")\n'
+           '   || s.isEmpty()) {\n  g();\n }\n}}\n')
+    assert ts_span("java", src, 2) == (1, 2)
+
+
+def test_parse不能はNone():
+    assert ts_span("java", "@@@@@\n", 1) is None
+
+
+def test_無関係エラーがあっても健全行はスパン維持_祖先遡上しない():
+    # 3行目のみ破損。2行目の宣言は健全 → None でなくその行スパン
+    assert ts_span("java", "class A{\n int ok = 1;\n void @@@ broken\n}\n", 2) \
+        == (1, 1)
+
+
+def test_選択文の内部にエラーがあればNone():
+    assert ts_span("c", "int f(){\n int x = (1 +\n}\n", 2) is None
+
+
+def test_proc_非EXEC_C文はmask後にCノード規則():
+    # 生 EXEC が C パースを壊さない（mask_exec_sql 後・行番号保存）
+    assert ts_span("proc", "int g = 1\n  + 2;\nEXEC SQL SELECT 1 ;\n", 1) \
+        == (0, 1)
