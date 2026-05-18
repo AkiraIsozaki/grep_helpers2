@@ -38,8 +38,17 @@ class Hit:
 
 
 def sort_key(h: Hit) -> tuple:
-    """spec §9 の全順序安定ソートキー。lineno は数値順。"""
+    """spec §9 v9 全順序キー。
+
+    (ref_kind_rank, chain_group, file, lineno, ref_kind, via_symbol,
+     category, category_sub, confidence, usage_summary, snippet,
+     language, encoding)。ref_kind_rank: direct→0 / indirect:*→1。
+    chain_group: direct→"" / indirect:*→chain。lineno は数値順。
+    """
+    ref_kind_rank = 0 if h.ref_kind == "direct" else 1
+    chain_group = "" if h.ref_kind == "direct" else h.chain
     return (
-        h.file, h.lineno, h.ref_kind, h.via_symbol, h.chain,
-        h.category, h.category_sub, h.confidence, h.usage_summary, h.snippet,
+        ref_kind_rank, chain_group, h.file, h.lineno, h.ref_kind,
+        h.via_symbol, h.category, h.category_sub, h.confidence,
+        h.usage_summary, h.snippet, h.language, h.encoding,
     )

@@ -28,3 +28,39 @@ def test_sort_keyはfile_lineno_ref_kindの順で全順序を与える():
     a = Hit("K", "java", "a.java", 2, "direct", "比較", "", "", "", "K@a.java:2", "s", "utf-8", "high")
     b = Hit("K", "java", "a.java", 10, "direct", "比較", "", "", "", "K@a.java:10", "s", "utf-8", "high")
     assert sorted([b, a], key=sort_key) == [a, b]
+
+
+def _h(**kw):
+    base = dict(keyword="K", language="java", file="/r/A.java", lineno=1,
+                ref_kind="direct", category="宣言", category_sub="",
+                usage_summary="u", via_symbol="", chain="K@A.java:1",
+                snippet="s", encoding="utf-8", confidence="high")
+    base.update(kw)
+    return Hit(**base)
+
+
+def test_directブロックがindirectより前に来る():
+    d = _h(ref_kind="direct", lineno=5, chain="K@A.java:5")
+    i = _h(ref_kind="indirect:constant", lineno=1, via_symbol="V",
+           chain="K@A.java:1 -> V@B.java:1")
+    assert sorted([i, d], key=sort_key) == [d, i]
+
+
+def test_indirectはchain文字列ごとに集約されてからfile_lineno():
+    a = _h(ref_kind="indirect:constant", file="/r/Z.java", lineno=9,
+           via_symbol="V", chain="K@A:1 -> V@A:1")
+    b = _h(ref_kind="indirect:constant", file="/r/A.java", lineno=1,
+           via_symbol="W", chain="K@A:1 -> W@B:1")
+    assert sorted([a, b], key=sort_key) == [a, b]
+
+
+def test_direct同士はfile_lineno数値順():
+    x = _h(lineno=10, chain="K@A.java:10")
+    y = _h(lineno=2, chain="K@A.java:2")
+    assert sorted([x, y], key=sort_key) == [y, x]
+
+
+def test_完全同値近傍はlanguage_encodingで全順序():
+    p = _h(language="java")
+    q = _h(language="shell")
+    assert sorted([q, p], key=sort_key) == [p, q]
