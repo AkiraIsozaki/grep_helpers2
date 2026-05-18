@@ -25,6 +25,7 @@ from grep_analyzer.model import Hit
 from grep_analyzer.progress import Progress
 from grep_analyzer import ripgrep as _rg
 from grep_analyzer.provenance import Occurrence, ProvenanceGraph
+from grep_analyzer.snippet import build_snippet
 from grep_analyzer.spill import EdgeStore
 from grep_analyzer.stoplist import SymbolPolicy, load_stoplist, partition
 
@@ -331,11 +332,13 @@ def run_fixedpoint(
             for chain in graph.chains_to(c, max_depth=opts.max_depth,
                                          max_paths=opts.max_paths, diag=diag):
                 indirect.append(Hit(
-                    keyword=keyword, language=language, file=c.relpath, lineno=c.lineno,
-                    ref_kind=_REF_KIND[kind], category=cat, category_sub="",
-                    usage_summary=f"{cat} ({language})", via_symbol=c.symbol,
-                    chain=chain, snippet=line,
-                    encoding=enc + (" 要確認" if replaced else ""), confidence=conf))
+                    keyword=keyword, language=language, file=c.relpath,
+                    lineno=c.lineno, ref_kind=_REF_KIND[kind], category=cat,
+                    category_sub="", usage_summary=f"{cat} ({language})",
+                    via_symbol=c.symbol, chain=chain,
+                    snippet=build_snippet(language, dialect, text, c.lineno),
+                    encoding=enc + (" 要確認" if replaced else ""),
+                    confidence=conf))
         prog.done()
         return indirect
     finally:

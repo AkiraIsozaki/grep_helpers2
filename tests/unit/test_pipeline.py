@@ -43,3 +43,18 @@ def test_壊れたgrep行は捨てず診断に回る(tmp_path: Path):
     assert rc == 0
     assert "bad_grep_line" in (out / "diagnostics.txt").read_text("utf-8")
     assert (out / "K.tsv").exists()
+
+
+def test_file列は絶対_chainは相対_snippetは構文単位(tmp_path):
+    src = tmp_path / "src"; src.mkdir()
+    (src / "A.java").write_text(
+        'class A {\n  static final String K =\n    "K";\n}\n', "utf-8")
+    inp = tmp_path / "in"; inp.mkdir()
+    (inp / "K.grep").write_text("A.java:2:  static final String K =\n", "utf-8")
+    out = tmp_path / "out"
+    assert run(inp, out, src) == 0
+    cells = (out / "K.tsv").read_text("utf-8-sig").splitlines()[1].split("\t")
+    resolved = str(Path(src).resolve())
+    assert cells[2] == f"{resolved}/A.java"                  # file 絶対
+    assert cells[9] == "K@A.java:2"                           # chain 相対維持
+    assert cells[10] == '  static final String K = \\n     "K";'  # snippet 多行

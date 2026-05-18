@@ -1,5 +1,6 @@
 """direct＋不動点 indirect 併合パイプライン（spec §15 フェーズ2 Phase 2a）。"""
 
+from dataclasses import replace
 from pathlib import Path
 
 from grep_analyzer import output_writer, resume
@@ -15,6 +16,7 @@ from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
 from grep_analyzer.fixedpoint import EngineOptions, run_fixedpoint
 from grep_analyzer.ingest import parse_grep_line
 from grep_analyzer.model import Hit
+from grep_analyzer.snippet import build_snippet
 from grep_analyzer.walk import DEFAULT_EXCLUDE, collect_files
 
 
@@ -76,12 +78,15 @@ def run(
                 keyword=keyword, language=language, file=rel, lineno=lineno,
                 ref_kind="direct", category=category, category_sub="",
                 usage_summary=f"{category} ({language})", via_symbol="",
-                chain=f"{keyword}@{rel}:{lineno}", snippet=content,
+                chain=f"{keyword}@{rel}:{lineno}",
+                snippet=build_snippet(language, dialect, file_text, lineno),
                 encoding=enc + (" 要確認" if replaced else ""), confidence=confidence,
             ))
 
         indirect = run_fixedpoint(hits, Path(source_root), opts, diag, files=files)
-        output_writer.finalize(output_dir, keyword, hits + indirect, opts)
+        src_abs = str(Path(source_root).resolve())
+        rows = [replace(h, file=f"{src_abs}/{h.file}") for h in hits + indirect]
+        output_writer.finalize(output_dir, keyword, rows, opts)
 
     (output_dir / "diagnostics.txt").write_text(
         diag.render(detail_limit=opts.diagnostics_detail_limit,
