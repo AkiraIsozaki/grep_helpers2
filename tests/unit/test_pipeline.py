@@ -24,7 +24,8 @@ def test_grepヒットを分類してキーワード毎TSVを出力する(tmp_pa
     row = dict(zip(cols, tsv[1].split("\t")))
     assert row["keyword"] == "STATUS_OK"
     assert row["language"] == "java"
-    assert row["file"] == "A.java"
+    # 再ベースライン理由A: file 列は spec v9 §9 で {source_root.resolve()}/rel へ絶対化
+    assert row["file"] == f"{Path(src_root).resolve()}/A.java"
     assert row["lineno"] == "3"
     assert row["ref_kind"] == "direct"
     assert row["category"] == "比較"

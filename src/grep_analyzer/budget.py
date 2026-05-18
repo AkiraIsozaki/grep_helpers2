@@ -6,7 +6,9 @@
 
 # 1 MB あたりの近似アイテム上限（固定定数＝決定的換算）。実バイト厳密性は
 # Phase 3 perf の領分。本定数は degrade 発火の決定的トリガとしてのみ機能。
-_ITEMS_PER_MB = 130084
+# Phase4 spec §15 で snippet 多行化（build_snippet）により 1 レコード最大
+# バイトが増→過小評価是正のため再較正（130084→74044）。詳細 phase3-perf-report.md。
+_ITEMS_PER_MB = 74044
 
 
 def estimate_items(*, n_symbols: int, n_edges: int, n_intro: int) -> int:

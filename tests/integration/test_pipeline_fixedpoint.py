@@ -25,8 +25,11 @@ def test_間接ヒットがdirectと併合され決定的TSVになる(tmp_path: 
     a = (o1 / "STATUS_OK.tsv").read_text("utf-8-sig")
     cols = a.splitlines()[0].split("\t")
     rows = [dict(zip(cols, ln.split("\t"))) for ln in a.splitlines()[1:]]
+    # 再ベースライン理由A: file 列は spec v9 §9 で絶対化 → 絶対パスで索引
+    base = str(Path(src).resolve())
     kinds = {r["file"]: r["ref_kind"] for r in rows}
-    assert kinds["C.java"] == "direct" and kinds["U.java"] == "indirect:constant"
+    assert (kinds[f"{base}/C.java"] == "direct"
+            and kinds[f"{base}/U.java"] == "indirect:constant")
     assert a == (o2 / "STATUS_OK.tsv").read_text("utf-8-sig")
 
 

@@ -101,3 +101,30 @@ _ITEMS_PER_MB = 130084   # (較正前: 4096)
   budget 経路（`if not budget.unlimited`）を確実に踏むよう設計。
 - `_ITEMS_PER_MB` は degrade 発火の決定的トリガ定数であり、実バイト厳密性は求めない。
   本較正値はこの環境での実測に基づく。
+
+---
+
+## Phase4 再較正証跡（spec §15・2026-05-18）
+
+snippet 多行化（`build_snippet`／spec v9 §9）で 1 レコード最大バイトが増大し
+過小評価となるため、既存と同一手順（`test_calibrate_items_per_mb` を **単体実行**・
+corpus_gen seed=7 n_files=600・`--memory-limit 100000`）で再較正。`max_items=200000`
+はシンボルキャップ由来の不変基準点（`100000+0+100000`）で snippet 非依存。変数は
+`tracemalloc` peak。単体実行で 12 回計測し安定（`peak_bytes` ≈ 2,831K–2,834K・
+`ITEMS_PER_MB` ≈ 74,002–74,155）、中央値採用:
+
+```
+CALIB peak_bytes=2832276 max_items=200000 bytes_per_item=14.2 ITEMS_PER_MB=74044
+```
+
+```
+bytes_per_item = 2832276 / 200000 = 14.161380
+items_per_mb   = floor(1_048_576 / 14.161380) = 74044
+```
+
+採用値（`src/grep_analyzer/budget.py:9`）: `_ITEMS_PER_MB = 74044`（旧 130084）。
+過小評価是正＝より早期かつ実バイト整合的に degrade トリガ。Inv-1 非ゲート影響なし
+（既定経路は `budget.unlimited=True` で `estimate_items` 非呼出・`_ITEMS_PER_MB`
+不感を `tests/integration/test_inv1_items_per_mb.py` が再ベースライン後も PASS で機械保証）。
+注: フル perf スイート同時実行時は他テストが `tracemalloc` 基線へ影響し peak が
+小さく出るため、報告書の手順どおり**単体実行の CALIB 行**を権威値とする。

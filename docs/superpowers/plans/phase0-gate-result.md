@@ -316,6 +316,8 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 - Inv-3（jobs/memory/ripgrep/複数kw 決定性）: `--memory-limit` 値や `--jobs`・ripgrep 有無等で「出力シンボル集合が変動しうる」が集合内の記録（相対順序含む）は完全決定的
 - Inv-4（複数 kw diagnostics 決定性）: 複数 kw walk 重複 dedup の意図変化は spec 仕様・出力 TSV/終了コード/diagnostics（sum）に無影響。個別kw diagnostics も同規則
 
+> **[v8/v9 再ベースライン注記 2026-05-18]** 上記 Inv-1 byte 不変は v7 スキーマ時点の凍結証跡（数値はテスト件数等を含み spec §15 が「byte 数値として再記述しない」と明記）。spec v9 §15 フェーズ4（意図的破壊的スキーマ変更）により golden/unit/integration expected を A:file絶対化・B:snippet多行化・C:ソート順の3要因で再生成し、v8/v9 後の新ベースラインで Inv-1 を再確立した（本計画 Task 10/12）。
+
 ### rg 環境受入の状態
 
 - 当初: 本環境は rg 不在のため `requires_ripgrep` 4本 skip（受入条件未充足の申し送り）。
@@ -388,6 +390,8 @@ parse(b'class A { int x = 1; }') -> root_node.type = "program" / has_error = Fal
 | Inv-5（part 分割透過） | part 分割透過。比較手続きは §3 手順1 の `_canonical_data_blob` に一元定義（part 群再構成＝書込側と同一関数。`splitlines()` 不使用。BOM/ヘッダは part 数回現れるためデータ行のみで比較） | `tests/unit/test_output_writer.py::test_連結データ_単一同値_Inv5` PASS；`tests/unit/test_output_writer.py::test_書込側と完了判定側が同一関数_blob_from_data_rows_を共有` PASS；`tests/unit/test_resume.py::test_utf8sig_複数part_行数保存改竄で未完了_BOM再構成経路` PASS |
 | Inv-6（縮約は §8.4 全件性を侵さない） | `SECTION_8_4_CATEGORIES`（`symbol_rejected`・`getter_setter_no_expand`・`prov_*` プレフィックス）は常に全件出力。縮約は非 §8.4 カテゴリのみ。代表サンプルは既存決定順（add 列）先頭 K で決定的 | `tests/unit/test_diagnostics_phase3.py::test_84カテゴリは縮約しない_全件` PASS；`tests/unit/test_diagnostics_phase3.py::test_非84カテゴリは縮約_集約行` PASS；`tests/unit/test_diagnostics_phase3.py::test_detail_limit0は現行と完全同一` PASS |
 | Inv-7（resume 冪等） | 同一入力 かつ 同一ツール版（`tool_version`）かつ 同一 `_ITEMS_PER_MB` かつ 同一オプションの下で、`--resume` 有/無の最終出力（全 part＋manifest バイト）は同値。前提のいずれかが崩れる場合は完了判定5が未完了とし保守的再処理 | `tests/unit/test_resume.py::test_manifest確定直前クラッシュ_未完了かつ再処理で同値` PASS（クラッシュ注入→再処理→バイト同値）；`tests/unit/test_resume.py::test_items_per_mb不一致は未完了` PASS；`tests/integration/test_pipeline_phase3.py::test_resumeで完了kwをスキップ_バイト不変` PASS |
+
+> **[v8/v9 再ベースライン注記 2026-05-18]** 上記 Inv-1 byte 不変は v7 スキーマ時点の凍結証跡（数値はテスト件数等を含み spec §15 が「byte 数値として再記述しない」と明記）。spec v9 §15 フェーズ4（意図的破壊的スキーマ変更）により golden/unit/integration expected を A:file絶対化・B:snippet多行化・C:ソート順の3要因で再生成し、v8/v9 後の新ベースラインで Inv-1 を再確立した（本計画 Task 10/12）。
 
 ### perf スケール証跡（PERF 行要約）
 
