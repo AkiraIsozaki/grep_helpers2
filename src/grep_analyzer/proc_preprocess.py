@@ -6,6 +6,8 @@
 
 import re
 
+from grep_analyzer.chase import _MASK_SPECS
+
 # `EXEC SQL ... ;` / `EXEC SQL ... END-EXEC` / `EXEC ORACLE ... ;` を行跨ぎで捕捉
 _EXEC_RE = re.compile(
     r"\bEXEC\s+(?:SQL|ORACLE)\b.*?(?:;|END-EXEC\b)",
@@ -23,10 +25,7 @@ def mask_exec_sql(source: str) -> str:
     return _EXEC_RE.sub(_blank, source)
 
 
-import re as _re
-from grep_analyzer.chase import _MASK_SPECS
-
-_PROC_LIT_RE = _re.compile("|".join(_MASK_SPECS["proc"]), _re.DOTALL)
+_PROC_LIT_RE = re.compile("|".join(_MASK_SPECS["proc"]), re.DOTALL)
 
 
 def _blank_literals(source: str) -> str:
