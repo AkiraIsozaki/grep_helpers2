@@ -6,9 +6,11 @@
 """
 
 import re
+
 from grep_analyzer.chase import mask_literals
 from grep_analyzer.classifiers.ts_classifier import node_at_line, parse_tree
-from grep_analyzer.proc_preprocess import mask_exec_sql
+from grep_analyzer.proc_preprocess import exec_spans, mask_exec_sql
+from grep_analyzer.tsv import _sanitize
 
 SEP = " \\n "          # spec §9 区切り: U+0020 U+005C U+006E U+0020
 ELL = "…"          # U+2026
@@ -200,9 +202,6 @@ def ts_span(language: str, file_text: str, lineno: int):
     return (last_stmt.start_point[0], last_stmt.end_point[0])
 
 
-from grep_analyzer.proc_preprocess import exec_spans
-
-
 def proc_exec_span(file_text: str, lineno: int):
     """hit が EXEC 区間に含まれれば原ソース行スパン [s,e]、なければ None。"""
     hit = lineno - 1
@@ -210,3 +209,44 @@ def proc_exec_span(file_text: str, lineno: int):
         if s <= hit <= e:
             return (s, e)
     return None
+
+
+def _escape_sep(line: str) -> str:
+    """spec §9 サニタイズ規約②: 行中の区切り列 ' \\n '(U+0020 005C 006E 0020)
+    と同一4文字並びの \\(U+005C) を \\\\ へ二重化（区切りと本文の曖昧化防止）。"""
+    return line.replace(SEP, " \\\\n ")
+
+
+def build_snippet(language: str, dialect: str, file_text: str,
+                  lineno: int) -> str:
+    """spec §9 snippet 切り出し規則のエントリ。確定済み1セル文字列を返す。
+
+    java/c: ts_span→無ければ **ヒット1行**（spec §9 フォールバック: java/c
+      に sql/shell ヒューリスティックは適用しない＝C へ shell 規則を当てる
+      非整合を排除）。
+    proc: EXEC 区間=proc_exec_span／区間外=ts_span("proc",..)（内部で
+      mask_exec_sql 後 C 解析）→ いずれも None なら ヒット1行（spec §7/§9）。
+    sql/shell: heuristic_span（AST 非使用＝これが (1) 相当）。
+    `dialect` は将来 cshell 境界用の予約引数（v1 未使用・呼出互換のため受領）。
+    連結前に各行へ規約①_sanitize→②_escape_sep を適用し clamp_lines。
+    """
+    lines = _phys(file_text)
+    hit = lineno - 1
+    if hit < 0 or hit >= len(lines):
+        return ""
+    span = None
+    if language in ("java", "c"):
+        span = ts_span(language, file_text, lineno)
+    elif language == "proc":
+        span = proc_exec_span(file_text, lineno)
+        if span is None:
+            span = ts_span("proc", file_text, lineno)
+    elif language in ("sql", "shell"):
+        span = heuristic_span(lines, hit, language)
+    if span is None:
+        span = (hit, hit)
+    s, e = span
+    s = max(0, min(s, hit))
+    e = min(len(lines) - 1, max(e, hit))
+    body = [_escape_sep(_sanitize(x)) for x in lines[s:e + 1]]
+    return clamp_lines(body, hit - s)

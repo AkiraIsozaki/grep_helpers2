@@ -88,3 +88,39 @@ def test_proc_exec_spanは原ソース行スパン():
     src = "int x;\nEXEC SQL SELECT 1\n  INTO :a FROM dual ;\n"
     assert proc_exec_span(src, 2) == (1, 2)
     assert proc_exec_span(src, 1) is None
+
+
+from grep_analyzer.snippet import build_snippet
+
+
+def test_java_複数行宣言を1セルへ連結():
+    src = "class A {\n  int x =\n    1 + 2;\n}\n"
+    assert build_snippet("java", "bourne", src, 2) == "  int x = \\n     1 + 2;"
+
+
+def test_java_if条件行スパン_行末ブレース同居_本体後続行非包含():
+    # ts_span (1,2)。行単位切出のため行2末尾の ` {` は同一物理行ゆえ含む。
+    # 本体 g(); 等の後続行は非包含（spec §9 表）。
+    src = "class A{ void m(int s){\n  if (s\n      == 1) {\n    g();\n  }\n}}\n"
+    assert build_snippet("java", "bourne", src, 2) == "  if (s \\n       == 1) {"
+
+
+def test_sql_複数条件whereを連結():
+    src = "SELECT *\nFROM t\nWHERE a=1\n  AND b=2;\n"
+    assert "WHERE a=1 \\n   AND b=2;" in build_snippet("sql", "bourne", src, 3)
+
+
+def test_proc_EXEC区間は原ソース行():
+    src = "int x;\nEXEC SQL SELECT 1\n  INTO :a FROM dual ;\nint z;\n"
+    assert build_snippet("proc", "bourne", src, 2) == \
+        "EXEC SQL SELECT 1 \\n   INTO :a FROM dual ;"
+
+
+def test_parse不能javaは最後ヒット1行():
+    assert build_snippet("java", "bourne", "@@@@@\n", 1) == "@@@@@"
+
+
+def test_区切り衝突はバックスラッシュ二重化_サニタイズ後():
+    # ソース行に ' \n ' 4文字並びが出現 → \ を \\ へ。タブは空白化(規約①)
+    src = "a \\n b\tc\n"
+    assert build_snippet("shell", "bourne", src, 1) == "a \\\\n b c"
