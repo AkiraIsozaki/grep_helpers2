@@ -91,13 +91,20 @@ applyLimit(limit);                // ← grep には映らない。でも K1 が
 ## 必要環境
 
 - Python **3.12**（`requires-python = ">=3.12"`）
-- モダン Linux / glibc ≥ 2.17（同梱 wheel は cp312・`manylinux_2_17_x86_64`）
+- モダン Linux / glibc ≥ 2.17（同梱 wheel は cp312・`manylinux_2_17` の x86_64／aarch64 両アーキ。配備先 aarch64＝DGX Spark、開発/CI＝x86_64）
 - 任意機能: `rg`（ripgrep）— 無い場合は該当テストが自動 skip
 
 ## インストール（オフライン再現）
 
 リポジトリは `wheelhouse/`（全依存の固定版 wheel）と `requirements.lock`
 （版＋sha256 ハッシュ固定）を同梱しており、ネット接続なしで再現インストールできる。
+
+`wheelhouse/` は**多アーキ同梱**＝配備先 **aarch64（NVIDIA DGX Spark / DGX OS・Python 3.12）**
+と開発/CI の **x86_64** の双方で同一手順が成立する（ネイティブ依存は両アーキの
+wheel を、純Python依存は共通 wheel を収録。`pip` が実行プラットフォーム適合 wheel を
+自動選択）。オフライン `-e .` のビルド分離用に `setuptools`/`wheel` も同梱済み。
+依存ピボットの根拠は `docs/superpowers/plans/phase0-gate-result.md` の
+「aarch64 再ベースライン記録」節（spec v10）。
 
 ```bash
 python3.12 -m venv .venv && . .venv/bin/activate

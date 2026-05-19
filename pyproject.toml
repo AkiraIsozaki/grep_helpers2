@@ -11,6 +11,7 @@ dependencies = [
     "tree-sitter-java==0.21.0",
     "tree-sitter-c==0.21.4",
     "chardet==5.2.0",
+    "pyahocorasick==2.3.1",
 ]
 
 [project.optional-dependencies]

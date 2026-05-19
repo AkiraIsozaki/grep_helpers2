@@ -18,7 +18,13 @@ def build(symbols: list[str]) -> ahocorasick.Automaton | None:
 
 
 def scan_line(au: ahocorasick.Automaton | None, line: str) -> list[str]:
-    """1 行から語境界一致シンボルを昇順ユニークで返す（決定的）。"""
+    """1 行から語境界一致シンボルを昇順ユニークで返す（決定的）。
+
+    版非依存の根拠: 列挙は `set` で集約し最後に `sorted()` で正規化、採否は
+    `end`/`len(sym)` から算出する位置（文字 index）のみに依存し iter() の
+    列挙順に非依存。よって pyahocorasick の版差（iter 順序・同一終端多重）を
+    構造的に吸収する（2.1.0→2.3.1 版更新で出力 byte 不変＝spec v10 で実証）。
+    """
     if au is None:
         return []
     found = set()

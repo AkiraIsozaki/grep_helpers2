@@ -442,3 +442,64 @@ CALIB peak_bytes=1612149 max_items=200000 bytes_per_item=8.1 ITEMS_PER_MB=130084
 - `requirements.lock` + wheelhouse によるオフライン再現実証済み
 - perf スケール O(n) 時間・O(1) メモリ確認済み
 - `_ITEMS_PER_MB` 実測較正済み（degrade トリガ定数の実環境根拠確立）
+
+---
+
+## aarch64 再ベースライン記録（spec v10・配備先ピボット）
+
+- 検証日 (UTC): 2026-05-19
+- 検証者: Claude Code（ユーザー指示・spec §4.2 G1 / §2.1 要確定欄の再確定）
+- 位置づけ: 配備先が **NVIDIA DGX Spark（GB10 Grace Blackwell＝Arm/aarch64・DGX OS=Ubuntu 24.04 系・system Python 3.12）** に確定。v0〜v9 の G1（本書冒頭・x86_64/glibc2.36）はターゲット変更により現配備先に対し失効。本節で aarch64 へ G1 を再ベースラインし spec §2.1 要確定欄を再確定する（spec v10）。本節が aarch64 G1 の**正本**。
+
+### Step 1: ターゲット環境の再確定
+
+| 項目 | 値 | 根拠 |
+|---|---|---|
+| 配備機 | NVIDIA DGX Spark | ユーザー確定 |
+| CPUアーキ | **aarch64**（Arm・GB10 Grace） | DGX Spark は Grace=Arm。旧 x86_64 と非互換＝再ベースライン要因 |
+| OS / libc | DGX OS（Ubuntu 24.04 系）/ glibc ≥ 2.17（manylinux2014 適合） | Ubuntu 24.04 は glibc 2.39。manylinux_2_17_aarch64 で確実動作 |
+| Python / ABI | system Python **3.12** / cp312 | Ubuntu 24.04 系の system Python |
+
+### Step 2: §4.2 手順3 の意思決定（取得不能依存）
+
+`pyahocorasick==2.1.0`（旧ピン）は manylinux/musllinux/linux いずれも **aarch64 prebuilt wheel が皆無**であることを実証（`pip download --only-binary=:all: --platform manylinux2014_aarch64/musllinux_1_1_aarch64/linux_aarch64` 全て `No matching distribution`）。spec §4.2 手順3 の分岐:
+
+- 採用: **(b) 代替＝版選択 `pyahocorasick==2.1.0 → 2.3.1`**（2.3.1 は aarch64 cp312 prebuilt wheel 有りを実証）。(a) sdist ビルド同梱は不採用＝**単一トラック前提（spec §3）を維持**。
+- 互換実証（API/挙動）: `src/grep_analyzer/automaton.py` の使用 API は `Automaton/add_word/make_automaton/iter` のみで 2.x 系不変。dev env(x86_64) で `2.1.0` ベースライン `244 passed, 9 deselected` ↔ `2.3.1` `244 passed, 9 deselected` が**完全一致**（golden TSV 完全一致＝決定性回帰含む）。コード改修ゼロ。
+- 他必須依存（`tree-sitter==0.21.3`／`tree-sitter-java==0.21.0`／`tree-sitter-c==0.21.4`／`chardet==5.2.0`）は版不変・aarch64 prebuilt 入手済。
+
+### Step 3: 多アーキ wheelhouse 再生成と供給網是正
+
+- **wheelhouse = 16 wheels / 12 packages**（ネイティブ4点×{x86_64,aarch64}＝8、純Python 共通8）。ネイティブ aarch64 内訳: `pyahocorasick-2.3.1-cp312-cp312-manylinux2014_aarch64…`／`tree_sitter-0.21.3-cp312-cp312-manylinux_2_17_aarch64…`／`tree_sitter_c-0.21.4-cp38-abi3-manylinux_2_17_aarch64…`／`tree_sitter_java-0.21.0-cp38-abi3-manylinux_2_17_aarch64…`。x86_64 は開発/CI 用に併存。
+- **既存潜在不具合の是正**: オフライン `pip install --no-index --find-links wheelhouse -e .` が、`pyproject.toml` の `[build-system] requires=["setuptools>=68"]` のビルド分離環境で **`setuptools` 不在**（Python 3.12 venv は setuptools 非同梱）により従来から失敗していた（旧 x86_64 wheelhouse にも build backend 不在＝v10 以前から潜在）。`setuptools==82.0.1`／`wheel==0.47.0`（純Python・アーキ非依存）を wheelhouse 同梱して解消。
+- `scripts/gen_requirements_lock.py` を **同一 `pkg==ver` の複数 `--hash` 集約**（多アーキ対応）＋完全ピン違反（1 pkg 複数版）異常終了へ改修。`tests/unit/test_requirements_lock.py` を **全 hash 検証**（旧実装は複数 hash 行で先頭1本のみ検証＝aarch64 hash が抜ける弱体化）へ強化。
+- `pyproject.toml` `dependencies` に `pyahocorasick==2.3.1` を明記（従来 import のみで未宣言だった spec §4.1 vs 実装の不整合を是正。本書 Phase 2 節「申し送り」の追認事項を解消）。
+- `requirements.lock` 再生成（12 packages、ネイティブ4点は2 hash）。
+
+### Step 4: G1 再実証（aarch64）と x86_64 回帰
+
+| 検証 | コマンド／方法 | 結果 |
+|---|---|---|
+| aarch64 オフライン解決（§4.2 手順2 相当） | `pip download --no-index --find-links wheelhouse --only-binary=:all: --platform manylinux_2_17_aarch64 --python-version 3.12 --implementation cp --require-hashes -r requirements.lock` | ✅ 全12 package が cp312/aarch64 で wheelhouse からハッシュ検証付き解決。ネイティブ4点は **aarch64 wheel が選択**。sdist 0 件 |
+| x86_64 実 venv 手順1 | `pip install --no-index --find-links wheelhouse --require-hashes -r requirements.lock` | ✅ rc=0・12 package 導入（`pyahocorasick 2.3.1`） |
+| x86_64 実 venv 手順2 | `pip install --no-index --find-links wheelhouse -e .` | ✅ rc=0・`Successfully built grep_analyzer` / `grep_analyzer-0.1.0` 導入（build 分離が wheelhouse の setuptools/wheel で成立） |
+| x86_64 フルスイート | `pytest -q -m "not perf and not requires_ripgrep"` | ✅ **244 passed, 9 deselected**（golden 全22ケース完全一致＝Inv-1 不変。履歴節の「golden 14」は Phase2b/3 時点の point-in-time 値で別物） |
+| オフライン再現テスト | `pytest tests/unit/test_requirements_lock_offline.py -q -m perf` | ✅ **1 passed**（クリーン venv `--require-hashes` install＋`import …,ahocorasick,…` 成功・新 lock で実走） |
+| lock 整合テスト | `pytest tests/unit/test_requirements_lock.py -q` | ✅ **2 passed**（全 hash 検証・spec §4.1 必須網羅） |
+
+### G1 再ベースライン判定（aarch64）: **PASS**
+
+理由:
+
+1. spec §2.1 要確定欄を aarch64 / glibc≥2.17 / cp312 で再確定（Step 1）。
+2. 全必須依存＋推移＋テスト＋ビルドバックエンドの cp312・aarch64 prebuilt wheel が wheelhouse からハッシュ検証付きでオフライン解決可能（Step 4）。sdist-only 依存ゼロ＝§4.2(a) 不要・**単一トラック前提（spec §3）を aarch64 でも維持**。唯一の取得不能依存 `pyahocorasick` は §4.2(b)＝版選択 `2.3.1` で解消（API/挙動互換を 244 件 byte 同値で実証）。
+3. 多アーキ同梱により x86_64（開発/CI）でも `--require-hashes` 実 venv install＋本体 `-e .`＋全テスト 244 passed を実走確認。出力スキーマ・決定性・Inv-1 は不変。
+
+→ **配備先 aarch64/DGX Spark に対する writing-plans / 配備の前提を再充足。**
+
+### 申し送り（v10）
+
+- **aarch64 実機バイナリ実行は未実施**（本検証環境は x86_64。aarch64 wheel の解決・ハッシュ・選択は実証したが、`.so` の実ロード/実行は aarch64 ハード必須）。これは v0 G1（x86_64）が `pip download` 実証中心だったのと同じ手法的限界。**初回 DGX Spark 配備時に `pip install --no-index --find-links wheelhouse --require-hashes -r requirements.lock && pip install --no-index --find-links wheelhouse -e . && python -m pytest -q -m "not perf and not requires_ripgrep"` を実走し本節へ追記すること**（aarch64 ネイティブ4点の実 import＋全テスト緑をもって完全クローズ）。
+- `wheelhouse/` は多アーキで肥大（16 wheels）。Git コミット運用（2026-05-17 方針＝wheelhouse は gitignore せず commit）に従う。**未了**: 本 v10 供給網変更（新規8 wheel untracked＋`pyahocorasick-2.1.0` 削除＋`requirements.lock`/`pyproject.toml`/spec 等）は**まだ未コミット**。コミットするまで `git clone` 即オフライン再現は成立しない（要 1 コミットで確定）。
+- `setuptools==82.0.1` / `wheel==0.47.0` の版選定根拠: `pip download setuptools wheel`（上限なし）の解決最新版を凍結したもの。`pyproject.toml` の `requires=["setuptools>=68]` を満たせば版自体に要件はない（実 import・metadata で正規版確認済）。`wheel` は setuptools.build_meta のビルド分離に厳密には不要（実走で `setuptools` のみ使用を確認）だが、将来 backend 変更耐性として無害同梱。再 `pip download` 時に build backend が無告知ドリフトしうる点は既知（lock＋hash 固定で配備時の同一性は担保）。
+- spec 改訂は v10（source of truth 維持。§2.1/§4.1/§4.2/改訂履歴・ステータス）。ユーザー再レビュー対象。
