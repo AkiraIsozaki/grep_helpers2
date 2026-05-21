@@ -2,6 +2,21 @@
 
 from dataclasses import dataclass
 
+
+@dataclass(frozen=True)
+class ChaseSymbols:
+    """1 行から抽出した追跡候補。
+
+    `constants` / `vars` は不動点で多ホップ追跡される。
+    `getters` / `setters` は横展開せず、全反復で terminal として報告する。
+    """
+
+    constants: tuple[str, ...] = ()
+    vars: tuple[str, ...] = ()
+    getters: tuple[str, ...] = ()
+    setters: tuple[str, ...] = ()
+
+
 TSV_COLUMNS = [
     "keyword", "language", "file", "lineno", "ref_kind",
     "category", "category_sub", "usage_summary", "via_symbol",

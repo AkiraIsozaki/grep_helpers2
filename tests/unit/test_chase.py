@@ -43,7 +43,8 @@ def test_Oracleのトリガ相関名とレコードフィールドはv1既知境
     assert extract_var_symbols("sql", "", "rec.field := 1") == ["field"]
 
 
-from grep_analyzer.chase import ChaseSymbols, extract_chase_symbols, mask_literals
+from grep_analyzer.chase import extract_chase_symbols, mask_literals
+from grep_analyzer.model import ChaseSymbols
 
 
 def test_文字列とコメントをマスクし行長を保つ():
