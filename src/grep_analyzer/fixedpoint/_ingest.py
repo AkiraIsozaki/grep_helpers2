@@ -35,32 +35,32 @@ def ingest_one(state: ChaseState, parent: Occurrence, language: str,
     chase_symbols = extract_chase_symbols(language, dialect, line)
     kinds = kinds_of(language, dialect, line)
     part = partition(chase_symbols, language, state.policy)
-    for sym, reason in sorted(part.rejected):
-        diag.add("symbol_rejected", f"{reason}\t{sym}")
-    for sym in part.chase:
-        if sym in state.capped:
+    for symbol, reason in sorted(part.rejected):
+        diag.add("symbol_rejected", f"{reason}\t{symbol}")
+    for symbol in part.chase:
+        if symbol in state.capped:
             continue
-        if not is_seed and sym == parent.symbol:
+        if not is_seed and symbol == parent.symbol:
             continue
-        state.symbol_kind.setdefault(sym, kinds.get(sym, "var"))
-        state.symbol_hop.setdefault(sym, hop)
-        lst = state.introducers.setdefault(sym, [])
+        state.symbol_kind.setdefault(symbol, kinds.get(symbol, "var"))
+        state.symbol_hop.setdefault(symbol, hop)
+        lst = state.introducers.setdefault(symbol, [])
         if parent not in lst:
             lst.append(parent)
-        if sym not in state.chase_done:
-            state.chase_active.add(sym)
-    for sym in part.terminal:
-        if sym in state.capped:
+        if symbol not in state.chase_done:
+            state.chase_active.add(symbol)
+    for symbol in part.terminal:
+        if symbol in state.capped:
             continue
-        if not is_seed and sym == parent.symbol:
+        if not is_seed and symbol == parent.symbol:
             continue
-        state.symbol_kind.setdefault(sym, kinds.get(sym, "getter"))
-        state.symbol_hop.setdefault(sym, hop)
-        lst = state.introducers.setdefault(sym, [])
+        state.symbol_kind.setdefault(symbol, kinds.get(symbol, "getter"))
+        state.symbol_hop.setdefault(symbol, hop)
+        lst = state.introducers.setdefault(symbol, [])
         if parent not in lst:
             lst.append(parent)
-        if sym not in state.terminal_done:
-            state.terminal_active.add(sym)
+        if symbol not in state.terminal_done:
+            state.terminal_active.add(symbol)
 
 
 def absorb_results(state: ChaseState, pass_results, scan_chase: set[str],
@@ -75,16 +75,16 @@ def absorb_results(state: ChaseState, pass_results, scan_chase: set[str],
         if replaced and rel not in state.replaced_logged:
             diag.add("decode_replaced", rel)
             state.replaced_logged.add(rel)
-        for sym, i, line in found:
-            if sym not in scan_chase and sym not in scan_term:
+        for symbol, lineno, line in found:
+            if symbol not in scan_chase and symbol not in scan_term:
                 continue
-            child = Occurrence(sym, rel, i)
-            for parent in state.introducers.get(sym, []):
+            child = Occurrence(symbol, rel, lineno)
+            for parent in state.introducers.get(symbol, []):
                 if parent != child:
                     state.edge_store.add(parent, child)
-            if sym in scan_term:
-                if sym not in state.no_expand_logged:
-                    diag.add("getter_setter_no_expand", sym)
-                    state.no_expand_logged.add(sym)
+            if symbol in scan_term:
+                if symbol not in state.no_expand_logged:
+                    diag.add("getter_setter_no_expand", symbol)
+                    state.no_expand_logged.add(symbol)
                 continue
             ingest_one(state, child, language, dialect, line, hop + 1)

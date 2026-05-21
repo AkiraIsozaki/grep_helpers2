@@ -34,15 +34,15 @@ def _scan_file(args):
 
     ストリーミング化＝親に bytes 非常駐・abspath から読む。automaton 走査は raw 行。
     """
-    rel, abspath, sym_list, lang_map, fallback = args
+    rel, abspath, symbol_list, lang_map, fallback = args
     raw = Path(abspath).read_bytes()
     text, enc, replaced, language, dialect = file_meta(rel, raw, lang_map, fallback_chain=fallback)
-    automaton_obj = automaton.build(sym_list)
+    automaton_obj = automaton.build(symbol_list)
     found = []
     if automaton_obj is not None:
         for i, line in enumerate(text.split("\n"), start=1):
-            for sym in automaton.scan_line(automaton_obj, line):
-                found.append((sym, i, line))
+            for symbol in automaton.scan_line(automaton_obj, line):
+                found.append((symbol, i, line))
     return rel, enc, replaced, language, dialect, found
 
 
@@ -60,9 +60,9 @@ def kinds_of(language: str, dialect: str, line: str) -> dict[str, str]:
 def scan_hop(scan_syms, scan_files, opts, nchunks):
     """1 hop の走査を chunks に分けて実行し、rel 単位の集約済み結果を返す。
 
-    `nchunks=1` の場合は単一 chunk として全 sym を 1 度に走査する（既存
+    `nchunks=1` の場合は単一 chunk として全 symbol を 1 度に走査する（既存
     fixedpoint.py L260-272 の単発経路と byte 同値）。`nchunks>1` の場合は
-    chunk 別に Pool.map し、rel 単位で found を集約してから (lineno, sym) で
+    chunk 別に Pool.map し、relpath 単位で found を集約してから (lineno, symbol) で
     再ソート（既存 L273-289 と byte 同値）。
 
     戻り値: (pass_results, n_actual_chunks)
