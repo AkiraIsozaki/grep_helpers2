@@ -10,16 +10,13 @@ direct ヒットを seed に constant/var を多ホップ追跡し indirect ヒ�
 |母集合| ステップで飽和。--max-depth/max_symbols/max_paths は安全弁。
 """
 
-import multiprocessing
 from pathlib import Path
 
-from grep_analyzer import automaton, walk
-from grep_analyzer.budget import MemoryBudget, estimate_items
+from grep_analyzer import walk
+from grep_analyzer.budget import MemoryBudget, estimate_items  # estimate_items: perf test の monkeypatch 接点（tests/perf/test_perf.py:49）
 from grep_analyzer.chase import extract_chase_symbols
 from grep_analyzer.classify import classify_hit
 from grep_analyzer.diagnostics import Diagnostics
-from grep_analyzer.dispatch import detect_language, detect_shell_dialect
-from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
 from grep_analyzer.model import Hit
 from grep_analyzer.progress import Progress
 from grep_analyzer import ripgrep as _rg
@@ -28,45 +25,8 @@ from grep_analyzer.snippet import build_snippet
 from grep_analyzer.spill import EdgeStore
 from grep_analyzer.stoplist import SymbolPolicy, load_stoplist, partition
 from grep_analyzer.fixedpoint._options import EngineOptions
+from grep_analyzer.fixedpoint._scan import _file_meta, _kinds_of, _scan_file, scan_hop
 from grep_analyzer.fixedpoint._state import ChaseState, _REF_KIND
-
-
-def _file_meta(rel: str, raw: bytes, lang_map: dict[str, str], fallback_chain=None):
-    """1 度だけデコードし (text, enc, replaced, language, dialect) を返す。"""
-    chain = list(fallback_chain) if fallback_chain else DEFAULT_FALLBACK
-    text, enc, replaced = decode_bytes(raw, chain)
-    language = detect_language(rel, text[:4096], lang_map)
-    dialect = detect_shell_dialect(rel, text[:4096]) if language == "shell" else "bourne"
-    return text, enc, replaced, language, dialect
-
-
-def _scan_file(args):
-    """1 ファイルをワーカ内で読み走査しヒット素片を返す純関数。
-
-    ストリーミング化＝親に bytes 非常駐・abspath から読む（spec §8.2）。
-    automaton 走査は raw 行。出力は Phase 2a と byte 不変。
-    """
-    rel, abspath, sym_list, lang_map, fallback = args
-    raw = Path(abspath).read_bytes()
-    text, enc, replaced, language, dialect = _file_meta(rel, raw, lang_map, fallback_chain=fallback)
-    au = automaton.build(sym_list)
-    found = []
-    if au is not None:
-        for i, line in enumerate(text.split("\n"), start=1):
-            for sym in automaton.scan_line(au, line):
-                found.append((sym, i, line))
-    return rel, enc, replaced, language, dialect, found
-
-
-def _kinds_of(language: str, dialect: str, line: str) -> dict[str, str]:
-    """1 行の各シンボル→種別。同名は constant>var>getter>setter の決定的優先。"""
-    cs = extract_chase_symbols(language, dialect, line)
-    out: dict[str, str] = {}
-    for kind, names in (("setter", cs.setters), ("getter", cs.getters),
-                        ("var", cs.vars), ("constant", cs.constants)):
-        for n in names:
-            out[n] = kind
-    return out
 
 
 def run_fixedpoint(
@@ -218,36 +178,9 @@ def run_fixedpoint(
                             n_symbols=-(-len(scan_syms) // (nchunks + 1)),
                             n_edges=state.edge_store.in_memory_len(), n_intro=n_intro)):
                     nchunks += 1
-            if nchunks <= 1:
-                args = [(rel, str(abspath), scan_syms, opts.lang_map, list(opts.encoding_fallback))
-                        for rel, abspath in scan_files]
-                if opts.jobs > 1:
-                    with multiprocessing.Pool(opts.jobs) as pool:
-                        results = pool.map(_scan_file, args)
-                else:
-                    results = [_scan_file(a) for a in args]
-                pass_results = sorted(results, key=lambda r: r[0])
-            else:
-                size = -(-len(scan_syms) // nchunks)
-                chunks = [scan_syms[i:i + size]
-                          for i in range(0, len(scan_syms), size)] or [[]]
-                diag.add("automaton_split", f"hop={hop} chunks={len(chunks)}")
-                agg: dict[str, list] = {}
-                meta: dict[str, tuple] = {}
-                for chunk in chunks:
-                    args = [(rel, str(abspath), chunk, opts.lang_map, list(opts.encoding_fallback))
-                            for rel, abspath in scan_files]
-                    if opts.jobs > 1:
-                        with multiprocessing.Pool(opts.jobs) as pool:
-                            res = pool.map(_scan_file, args)
-                    else:
-                        res = [_scan_file(a) for a in args]
-                    for rel, enc, replaced, language, dialect, found in res:
-                        meta.setdefault(rel, (enc, replaced, language, dialect))
-                        agg.setdefault(rel, []).extend(found)
-                pass_results = [(rel, *meta[rel],
-                                 sorted(agg[rel], key=lambda t: (t[1], t[0])))
-                                for rel in sorted(agg)]
+            pass_results, n_actual_chunks = scan_hop(scan_syms, scan_files, opts, nchunks)
+            if nchunks > 1:
+                diag.add("automaton_split", f"hop={hop} chunks={n_actual_chunks}")
             for rel, enc, replaced, language, dialect, found in pass_results:
                 state.encoding_of.setdefault(rel, (enc, replaced))
                 if replaced and rel not in state.replaced_logged:

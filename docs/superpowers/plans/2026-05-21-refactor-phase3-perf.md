@@ -9,12 +9,16 @@
 
 ## R4 試作判定 (Task A2 Step 0 で記録)
 
-| 項目 | 判定 |
-|---|---|
-| 統合版コード量 | <行数> |
-| 並存版コード量 | <行数> |
-| diag 発火局所性 | OK/NG |
-| 採用: 統合 or 並存 | <結論> |
+| 項目 | 並存案 | 統合案 |
+|---|---|---|
+| コード量（ファイル全体・docstring 含） | 45 行 | 37 行 |
+| 関数本体実コード（def 〜 return） | scan_hop_single: 9 行 / scan_hop_chunked: 19 行 = 計 28 行 | scan_hop: 22 行 |
+| diag 発火局所性 | 呼出側で `if nchunks > 1:` 必要 | 呼出側で `if nchunks > 1:` 必要（同等） |
+| byte 同値性 | — | nchunks=1 ⇒ chunks=[scan_syms] 単発実行で found は (line 昇順, sym 昇順) 維持・`sorted(agg[rel], key=(line, sym))` は automaton.scan_line の sorted 出力と恒等一致（補-8） |
+| 結論 | × | **採用** |
+
+統合に進む（差分が "chunks の構築方法" だけに収束、R4 規約 §5 を満たす）。
+試作配置: `/tmp/phase3_r4_proto/scan_split.py` / `scan_unified.py`（補-7 / Phase 3 完了時に手動削除推奨）。
 
 ## Phase 3 [A] 完了後
 
