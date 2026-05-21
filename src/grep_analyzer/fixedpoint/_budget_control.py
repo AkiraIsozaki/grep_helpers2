@@ -12,19 +12,8 @@
 Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
 """
 
+from grep_analyzer import budget as _budget
 from grep_analyzer.fixedpoint._state import ChaseState
-
-
-def _estimate_items(*, n_symbols, n_edges, n_intro):
-    """`grep_analyzer.fixedpoint.estimate_items` を動的参照する間接呼出。
-
-    perf test (tests/perf/test_perf.py) が `monkeypatch.setattr(
-    "grep_analyzer.fixedpoint.estimate_items", _spy)` で spy 差し替えを行うため、
-    `_budget_control.py` 側でも `__init__.py` 名前空間経由で参照する必要がある。
-    関数内 import で循環を回避する。
-    """
-    from grep_analyzer import fixedpoint as _fp
-    return _fp.estimate_items(n_symbols=n_symbols, n_edges=n_edges, n_intro=n_intro)
 
 
 def apply_global_cap(state: ChaseState):
@@ -36,7 +25,7 @@ def apply_global_cap(state: ChaseState):
                   key=lambda s: (state.symbol_hop.get(s, 0), len(s), s))
     keep_count = opts.max_symbols
     if not state.budget.unlimited:
-        while keep_count > 0 and state.budget.exceeded(_estimate_items(
+        while keep_count > 0 and state.budget.exceeded(_budget.estimate_items(
                 n_symbols=keep_count, n_edges=0, n_intro=keep_count)):
             keep_count -= 1
     if len(live) <= keep_count:
@@ -56,7 +45,7 @@ def maybe_spill(state: ChaseState, hop: int):
     n_intro = sum(len(v) for v in state.introducers.values())
     n_live = len(state.chase_active | state.chase_done
                  | state.terminal_active | state.terminal_done)
-    if state.budget.exceeded(_estimate_items(
+    if state.budget.exceeded(_budget.estimate_items(
             n_symbols=n_live, n_edges=state.edge_store.in_memory_len(),
             n_intro=n_intro)):
         state.edge_store.maybe_spill_now()
@@ -76,12 +65,12 @@ def compute_nchunks(state: ChaseState, scan_syms: list[str]) -> int:
     n_intro = sum(len(v) for v in state.introducers.values())
     n_live = len(state.chase_active | state.chase_done
                  | state.terminal_active | state.terminal_done)
-    if not state.budget.exceeded(_estimate_items(
+    if not state.budget.exceeded(_budget.estimate_items(
             n_symbols=n_live, n_edges=state.edge_store.in_memory_len(),
             n_intro=n_intro)):
         return 1
     while nchunks < opts.max_passes and nchunks < len(scan_syms) and \
-            state.budget.exceeded(_estimate_items(
+            state.budget.exceeded(_budget.estimate_items(
                 n_symbols=-(-len(scan_syms) // (nchunks + 1)),
                 n_edges=state.edge_store.in_memory_len(), n_intro=n_intro)):
         nchunks += 1

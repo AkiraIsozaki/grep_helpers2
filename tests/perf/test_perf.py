@@ -44,9 +44,9 @@ def test_calibrate_items_per_mb(tmp_path, monkeypatch):
         seen.append(v)
         return v
 
-    # fixedpoint は `from grep_analyzer.budget import estimate_items`（関数
-    # オブジェクト束縛）ゆえ fixedpoint 名前空間側を差し替える。
-    monkeypatch.setattr("grep_analyzer.fixedpoint.estimate_items", _spy)
+    # _budget_control は `from grep_analyzer import budget as _budget`（モジュール
+    # 属性参照）ゆえ budget モジュール側の属性を差し替える。
+    monkeypatch.setattr("grep_analyzer.budget.estimate_items", _spy)
 
     src = tmp_path / "src"; generate(src, seed=7, n_files=600)
     # grep 入力のスニペットは実ファイル行を使用 → extract_chase_symbols がシンボルを抽出

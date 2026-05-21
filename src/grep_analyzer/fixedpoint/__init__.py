@@ -14,7 +14,6 @@ from pathlib import Path
 
 from grep_analyzer import ripgrep as _rg
 from grep_analyzer import walk
-from grep_analyzer.budget import estimate_items  # perf test の monkeypatch 接点（tests/perf/test_perf.py:49）
 from grep_analyzer.diagnostics import Diagnostics
 from grep_analyzer.fixedpoint._budget_control import (
     apply_global_cap,
@@ -29,7 +28,7 @@ from grep_analyzer.fixedpoint._seed import initialize_state
 from grep_analyzer.model import Hit
 from grep_analyzer.progress import Progress
 
-__all__ = ["EngineOptions", "run_fixedpoint", "estimate_items"]
+__all__ = ["EngineOptions", "run_fixedpoint"]
 
 
 def run_fixedpoint(
