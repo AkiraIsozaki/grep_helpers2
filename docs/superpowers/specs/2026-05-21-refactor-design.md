@@ -107,7 +107,7 @@ Phase 4: 命名・コメントの全モジュール横断適用
 - 関数引数（公開・内部問わず）
 - クラス属性
 - モジュールトップレベル定数
-- 4 行以上の有効範囲を持つローカル変数
+- **4 行以上の有効範囲を持つローカル変数**（ループ内で毎反復再生成される一時辞書はループ全体を有効範囲として計数）
 - 複数スコープを跨ぐ変数
 
 ## 4. コメント規約
@@ -350,9 +350,10 @@ class ChaseState:
 
 **multiprocessing pickle 制約（重要）**:
 - `_scan_file` のシグネチャ `(rel, abspath, sym_list, lang_map, fallback)` は **変更禁止**
-- ChaseState 全体を worker に渡さない（pickling 不能 / 過大）
-- `_scan.scan_hop()` の役割は: ChaseState から必要なプリミティブ（`sym_list`, `lang_map`, `fallback_chain`）を抽出して args タプルを作り、`Pool.map(_scan_file, args)` を呼び、結果を ChaseState へ書き戻す
+- **ChaseState は main process でのみ保持・更新**される（worker には決して渡さない）
+- `_scan.scan_hop()` の役割は: ChaseState から必要なプリミティブ（`sym_list`, `lang_map`, `fallback_chain`）を抽出して args タプルを作り、`Pool.map(_scan_file, args)` を呼び、worker からの戻り値を ChaseState へ書き戻す
 - worker 側（`_scan_file`）は ChaseState を知らず、トップレベル純関数のまま維持（Inv-B/E 維持）
+- 注: ChaseState に `rel_to_abs` / `encoding_of` を格納することは、main process が保持することと等価であり、worker への送信を意味しない
 
 **`rel_to_abs` / `encoding_of` の初期化タイミング（Phase 3 plan で確定）**:
 - 現状 `rel_to_abs` は `walk.walk_files()` 結果から L192 で構築、`enc_of`（→ `encoding_of`）は scan 結果から L290 で蓄積
@@ -486,11 +487,17 @@ N1〜N4 と R1〜R4 は **同 Phase 内で適用順序を持つ**。Phase 4 plan
 
 **R1 再検査の具体手段**（Phase 4 plan で実施）:
 
-(a) **同名 import 横断検出**: rename 後に同じ識別子名がモジュール間で参照されている箇所を機械抽出。例:
+(a) **同名 import 横断検出**: rename 後に同じ識別子名がモジュール間で参照されている箇所を機械抽出。Phase 4 では rename 前後で 2 度走らせる:
+
 ```bash
+# Phase 4 着手時（rename 前）— 現状の略語形態の残骸を把握
+grep -rEn '\b(au|sym|syms|dia|prog|agg|meta|intro|estore)\b' src/
+
+# Phase 4 完了直前（rename 後）— rename 先の最終形が複数モジュールに跨っていないか
 grep -rEn 'hits_by_relpath|file_meta_by_relpath|introducers|edge_store' src/
 ```
-出現が複数モジュールに跨る場合、(i) 共通定義を 1 モジュールに寄せるべきか、(ii) たまたま同名で責務が違うかを目視判定。
+
+後者で出現が複数モジュールに跨る場合、(i) 共通定義を 1 モジュールに寄せるべきか、(ii) たまたま同名で責務が違うかを目視判定。
 
 (b) **同責務疑い構造の検出**: 同じ動詞 (`build_*` / `compute_*` / `extract_*`) を持つ複数関数を grep で抽出し、シグネチャと docstring を 1 行で並べて比較。
 ```bash
