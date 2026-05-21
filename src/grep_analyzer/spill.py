@@ -4,7 +4,7 @@
 sorted(set(edges)) と同一（出力透過・決定的）。in_memory_len はメモリ常駐数
 （スピル後 0＝estimate_items にスピルが圧解消として反映）。maybe_spill_now は
 engine priority-2 用で内部 _spill_now 直呼び（_force_spill_threshold は
-Task2 unit 専用・本番経路から設定しない）。
+unit テスト専用・本番経路から設定しない）。
 
 Related: spec §8.2
 """
@@ -62,7 +62,7 @@ class EdgeStore:
         self._fh = None
         self._path: Path | None = None
         self.spilled = False
-        self._force_spill_threshold: int | None = None  # Task2 unit 専用
+        self._force_spill_threshold: int | None = None  # unit テスト専用
 
     def add(self, p: Occurrence, c: Occurrence) -> None:
         """1 エッジ追加。予算/unit フック超過で以降スピルへ。"""

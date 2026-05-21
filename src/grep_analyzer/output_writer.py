@@ -14,12 +14,12 @@ import tempfile
 from pathlib import Path
 
 from grep_analyzer import __version__
-from grep_analyzer.model import TSV_COLUMNS, Hit, sort_key  # TSV_COLUMNS/sort_key は Task3 で使用
+from grep_analyzer.model import TSV_COLUMNS, Hit, sort_key
 from grep_analyzer.tsv import _sanitize
 
 
 def _data_line(h: Hit) -> str:
-    """1 データ行＝tsv.py:22 と同一バイト列（サニタイズ後タブ結合）。"""
+    """1 データ行を生成する（tsv._sanitize 適用後にタブ結合）。"""
     return "\t".join(_sanitize(c) for c in h.to_row())
 
 
@@ -39,7 +39,7 @@ def _canonical_data_blob(ordered: list[Hit]) -> bytes:
 def _rows_from_part_text(text: str) -> list[str]:
     """part 1 本のデコード済テキストからデータ行列を取り出す。
 
-    書込時 `"\\n".join([header]+data_lines)+"\\n"`（tsv.py:21-23 形式）の厳密逆＝先頭 BOM 除去 → rstrip("\\n")
+    書込時 `"\\n".join([header]+data_lines)+"\\n"`（_part_bytes の整形）の厳密逆＝先頭 BOM 除去 → rstrip("\\n")
     → split("\\n") → 先頭ヘッダ 1 行除去。splitlines() は使わない
     （_sanitize 非対象の U+2028/U+0085 等で水増しするため＝spec §3 手順1）。
     decode 済 utf-8-sig は BOM 自動除去だが、防御的に先頭 U+FEFF も剥がす。
@@ -51,7 +51,7 @@ def _rows_from_part_text(text: str) -> list[str]:
 
 
 def _atomic_write(path: "Path", data: bytes) -> None:
-    """tsv.py:26-36 と同一の原子プリミティブ（mkstemp->fsync->os.replace）。"""
+    """唯一の原子書込プリミティブ（mkstemp->fsync->os.replace で不可分置換）。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent),
                                prefix=path.name + ".", suffix=".tmp")
