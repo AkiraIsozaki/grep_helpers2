@@ -1,42 +1,17 @@
-"""TSV出力（spec §9）。決定的全順序ソート・サニタイズ・原子的書込・BOM規則。"""
+"""TSV フィールドのサニタイズ規約（spec §9 規約①）。
 
-import os
-import tempfile
-from pathlib import Path
+行 / 改ページ分割クラス（\\t \\r \\n \\v \\f U+0085 U+2028 U+2029）を
+半角空白 1 個に置換する `_sanitize` のみを提供する。書込本体は output_writer.py。
 
-from grep_analyzer.model import TSV_COLUMNS, Hit, sort_key
-
+Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 2 [E]
+"""
 
 # spec §9 サニタイズ規約①: 行/改ページ分割クラスを半角空白1個へ
 # （\t \r \n \v \f U+0085 U+2028 U+2029＝spec §11 名指し集合）。
 # split("\n")/data_sha256 の決定性コアは不変（U+000A は従来どおり空白化）。
-_SANITIZE_MAP = {ord(c): " " for c in "\t\r\n\x0b\x0c\x85\u2028\u2029"}
+_SANITIZE_MAP = {ord(c): " " for c in "\t\r\n\x0b\x0c\x85  "}
 
 
 def _sanitize(cell: str) -> str:
     """フィールド内のタブ・改行・行分割クラスを空白へ置換する（spec §9）。"""
     return cell.translate(_SANITIZE_MAP)
-
-
-def write_tsv(path: Path, hits: list[Hit], encoding: str) -> None:
-    """hits を決定的にソートし、一時ファイル→fsync→rename で原子的に書き出す。
-
-    encoding が "utf-8-sig" のときのみ BOM を付与（非UTF-8は付けない・spec §9）。
-    """
-    ordered = sorted(hits, key=sort_key)
-    lines = ["\t".join(TSV_COLUMNS)]
-    lines += ["\t".join(_sanitize(c) for c in h.to_row()) for h in ordered]
-    data = ("\n".join(lines) + "\n").encode(encoding, errors="replace")
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)  # rename 済みのみ完了（spec §10.3）
-    except BaseException:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-        raise
