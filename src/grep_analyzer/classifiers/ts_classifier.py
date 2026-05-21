@@ -13,7 +13,7 @@ _JAVA = Language(tree_sitter_java.language(), "java")
 _C = Language(tree_sitter_c.language(), "c")
 
 # ノード型 → 共通上位カテゴリ（spec §7 の判定軸の最小集合）。
-# Phase 1 は決定的基盤が目的（分類精度は handcrafted の領分・spec §11）。
+# 決定的基盤が目的（分類精度は handcrafted の領分・spec §11）。
 # 内側から外へ climb して最初に一致した「文レベル」ノードのカテゴリを採る。
 # argument_list / init_declarator は包含関係で if/宣言 と衝突するため意図的に含めない。
 _CATEGORY_BY_NODE = {

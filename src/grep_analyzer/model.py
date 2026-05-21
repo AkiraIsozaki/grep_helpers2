@@ -26,7 +26,7 @@ TSV_COLUMNS = [
 
 @dataclass(frozen=True)
 class Hit:
-    """TSV1行に対応する分類結果。Phase 1 では ref_kind は常に "direct"。"""
+    """TSV1行に対応する分類結果（direct / indirect:* を含む）。"""
 
     keyword: str
     language: str
@@ -53,7 +53,7 @@ class Hit:
 
 
 def sort_key(h: Hit) -> tuple:
-    """spec §9 v9 全順序キー。
+    """spec §9 全順序キー。
 
     (ref_kind_rank, chain_group, file, lineno, ref_kind, via_symbol,
      category, category_sub, confidence, usage_summary, snippet,

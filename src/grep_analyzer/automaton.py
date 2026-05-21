@@ -23,7 +23,7 @@ def scan_line(automaton_obj: ahocorasick.Automaton | None, line: str) -> list[st
     版非依存の根拠: 列挙は `set` で集約し最後に `sorted()` で正規化、採否は
     `end`/`len(sym)` から算出する位置（文字 index）のみに依存し iter() の
     列挙順に非依存。よって pyahocorasick の版差（iter 順序・同一終端多重）を
-    構造的に吸収する（2.1.0→2.3.1 版更新で出力 byte 不変＝spec v10 で実証）。
+    構造的に吸収する（2.1.0→2.3.1 版更新で出力 byte 不変＝実機検証済）。
     """
     if automaton_obj is None:
         return []

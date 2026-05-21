@@ -1,4 +1,4 @@
-"""kw 単位 resume の完了判定（spec v4 §4 WS1・完了判定1〜5）。"""
+"""kw 単位 resume の完了判定（spec §4・完了判定1〜5）。"""
 
 import hashlib
 import json

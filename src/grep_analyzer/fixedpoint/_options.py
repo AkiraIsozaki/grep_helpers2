@@ -12,7 +12,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class EngineOptions:
-    """spec §8/§10.4 のエンジン挙動パラメータ（Phase 2a/2b 範囲）。"""
+    """spec §8/§10.4 のエンジン挙動パラメータ。"""
 
     max_depth: int
     min_specificity: int

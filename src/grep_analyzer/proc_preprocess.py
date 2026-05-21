@@ -37,7 +37,7 @@ def exec_spans(source: str) -> list[tuple[int, int]]:
     """EXEC SQL/ORACLE 区間を (start_line, end_line)（0始まり）で返す。
 
     リテラル・コメント空白化コピー上で _EXEC_RE を走らせ文字列内 ;/
-    END-EXEC の誤切断を防ぐ（spec §7 v9 Crit-1）。空白化は長さ保存
+    END-EXEC の誤切断を防ぐ（spec §7 Crit-1）。空白化は長さ保存
     のため原ソース行へ正しく写像できる。
     """
     masked = _blank_literals(source)
