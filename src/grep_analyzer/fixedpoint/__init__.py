@@ -12,26 +12,24 @@ direct ヒットを seed に constant/var を多ホップ追跡し indirect ヒ�
 
 from pathlib import Path
 
-from grep_analyzer import walk
-from grep_analyzer.budget import MemoryBudget, estimate_items  # estimate_items: perf test の monkeypatch 接点（tests/perf/test_perf.py:49）
-from grep_analyzer.classify import classify_hit
-from grep_analyzer.diagnostics import Diagnostics
-from grep_analyzer.model import Hit
-from grep_analyzer.progress import Progress
 from grep_analyzer import ripgrep as _rg
-from grep_analyzer.provenance import Occurrence, ProvenanceGraph
-from grep_analyzer.snippet import build_snippet
-from grep_analyzer.spill import EdgeStore
-from grep_analyzer.stoplist import SymbolPolicy, load_stoplist
+from grep_analyzer import walk
+from grep_analyzer.budget import estimate_items  # perf test の monkeypatch 接点（tests/perf/test_perf.py:49）
+from grep_analyzer.diagnostics import Diagnostics
 from grep_analyzer.fixedpoint._budget_control import (
     apply_global_cap,
     compute_nchunks,
     maybe_spill,
 )
+from grep_analyzer.fixedpoint._finalize import build_indirect_hits
+from grep_analyzer.fixedpoint._ingest import absorb_results
 from grep_analyzer.fixedpoint._options import EngineOptions
-from grep_analyzer.fixedpoint._ingest import absorb_results, ingest_one
-from grep_analyzer.fixedpoint._scan import _file_meta, _kinds_of, _scan_file, scan_hop
-from grep_analyzer.fixedpoint._state import ChaseState, _REF_KIND
+from grep_analyzer.fixedpoint._scan import scan_hop
+from grep_analyzer.fixedpoint._seed import initialize_state
+from grep_analyzer.model import Hit
+from grep_analyzer.progress import Progress
+
+__all__ = ["EngineOptions", "run_fixedpoint", "estimate_items"]
 
 
 def run_fixedpoint(
@@ -43,34 +41,7 @@ def run_fixedpoint(
     files 指定時は内部 walk を省き事前収集 (rel, abspath) 列を使う（同値）。
     """
     source_root = Path(source_root)
-    keyword = sorted({s.keyword for s in seed_hits})[0] if seed_hits else ""
-    budget = MemoryBudget(opts.memory_limit_mb)
-    state = ChaseState(
-        source_root=source_root,
-        options=opts,
-        diagnostics=diag,
-        policy=SymbolPolicy(opts.min_specificity, load_stoplist(opts.stoplist_path)),
-        budget=budget,
-        graph=ProvenanceGraph(),
-        edge_store=EdgeStore(opts.spill_dir, budget),
-        keyword=keyword,
-    )
-
-    # hop0→hop1: seed ファイル実読で spec §5.1 決定的に言語/方言確定
-    for s in seed_hits:
-        occ = Occurrence(s.keyword, s.file, s.lineno)
-        state.graph.add_seed(occ)
-        sp = source_root / s.file
-        if sp.is_file():
-            text, _, _, lang, dia = _file_meta(
-                s.file, sp.read_bytes(), opts.lang_map,
-                fallback_chain=list(opts.encoding_fallback))
-            _ls = text.split("\n")
-            seed_line = _ls[s.lineno - 1] if 0 <= s.lineno - 1 < len(_ls) else ""
-        else:
-            lang, dia = s.language, "bourne"
-            seed_line = ""
-        ingest_one(state, occ, lang, dia, seed_line, hop=1, is_seed=True)
+    state = initialize_state(seed_hits, source_root, opts, diag)
 
     if files is None:
         files = list(walk.walk_files(
@@ -78,8 +49,8 @@ def run_fixedpoint(
             follow_symlinks=opts.follow_symlinks,
             max_file_bytes=opts.max_file_bytes, diag=diag))
     state.rel_to_abs = {rel: abspath for rel, abspath in files}
-    prog = Progress(opts.progress)
-    prog.start(len(files))
+    progress = Progress(opts.progress)
+    progress.start(len(files))
 
     try:
         hop = 1
@@ -105,47 +76,11 @@ def run_fixedpoint(
             if nchunks > 1:
                 diag.add("automaton_split", f"hop={hop} chunks={n_actual_chunks}")
             absorb_results(state, pass_results, scan_chase, scan_term, hop)
-            prog.hop(hop, len(scan_syms), len(scan_files))
+            progress.hop(hop, len(scan_syms), len(scan_files))
             hop += 1
 
-        for p, c in state.edge_store.sorted_unique():
-            state.graph.add_edge(p, c)
-
-        indirect: list[Hit] = []
-        seen: set[Occurrence] = set()
-        line_cache: dict[str, list[str]] = {}
-        meta_of: dict[str, tuple[str, str, str]] = {}
-        for _, c in state.edge_store.sorted_unique():
-            if c in seen or c.symbol not in (state.chase_done | state.terminal_done):
-                continue
-            if state.graph.is_seed_location(c.relpath, c.lineno):
-                continue
-            seen.add(c)
-            if c.relpath not in line_cache:
-                raw = state.rel_to_abs[c.relpath].read_bytes() if c.relpath in state.rel_to_abs else b""
-                text, enc, replaced, lang, dia = _file_meta(c.relpath, raw, opts.lang_map, fallback_chain=list(opts.encoding_fallback))
-                line_cache[c.relpath] = text.split("\n")
-                meta_of[c.relpath] = (text, lang, dia)
-                state.encoding_of.setdefault(c.relpath, (enc, replaced))
-            text, language, dialect = meta_of[c.relpath]
-            lines = line_cache[c.relpath]
-            line = lines[c.lineno - 1] if 0 <= c.lineno - 1 < len(lines) else ""
-            kind = state.symbol_kind.get(c.symbol, "var")
-            cat, conf = classify_hit(language, dialect, text, c.lineno, line)
-            if kind in ("getter", "setter"):
-                conf = "low"
-            enc, replaced = state.encoding_of.get(c.relpath, ("utf-8", False))
-            for chain in state.graph.chains_to(c, max_depth=opts.max_depth,
-                                         max_paths=opts.max_paths, diag=diag):
-                indirect.append(Hit(
-                    keyword=keyword, language=language, file=c.relpath,
-                    lineno=c.lineno, ref_kind=_REF_KIND[kind], category=cat,
-                    category_sub="", usage_summary=f"{cat} ({language})",
-                    via_symbol=c.symbol, chain=chain,
-                    snippet=build_snippet(language, dialect, text, c.lineno),
-                    encoding=enc + (" 要確認" if replaced else ""),
-                    confidence=conf))
-        prog.done()
+        indirect = build_indirect_hits(state)
+        progress.done()
         return indirect
     finally:
         state.edge_store.close()
