@@ -61,16 +61,18 @@ class ProvenanceGraph:
             results = results[:max_paths]
         return results
 
-    def _dfs(self, node, target, path, vocc, vsym, max_depth, diag, results) -> None:
+    def _dfs(self, node, target, path, visited_occurrences, visited_symbols,
+             max_depth, diag, results) -> None:
         if node == target:
             results.append(" -> ".join(_hop(o) for o in path))
             return
         if len(path) - 1 >= max_depth:
             diag.add("prov_max_depth", _hop(path[0]) + " ... " + _hop(node))
             return
-        for nxt in self._adj.get(node, []):
-            if nxt in vocc or nxt.symbol in vsym:
-                diag.add("prov_cycle_cut", _hop(node) + " -> " + _hop(nxt))
+        for next_occ in self._adj.get(node, []):
+            if next_occ in visited_occurrences or next_occ.symbol in visited_symbols:
+                diag.add("prov_cycle_cut", _hop(node) + " -> " + _hop(next_occ))
                 continue
-            self._dfs(nxt, target, path + [nxt], vocc | {nxt},
-                      vsym | {nxt.symbol}, max_depth, diag, results)
+            self._dfs(next_occ, target, path + [next_occ],
+                      visited_occurrences | {next_occ},
+                      visited_symbols | {next_occ.symbol}, max_depth, diag, results)
