@@ -10,14 +10,14 @@ def build(symbols: list[str]) -> ahocorasick.Automaton | None:
     syms = [s for s in symbols if s]
     if not syms:
         return None
-    au = ahocorasick.Automaton()
+    automaton_obj = ahocorasick.Automaton()
     for s in syms:
-        au.add_word(s, s)
-    au.make_automaton()
-    return au
+        automaton_obj.add_word(s, s)
+    automaton_obj.make_automaton()
+    return automaton_obj
 
 
-def scan_line(au: ahocorasick.Automaton | None, line: str) -> list[str]:
+def scan_line(automaton_obj: ahocorasick.Automaton | None, line: str) -> list[str]:
     """1 行から語境界一致シンボルを昇順ユニークで返す（決定的）。
 
     版非依存の根拠: 列挙は `set` で集約し最後に `sorted()` で正規化、採否は
@@ -25,11 +25,11 @@ def scan_line(au: ahocorasick.Automaton | None, line: str) -> list[str]:
     列挙順に非依存。よって pyahocorasick の版差（iter 順序・同一終端多重）を
     構造的に吸収する（2.1.0→2.3.1 版更新で出力 byte 不変＝spec v10 で実証）。
     """
-    if au is None:
+    if automaton_obj is None:
         return []
     found = set()
     n = len(line)
-    for end, sym in au.iter(line):
+    for end, sym in automaton_obj.iter(line):
         start = end - len(sym) + 1
         before = line[start - 1] if start > 0 else ""
         after = line[end + 1] if end + 1 < n else ""

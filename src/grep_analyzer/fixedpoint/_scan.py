@@ -37,11 +37,11 @@ def _scan_file(args):
     rel, abspath, sym_list, lang_map, fallback = args
     raw = Path(abspath).read_bytes()
     text, enc, replaced, language, dialect = file_meta(rel, raw, lang_map, fallback_chain=fallback)
-    au = automaton.build(sym_list)
+    automaton_obj = automaton.build(sym_list)
     found = []
-    if au is not None:
+    if automaton_obj is not None:
         for i, line in enumerate(text.split("\n"), start=1):
-            for sym in automaton.scan_line(au, line):
+            for sym in automaton.scan_line(automaton_obj, line):
                 found.append((sym, i, line))
     return rel, enc, replaced, language, dialect, found
 
