@@ -2382,3 +2382,10 @@ Phase 3 で発生・残置する Minor は Phase 4 plan 冒頭に記録する:
 - `_state.py` を `state.py`（public）にする選択肢の検討
 - `snippet/__init__.py` の `build_snippet` docstring を C3 形式（spec 参照を末尾 Related: に集約）へ
 - `test_encoding_wiring.py` 内コメントの `enc_of` → `encoding_of` 表記追従
+- **`_budget_control._estimate_items` 動的属性参照の清潔化** (V5 観点 B Major #1): Phase 3 で `_estimate_items(*, n_symbols, n_edges, n_intro)` ラッパが `from grep_analyzer import fixedpoint as _fp; _fp.estimate_items(...)` を関数内 import で呼ぶ実装になっている（perf test の `monkeypatch.setattr("grep_analyzer.fixedpoint.estimate_items", _spy)` 接点維持のため）。Phase 4 で `tests/perf/test_perf.py:49` を `monkeypatch.setattr("grep_analyzer.budget.estimate_items", _spy)` に変更し、`_budget_control.py` も `from grep_analyzer.budget import estimate_items` 直接呼出に戻す（hot path のオーバヘッド削減 + 可読性向上）
+- `_options.py:15` の `（Phase 2a/2b 範囲）` マーカー削除（C5 違反、補-14 で既登録）
+- `_seed.py` / `_finalize.py` の `from grep_analyzer.fixedpoint._scan import _file_meta` の private prefix 共有（`_file_meta` / `_kinds_of` を public 名に rename + `_helpers.py` への分離を検討）
+- `_ingest.py` の `absorb_results` / `ingest_one` の `hop` 引数 docstring 統一（V5 観点 B Minor #4）
+- `apply_global_cap` の `discard` 行に「既 capped でも discard する理由」コメント付与（V5 観点 B Suggestion）
+- `snippet/__init__.py` の `__all__` を冒頭の import 群末尾へ移動（V5 観点 A Suggestion）
+- `snippet/_ts.py` の `_GRAN_*` 等定数集合に tree-sitter 0.21 由来の出典コメント追加

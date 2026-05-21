@@ -6,8 +6,8 @@
   edge_store.maybe_spill_now() を呼ぶ。1 度だけ diag を立てる。
 - compute_nchunks: 1 hop の chunk 数を予算と force_chunks から決める。
 
-注: compute_nchunks は **scan_active/term_active を空にした直後**に呼ばれる
-前提（既存 fixedpoint.py L246-258 と同じタイミング・n_live 計算同値）。
+注: compute_nchunks は **chase_active/terminal_active を空にした直後**に呼ばれる
+前提（n_live はその時点の (chase|terminal)_done 集合のみから計算される）。
 
 Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
 """
