@@ -17,7 +17,7 @@ from grep_analyzer.model import ChaseSymbols
 def extract_var_symbols(language: str, dialect: str, line: str) -> list[str]:
     """1 行から indirect:var 追跡シンボル（代入の左辺識別子）を抽出する。
 
-    fixedpoint の `_ingest` が言語非依存の var シンボル列を必要とするため、
+    indirect:var 追跡で左辺識別子のみを必要とする呼出元から使われるため、
     Chaser を経由せず直接対応する `*_chaser._extract_var_symbols` を呼ぶ。
     対象外言語・該当なしは空リスト。
     """

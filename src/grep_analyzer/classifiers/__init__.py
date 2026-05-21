@@ -22,4 +22,4 @@ _CHASERS: dict[str, Chaser] = {
     "sql": sql_chaser,
 }
 
-__all__ = ["_CHASERS", "Chaser"]
+__all__ = ["Chaser"]
