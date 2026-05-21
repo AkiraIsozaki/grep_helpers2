@@ -32,10 +32,10 @@ def _paren_span(node) -> tuple[int, int]:
     for ch in node.children:
         if ch.type == "parenthesized_expression":
             return (ch.start_point[0], ch.end_point[0])
-    lp = next((c for c in node.children if c.type == "("), None)
-    rps = [c for c in node.children if c.type == ")"]
-    if lp is not None and rps:
-        return (lp.start_point[0], rps[-1].end_point[0])
+    lparen = next((c for c in node.children if c.type == "("), None)
+    rparens = [c for c in node.children if c.type == ")"]
+    if lparen is not None and rparens:
+        return (lparen.start_point[0], rparens[-1].end_point[0])
     return (node.start_point[0], node.end_point[0])
 
 
@@ -61,23 +61,23 @@ def ts_span(language: str, file_text: str, lineno: int):
         root = parse_tree(lang, src)
     except Exception:
         return None
-    n = node_at_line(root, lineno)
-    if n is None:
+    node = node_at_line(root, lineno)
+    if node is None:
         return None
     gran = _GRAN_JAVA if lang == "java" else _GRAN_C
     last_stmt = None
-    cur = n
+    cur = node
     while cur is not None:
-        t = cur.type
-        if t in _STMT:
+        node_type = cur.type
+        if node_type in _STMT:
             last_stmt = cur
-        if t in gran:
+        if node_type in gran:
             if _has_error(cur):
                 return None
-            if t in _PAREN_ONLY:
+            if node_type in _PAREN_ONLY:
                 return _paren_span(cur)
             return (cur.start_point[0], cur.end_point[0])
-        if t in _BLOCK:
+        if node_type in _BLOCK:
             if last_stmt is None or _has_error(last_stmt):
                 return None
             return (last_stmt.start_point[0], last_stmt.end_point[0])

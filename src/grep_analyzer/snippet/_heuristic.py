@@ -14,14 +14,14 @@ from grep_analyzer.patterns.snippet_boundaries import (
 from grep_analyzer.snippet._clamp import LINE_MAX
 
 
-def _balanced(t: str) -> bool:
-    d = 0
-    for c in t:
+def _balanced(text: str) -> bool:
+    paren_depth = 0
+    for c in text:
         if c in "([{":
-            d += 1
+            paren_depth += 1
         elif c in ")]}":
-            d -= 1
-    return d == 0 and t.count("'") % 2 == 0 and t.count('"') % 2 == 0
+            paren_depth -= 1
+    return paren_depth == 0 and text.count("'") % 2 == 0 and text.count('"') % 2 == 0
 
 
 def heuristic_span(lines: list[str], hit: int, language: str) -> tuple[int, int]:
@@ -32,10 +32,10 @@ def heuristic_span(lines: list[str], hit: int, language: str) -> tuple[int, int]
     shell は ;/fi/done/esac/breaksw）ならその行を含めて停止。heredoc は
     mask 非対応＝§8.4 境界、LINE_MAX で必ず有限停止。
     """
-    m = [mask_literals(language, ln) for ln in lines]
+    masked_lines = [mask_literals(language, ln) for ln in lines]
 
     def stop(i: int) -> bool:
-        x = m[i]
+        x = masked_lines[i]
         if x.rstrip().endswith("\\"):
             return False
         if not _balanced(x):

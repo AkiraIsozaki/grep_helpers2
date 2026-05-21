@@ -140,7 +140,7 @@ def test_automaton分割発火構成でfallback鎖が届く(tmp_path, monkeypatc
     # （Task1 のみ＝未配線）か否か」を RED→GREEN で駆動する wiring スモーク
     # であり、`:248` 配線済で `:264` のみ漏れた状態を単独分離検出はしない
     # （F.java の最終 encoding/snippet は実コード上 :313 の indirect 再構成
-    # ＋_scan_file enc_of 由来で表面化し :264 単独では不変なため）。
+    # ＋_scan_file encoding_of 由来で表面化し :264 単独では不変なため）。
     # `:264` 配線必須は Step 3 で別途規定し、`pytest -q` 全緑＋分割 fixture
     # が分割経路を実行する事実で担保する（本テストは網羅保証でなく駆動用）。
     _no_chardet(monkeypatch)
