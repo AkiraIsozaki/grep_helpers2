@@ -13,7 +13,7 @@ from grep_analyzer.budget import MemoryBudget
 from grep_analyzer.diagnostics import Diagnostics
 from grep_analyzer.fixedpoint._ingest import ingest_one
 from grep_analyzer.fixedpoint._options import EngineOptions
-from grep_analyzer.fixedpoint._scan import _file_meta
+from grep_analyzer.fixedpoint._scan import file_meta
 from grep_analyzer.fixedpoint._state import ChaseState
 from grep_analyzer.model import Hit
 from grep_analyzer.provenance import Occurrence, ProvenanceGraph
@@ -45,7 +45,7 @@ def initialize_state(seed_hits: list[Hit], source_root: Path,
         state.graph.add_seed(occ)
         sp = source_root / s.file
         if sp.is_file():
-            text, _, _, lang, dia = _file_meta(
+            text, _, _, lang, dia = file_meta(
                 s.file, sp.read_bytes(), opts.lang_map,
                 fallback_chain=list(opts.encoding_fallback))
             _ls = text.split("\n")

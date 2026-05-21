@@ -5,7 +5,7 @@
 のみ渡す。`scan_hop` は呼出側から渡された必要プリミティブだけを引数に取り、
 worker からの戻り値を呼出側で追跡状態へ反映する（worker isolation 厳守・補-9）。
 
-`_file_meta` / `_kinds_of` は追跡状態を引数に取らない純関数 helper として
+`file_meta` / `kinds_of` は追跡状態を引数に取らない純関数 helper として
 `_seed` / `_ingest` / `_finalize` から共有 import される（pickle 制約と矛盾なし）。
 
 Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
@@ -20,7 +20,7 @@ from grep_analyzer.dispatch import detect_language, detect_shell_dialect
 from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
 
 
-def _file_meta(rel: str, raw: bytes, lang_map: dict[str, str], fallback_chain=None):
+def file_meta(rel: str, raw: bytes, lang_map: dict[str, str], fallback_chain=None):
     """1 度だけデコードし (text, encoding, replaced, language, dialect) を返す。"""
     chain = list(fallback_chain) if fallback_chain else DEFAULT_FALLBACK
     text, enc, replaced = decode_bytes(raw, chain)
@@ -36,7 +36,7 @@ def _scan_file(args):
     """
     rel, abspath, sym_list, lang_map, fallback = args
     raw = Path(abspath).read_bytes()
-    text, enc, replaced, language, dialect = _file_meta(rel, raw, lang_map, fallback_chain=fallback)
+    text, enc, replaced, language, dialect = file_meta(rel, raw, lang_map, fallback_chain=fallback)
     au = automaton.build(sym_list)
     found = []
     if au is not None:
@@ -46,7 +46,7 @@ def _scan_file(args):
     return rel, enc, replaced, language, dialect, found
 
 
-def _kinds_of(language: str, dialect: str, line: str) -> dict[str, str]:
+def kinds_of(language: str, dialect: str, line: str) -> dict[str, str]:
     """1 行の各シンボル→種別。同名は逆順ループで最後に書き込む constant が優先。"""
     cs = extract_chase_symbols(language, dialect, line)
     out: dict[str, str] = {}

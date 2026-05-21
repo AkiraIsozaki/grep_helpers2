@@ -12,7 +12,7 @@ Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
 """
 
 from grep_analyzer.chase import extract_chase_symbols
-from grep_analyzer.fixedpoint._scan import _kinds_of
+from grep_analyzer.fixedpoint._scan import kinds_of
 from grep_analyzer.fixedpoint._state import ChaseState
 from grep_analyzer.provenance import Occurrence
 from grep_analyzer.stoplist import partition
@@ -33,7 +33,7 @@ def ingest_one(state: ChaseState, parent: Occurrence, language: str,
             state.maxdepth_logged.add(parent)
         return
     cs = extract_chase_symbols(language, dialect, line)
-    kinds = _kinds_of(language, dialect, line)
+    kinds = kinds_of(language, dialect, line)
     part = partition(cs, language, state.policy)
     for sym, reason in sorted(part.rejected):
         diag.add("symbol_rejected", f"{reason}\t{sym}")

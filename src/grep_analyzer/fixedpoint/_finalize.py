@@ -8,7 +8,7 @@ Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
 """
 
 from grep_analyzer.classify import classify_hit
-from grep_analyzer.fixedpoint._scan import _file_meta
+from grep_analyzer.fixedpoint._scan import file_meta
 from grep_analyzer.fixedpoint._state import ChaseState
 from grep_analyzer.model import Hit
 from grep_analyzer.provenance import Occurrence
@@ -37,7 +37,7 @@ def build_indirect_hits(state: ChaseState) -> list[Hit]:
         seen.add(c)
         if c.relpath not in line_cache:
             raw = state.rel_to_abs[c.relpath].read_bytes() if c.relpath in state.rel_to_abs else b""
-            text, enc, replaced, lang, dia = _file_meta(
+            text, enc, replaced, lang, dia = file_meta(
                 c.relpath, raw, opts.lang_map,
                 fallback_chain=list(opts.encoding_fallback))
             line_cache[c.relpath] = text.split("\n")
