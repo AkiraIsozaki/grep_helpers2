@@ -32,9 +32,9 @@ def ingest_one(state: ChaseState, parent: Occurrence, language: str,
                      f"{parent.lineno} (hop {hop} > --max-depth {opts.max_depth})")
             state.maxdepth_logged.add(parent)
         return
-    cs = extract_chase_symbols(language, dialect, line)
+    chase_symbols = extract_chase_symbols(language, dialect, line)
     kinds = kinds_of(language, dialect, line)
-    part = partition(cs, language, state.policy)
+    part = partition(chase_symbols, language, state.policy)
     for sym, reason in sorted(part.rejected):
         diag.add("symbol_rejected", f"{reason}\t{sym}")
     for sym in part.chase:

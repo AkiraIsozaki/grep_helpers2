@@ -28,7 +28,7 @@ def build_indirect_hits(state: ChaseState) -> list[Hit]:
     indirect: list[Hit] = []
     seen: set[Occurrence] = set()
     line_cache: dict[str, list[str]] = {}
-    meta_of: dict[str, tuple[str, str, str]] = {}
+    file_meta_by_relpath: dict[str, tuple[str, str, str]] = {}
     for _, c in state.edge_store.sorted_unique():
         if c in seen or c.symbol not in (state.chase_done | state.terminal_done):
             continue
@@ -37,13 +37,13 @@ def build_indirect_hits(state: ChaseState) -> list[Hit]:
         seen.add(c)
         if c.relpath not in line_cache:
             raw = state.rel_to_abs[c.relpath].read_bytes() if c.relpath in state.rel_to_abs else b""
-            text, enc, replaced, lang, dia = file_meta(
+            text, enc, replaced, lang, dialect = file_meta(
                 c.relpath, raw, opts.lang_map,
                 fallback_chain=list(opts.encoding_fallback))
             line_cache[c.relpath] = text.split("\n")
-            meta_of[c.relpath] = (text, lang, dia)
+            file_meta_by_relpath[c.relpath] = (text, lang, dialect)
             state.encoding_of.setdefault(c.relpath, (enc, replaced))
-        text, language, dialect = meta_of[c.relpath]
+        text, language, dialect = file_meta_by_relpath[c.relpath]
         lines = line_cache[c.relpath]
         line = lines[c.lineno - 1] if 0 <= c.lineno - 1 < len(lines) else ""
         kind = state.symbol_kind.get(c.symbol, "var")

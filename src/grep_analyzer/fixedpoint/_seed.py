@@ -45,13 +45,13 @@ def initialize_state(seed_hits: list[Hit], source_root: Path,
         state.graph.add_seed(occ)
         sp = source_root / s.file
         if sp.is_file():
-            text, _, _, lang, dia = file_meta(
+            text, _, _, lang, dialect = file_meta(
                 s.file, sp.read_bytes(), opts.lang_map,
                 fallback_chain=list(opts.encoding_fallback))
             _ls = text.split("\n")
             seed_line = _ls[s.lineno - 1] if 0 <= s.lineno - 1 < len(_ls) else ""
         else:
-            lang, dia = s.language, "bourne"
+            lang, dialect = s.language, "bourne"
             seed_line = ""
-        ingest_one(state, occ, lang, dia, seed_line, hop=1, is_seed=True)
+        ingest_one(state, occ, lang, dialect, seed_line, hop=1, is_seed=True)
     return state

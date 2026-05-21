@@ -48,10 +48,10 @@ def _scan_file(args):
 
 def kinds_of(language: str, dialect: str, line: str) -> dict[str, str]:
     """1 行の各シンボル→種別。同名は逆順ループで最後に書き込む constant が優先。"""
-    cs = extract_chase_symbols(language, dialect, line)
+    chase_symbols = extract_chase_symbols(language, dialect, line)
     out: dict[str, str] = {}
-    for kind, names in (("setter", cs.setters), ("getter", cs.getters),
-                        ("var", cs.vars), ("constant", cs.constants)):
+    for kind, names in (("setter", chase_symbols.setters), ("getter", chase_symbols.getters),
+                        ("var", chase_symbols.vars), ("constant", chase_symbols.constants)):
         for n in names:
             out[n] = kind
     return out
@@ -75,8 +75,8 @@ def scan_hop(scan_syms, scan_files, opts, nchunks):
         size = -(-len(scan_syms) // nchunks)
         chunks = [scan_syms[i:i + size]
                   for i in range(0, len(scan_syms), size)] or [[]]
-    agg: dict[str, list] = {}
-    meta: dict[str, tuple] = {}
+    hits_by_relpath: dict[str, list] = {}
+    file_meta_by_relpath: dict[str, tuple] = {}
     for chunk in chunks:
         args = [(rel, str(abspath), chunk, opts.lang_map, list(opts.encoding_fallback))
                 for rel, abspath in scan_files]
@@ -86,9 +86,9 @@ def scan_hop(scan_syms, scan_files, opts, nchunks):
         else:
             res = [_scan_file(a) for a in args]
         for rel, enc, replaced, language, dialect, found in res:
-            meta.setdefault(rel, (enc, replaced, language, dialect))
-            agg.setdefault(rel, []).extend(found)
-    pass_results = [(rel, *meta[rel],
-                     sorted(agg[rel], key=lambda t: (t[1], t[0])))
-                    for rel in sorted(agg)]
+            file_meta_by_relpath.setdefault(rel, (enc, replaced, language, dialect))
+            hits_by_relpath.setdefault(rel, []).extend(found)
+    pass_results = [(rel, *file_meta_by_relpath[rel],
+                     sorted(hits_by_relpath[rel], key=lambda t: (t[1], t[0])))
+                    for rel in sorted(hits_by_relpath)]
     return pass_results, len(chunks)
