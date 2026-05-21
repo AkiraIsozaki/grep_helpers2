@@ -8,45 +8,45 @@ from grep_analyzer.walk import DEFAULT_EXCLUDE
 
 def _parse_lang_map(spec: str | None) -> dict[str, str]:
     """`.ext=lang,.e2=l2` を {".ext":"lang"} に。空は {}（spec §10.4/§5.1手順1）。"""
-    out: dict[str, str] = {}
+    lang_map: dict[str, str] = {}
     if spec:
         for pair in spec.split(","):
             ext, _, lang = pair.partition("=")
             if ext and lang:
-                out[ext if ext.startswith(".") else "." + ext] = lang
-    return out
+                lang_map[ext if ext.startswith(".") else "." + ext] = lang
+    return lang_map
 
 
 def _make_parser() -> argparse.ArgumentParser:
     """共通 ArgumentParser を組み立てて返す。"""
-    p = argparse.ArgumentParser(prog="grep_analyzer")
-    p.add_argument("--input", required=True)
-    p.add_argument("--output", required=True)
-    p.add_argument("--source-root", required=True, dest="source_root")
-    p.add_argument("--max-depth", type=int, default=10, dest="max_depth")
-    p.add_argument("--min-specificity", type=int, default=2, dest="min_specificity")
-    p.add_argument("--stoplist", default=None)
-    p.add_argument("--lang-map", default=None, dest="lang_map")
-    p.add_argument("--include", action="append", default=[])
-    p.add_argument("--exclude", action="append", default=None)
-    p.add_argument("--jobs", type=int, default=1)
-    p.add_argument("--follow-symlinks", action="store_true", dest="follow_symlinks")
-    p.add_argument("--max-file-bytes", type=int, default=5_000_000, dest="max_file_bytes")
-    p.add_argument("--max-symbols", type=int, default=100_000, dest="max_symbols")
-    p.add_argument("--max-paths", type=int, default=1000, dest="max_paths")
-    p.add_argument("--memory-limit", type=int, default=None, dest="memory_limit_mb")
-    p.add_argument("--use-ripgrep", action="store_true", dest="use_ripgrep")
-    p.add_argument("--max-passes", type=int, default=8, dest="max_passes")
-    p.add_argument("--progress", default="off")
-    p.add_argument("--resume", action="store_true")
-    p.add_argument("--output-encoding", default="utf-8-sig", dest="output_encoding")
-    p.add_argument("--encoding-fallback", default="cp932,euc-jp,latin-1",
-                   dest="encoding_fallback")
-    p.add_argument("--max-rows-per-part", type=int, default=1_048_575,
-                   dest="max_rows_per_part")
-    p.add_argument("--diagnostics-detail-limit", type=int, default=1000,
-                   dest="diagnostics_detail_limit")
-    return p
+    parser = argparse.ArgumentParser(prog="grep_analyzer")
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--source-root", required=True, dest="source_root")
+    parser.add_argument("--max-depth", type=int, default=10, dest="max_depth")
+    parser.add_argument("--min-specificity", type=int, default=2, dest="min_specificity")
+    parser.add_argument("--stoplist", default=None)
+    parser.add_argument("--lang-map", default=None, dest="lang_map")
+    parser.add_argument("--include", action="append", default=[])
+    parser.add_argument("--exclude", action="append", default=None)
+    parser.add_argument("--jobs", type=int, default=1)
+    parser.add_argument("--follow-symlinks", action="store_true", dest="follow_symlinks")
+    parser.add_argument("--max-file-bytes", type=int, default=5_000_000, dest="max_file_bytes")
+    parser.add_argument("--max-symbols", type=int, default=100_000, dest="max_symbols")
+    parser.add_argument("--max-paths", type=int, default=1000, dest="max_paths")
+    parser.add_argument("--memory-limit", type=int, default=None, dest="memory_limit_mb")
+    parser.add_argument("--use-ripgrep", action="store_true", dest="use_ripgrep")
+    parser.add_argument("--max-passes", type=int, default=8, dest="max_passes")
+    parser.add_argument("--progress", default="off")
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--output-encoding", default="utf-8-sig", dest="output_encoding")
+    parser.add_argument("--encoding-fallback", default="cp932,euc-jp,latin-1",
+                        dest="encoding_fallback")
+    parser.add_argument("--max-rows-per-part", type=int, default=1_048_575,
+                        dest="max_rows_per_part")
+    parser.add_argument("--diagnostics-detail-limit", type=int, default=1000,
+                        dest="diagnostics_detail_limit")
+    return parser
 
 
 def _opts_from(args: argparse.Namespace) -> EngineOptions:

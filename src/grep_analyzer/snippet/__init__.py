@@ -50,8 +50,8 @@ def build_snippet(language: str, dialect: str, file_text: str,
         span = heuristic_span(lines, hit, language)
     if span is None:
         span = (hit, hit)
-    s, e = span
-    s = max(0, min(s, hit))
-    e = min(len(lines) - 1, max(e, hit))
-    body = [_escape_sep(_sanitize(x)) for x in lines[s:e + 1]]
-    return clamp_lines(body, hit - s)
+    span_start, span_end = span
+    span_start = max(0, min(span_start, hit))
+    span_end = min(len(lines) - 1, max(span_end, hit))
+    body = [_escape_sep(_sanitize(x)) for x in lines[span_start:span_end + 1]]
+    return clamp_lines(body, hit - span_start)

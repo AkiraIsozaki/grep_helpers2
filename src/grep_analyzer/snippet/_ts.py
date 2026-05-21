@@ -98,7 +98,7 @@ def proc_exec_span(file_text: str, lineno: int):
     Related: spec §7 (Pro*C 取扱), §9 (snippet)
     """
     hit = lineno - 1
-    for s, e in exec_spans(file_text):
-        if s <= hit <= e:
-            return (s, e)
+    for span_start, span_end in exec_spans(file_text):
+        if span_start <= hit <= span_end:
+            return (span_start, span_end)
     return None
