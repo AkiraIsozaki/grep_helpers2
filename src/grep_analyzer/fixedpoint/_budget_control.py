@@ -56,12 +56,12 @@ def maybe_spill(state: ChaseState, hop: int):
             state.spill_logged = True
 
 
-def compute_nchunks(state: ChaseState, scan_syms: list[str]) -> int:
+def compute_nchunks(state: ChaseState, scan_symbols: list[str]) -> int:
     """1 hop の chunk 数を決める。`force_chunks` 指定優先、超過予算時のみ自動増やす。"""
     opts = state.options
     nchunks = 1
     if opts.force_chunks and opts.force_chunks > 1:
-        return min(opts.force_chunks, opts.max_passes, max(1, len(scan_syms)))
+        return min(opts.force_chunks, opts.max_passes, max(1, len(scan_symbols)))
     if state.budget.unlimited:
         return 1
     n_intro = sum(len(v) for v in state.introducers.values())
@@ -71,9 +71,9 @@ def compute_nchunks(state: ChaseState, scan_syms: list[str]) -> int:
             n_symbols=n_live, n_edges=state.edge_store.in_memory_len(),
             n_intro=n_intro)):
         return 1
-    while nchunks < opts.max_passes and nchunks < len(scan_syms) and \
+    while nchunks < opts.max_passes and nchunks < len(scan_symbols) and \
             state.budget.exceeded(_budget.estimate_items(
-                n_symbols=-(-len(scan_syms) // (nchunks + 1)),
+                n_symbols=-(-len(scan_symbols) // (nchunks + 1)),
                 n_edges=state.edge_store.in_memory_len(), n_intro=n_intro)):
         nchunks += 1
     return nchunks

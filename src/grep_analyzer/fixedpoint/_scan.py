@@ -57,7 +57,7 @@ def kinds_of(language: str, dialect: str, line: str) -> dict[str, str]:
     return out
 
 
-def scan_hop(scan_syms, scan_files, opts, nchunks):
+def scan_hop(scan_symbols, scan_files, opts, nchunks):
     """1 hop の走査を chunks に分けて実行し、relpath 単位の集約済み結果を返す。
 
     `nchunks=1` の場合は単一 chunk として全 symbol を 1 度に走査する（既存
@@ -70,11 +70,11 @@ def scan_hop(scan_syms, scan_files, opts, nchunks):
       - n_actual_chunks: 呼出側 diag.add("automaton_split", ...) 用
     """
     if nchunks <= 1:
-        chunks = [scan_syms]
+        chunks = [scan_symbols]
     else:
-        size = -(-len(scan_syms) // nchunks)
-        chunks = [scan_syms[i:i + size]
-                  for i in range(0, len(scan_syms), size)] or [[]]
+        size = -(-len(scan_symbols) // nchunks)
+        chunks = [scan_symbols[i:i + size]
+                  for i in range(0, len(scan_symbols), size)] or [[]]
     hits_by_relpath: dict[str, list] = {}
     file_meta_by_relpath: dict[str, tuple] = {}
     for chunk in chunks:

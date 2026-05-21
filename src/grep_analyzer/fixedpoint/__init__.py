@@ -60,24 +60,24 @@ def run_fixedpoint(
             maybe_spill(state, hop)
             scan_chase = {s for s in state.chase_active if s not in state.capped}
             scan_term = {s for s in state.terminal_active if s not in state.capped}
-            scan_syms = sorted(scan_chase | scan_term)
+            scan_symbols = sorted(scan_chase | scan_term)
             state.chase_done |= state.chase_active
             state.chase_active = set()
             state.terminal_done |= state.terminal_active
             state.terminal_active = set()
-            if not scan_syms or hop > opts.max_depth:
+            if not scan_symbols or hop > opts.max_depth:
                 break
             scan_files = files
             if opts.use_ripgrep:
-                keep_rels = _rg.prefilter(source_root, state.rel_to_abs, scan_syms)
+                keep_rels = _rg.prefilter(source_root, state.rel_to_abs, scan_symbols)
                 if keep_rels is not None:
                     scan_files = [(r, a) for r, a in files if r in keep_rels]
-            nchunks = compute_nchunks(state, scan_syms)
-            pass_results, n_actual_chunks = scan_hop(scan_syms, scan_files, opts, nchunks)
+            nchunks = compute_nchunks(state, scan_symbols)
+            pass_results, n_actual_chunks = scan_hop(scan_symbols, scan_files, opts, nchunks)
             if nchunks > 1:
                 diag.add("automaton_split", f"hop={hop} chunks={n_actual_chunks}")
             absorb_results(state, pass_results, scan_chase, scan_term, hop)
-            progress.hop(hop, len(scan_syms), len(scan_files))
+            progress.hop(hop, len(scan_symbols), len(scan_files))
             hop += 1
 
         indirect = build_indirect_hits(state)
