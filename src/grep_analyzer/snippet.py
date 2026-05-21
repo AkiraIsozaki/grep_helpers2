@@ -9,6 +9,7 @@ import re
 
 from grep_analyzer.chase import mask_literals
 from grep_analyzer.classifiers.ts_classifier import node_at_line, parse_tree
+from grep_analyzer.patterns.snippet_boundaries import SH_TERMINATOR_RE, SQL_CLAUSE_RE
 from grep_analyzer.proc_preprocess import exec_spans, mask_exec_sql
 from grep_analyzer.tsv import _sanitize
 
@@ -72,11 +73,6 @@ def clamp_lines(lines: list[str], hit: int, line_max: int = LINE_MAX,
     return _render(out, top_k, bot_k)
 
 
-_SQL_CLAUSE = re.compile(
-    r"\b(WHERE|SET|VALUES|SELECT|FROM|GROUP\s+BY|ORDER\s+BY|HAVING)\b", re.I)
-_SH_END = re.compile(r"(?:^|\s)(fi|done|esac|breaksw)\b|;")
-
-
 def _balanced(t: str) -> bool:
     d = 0
     for c in t:
@@ -104,8 +100,8 @@ def heuristic_span(lines: list[str], hit: int, language: str) -> tuple[int, int]
         if not _balanced(x):
             return False
         if language == "sql":
-            return x.rstrip().endswith(";") or bool(_SQL_CLAUSE.search(x))
-        return bool(_SH_END.search(x))
+            return x.rstrip().endswith(";") or bool(SQL_CLAUSE_RE.search(x))
+        return bool(SH_TERMINATOR_RE.search(x))
 
     s = hit
     for _ in range(LINE_MAX - 1):
