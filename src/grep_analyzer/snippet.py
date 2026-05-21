@@ -5,8 +5,6 @@
 実環境実行で検証済。
 """
 
-import re
-
 from grep_analyzer.chase import mask_literals
 from grep_analyzer.classifiers.ts_classifier import node_at_line, parse_tree
 from grep_analyzer.patterns.snippet_boundaries import SH_TERMINATOR_RE, SQL_CLAUSE_RE
