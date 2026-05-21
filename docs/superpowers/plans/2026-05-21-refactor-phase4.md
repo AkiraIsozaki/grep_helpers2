@@ -1,0 +1,809 @@
+# Refactor Phase 4: 命名・コメントの全モジュール横断適用 Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Phase 1〜3 で構造確定したコード全体に対し、N1〜N4 命名規約と C1〜C5 コメント規約を横断適用する。さらに Phase 3 から持ち越した技術債務（`_estimate_items` 動的参照清潔化、`_REF_KIND` 所在移動、private 接頭辞整理など）を解消する。挙動は byte 不変（Inv-A〜E 全保持）。
+
+**Architecture:**
+- N1〜N4: 略語 → フルスペル、述語/動詞 統一、ドメイン語彙固定、ループ慣用識別子除外
+- C1〜C5: 識別子で伝わるコメント削除、spec 参照を `Related:` に集約、フェーズ/版マーカー除去
+- Phase 3 引き継ぎの技術債務を Task 群で個別解消
+- 設計 §7 V7 の適用順序: N1〜N4 inventory → rename → C1〜C5 適用 → R1 再検査
+
+**Tech Stack:** Python 3.12 / pytest / ripgrep / grep ベースの inventory
+
+**Related design:** `docs/superpowers/specs/2026-05-21-refactor-design.md` §3 N1-N5, §4 C1-C6, §6 Phase 4, §7 V1-V7
+
+---
+
+## Phase 3 引き継ぎ事項
+
+Phase 3 V5 で持ち越した全項目を本 plan で消化する:
+
+| # | 出自 | 項目 | 対象 Task |
+|---|---|---|---|
+| 1 | 設計 §3 N5 | au / sym / syms / dia / cs / agg / meta 等ローカル変数の横断 rename | Task N-1〜N-4 |
+| 2 | Phase 2 #5 | `patterns/literal_masking.py` の java/c/proc 完全重複（Pro*C 個別化判定） | Task R-1 |
+| 3 | Phase 2 #6 | `Phase 1.5` / `Phase 2a` / `v9` 等のマーカー除去（C5） | Task C-1 |
+| 4 | Phase 2 #7 | `classifiers/__init__.py` eager import 失敗時の運用判断 | Task R-2 |
+| 5 | Phase 3 | `_state.py` の `_REF_KIND` 命名 + 所在（`_state` → `_finalize`） | Task A-1 |
+| 6 | Phase 3 | `_state.py` を `state.py`（public）にする選択肢 | Task A-1 で判断 |
+| 7 | Phase 3 | `snippet/__init__.py` の `build_snippet` docstring を C3 形式へ | Task C-2 |
+| 8 | Phase 3 | `test_encoding_wiring.py` コメントの `enc_of` → `encoding_of` 表記 | Task N-3 |
+| 9 | Phase 3 V5 Major | `_budget_control._estimate_items` 動的参照清潔化 | Task A-2 |
+| 10 | Phase 3 V5 | `_options.py:15` の `（Phase 2a/2b 範囲）` マーカー削除 | Task C-1 |
+| 11 | Phase 3 V5 | `_seed.py` / `_finalize.py` の `_file_meta` private prefix 共有 | Task A-3 |
+| 12 | Phase 3 V5 | `_ingest.py` の `hop` 引数 docstring 統一 | Task C-2 |
+| 13 | Phase 3 V5 | `apply_global_cap` の discard コメント | Task C-2 |
+| 14 | Phase 3 V5 | `snippet/__init__.py` の `__all__` 位置 | Task C-2 |
+| 15 | Phase 3 V5 | `snippet/_ts.py` の `_GRAN_*` 出典コメント | Task C-2 |
+
+---
+
+## ファイル構造（Phase 4 完了時）
+
+Phase 3 完了時点と同じ構造を維持する（新規ファイルなし、削除なし、移動は `_state.py` の `_REF_KIND` → `_finalize.py` のみ）。
+
+```
+src/grep_analyzer/
+├── snippet/                ← Phase 3 完了時のまま、内部 rename + C5 適用
+├── fixedpoint/             ← Phase 3 完了時のまま、内部 rename + C5 適用
+│   ├── _state.py           ← _REF_KIND を削除（→ _finalize.py へ）
+│   ├── _finalize.py        ← _REF_KIND を持つ
+│   └── _budget_control.py  ← _estimate_items 動的参照を直接 import に戻す
+├── classifiers/            ← Phase 3 完了時のまま、内部 rename + C5 適用
+├── patterns/               ← Phase 3 完了時のまま、内部 rename + C5 適用
+├── chase.py                ← rename + C5
+├── automaton.py            ← au local 変数 rename
+└── ...（他全モジュール）
+tests/
+├── perf/test_perf.py       ← monkeypatch ターゲット変更（Task A-2 連動）
+├── integration/test_encoding_wiring.py ← コメント追従
+└── ...（他全モジュール）
+```
+
+---
+
+## ファイル単位の rename 対象（N1〜N4 inventory）
+
+設計 §3 N1〜N4 / 既存 fixedpoint 完了時の grep ベース調査結果:
+
+### 略語ローカル変数（N1 違反、ホワイトリスト外）
+
+| 旧 | 新 | 主な出現箇所（概数）|
+|---|---|---|
+| `au` | `automaton`（local 変数として）| `automaton.py:13`, `_scan.py:40-42` |
+| `sym` / `syms` | `symbol` / `symbols` | `_scan.py:45,53`, `_ingest.py:38-52,72-83`, `automaton.py:15` |
+| `cs` | `chase_symbols` | `stoplist.py:91`, `_scan.py:51-54`, `_ingest.py:35` |
+| `dia` | `dialect` | `_seed.py:48-56`, `_finalize.py:37-41` |
+| `agg` | `hits_by_relpath` | `_scan.py:78-93` |
+| `meta` | `file_meta_by_relpath` | `_scan.py:79-92`, `_finalize.py:23-41` |
+| `dn` / `up` | `down_idx` / `up_idx` | `snippet/_clamp.py:36-58` |
+| `ra` / `rb` | `above_count` / `below_count` | `snippet/_clamp.py:43-54` |
+| `lp` / `rps` | `lparen` / `rparens` | `snippet/_ts.py:37-39` |
+| `d` (paren_depth) | `paren_depth` | `snippet/_heuristic.py:21-29` |
+| `t` (type) | `node_type` | `snippet/_heuristic.py:23-32`, `snippet/_ts.py:78-92` |
+| `m` (mask) | `masked_lines` | `snippet/_heuristic.py:42` |
+| `n` (node) | `node` | `snippet/_ts.py:75` |
+| `s, e` (span) | 場合により `start`, `end` | `snippet/_heuristic.py`, `snippet/_ts.py` ほか |
+
+**N5 除外**: 内包表記内の `x for x in xs`、`for i in range(...)`、`_` 単独、定義から最終参照まで 3 行以内のローカル変数。
+
+### N4 ドメイン語彙固定
+
+すでに概ね統一済（`relpath`, `lineno`, `keyword`, `symbol`, `occurrence`, `provenance`, `chain`, `hop`, `seed`）。grep ベースで違反がないことを確認するのみ。
+
+---
+
+## C5 違反 inventory（マーカー除去）
+
+`grep -rn "Phase ?[0-9]\([a-z]\|\.[0-9]\)\?\|spec v[0-9]\|Inv-[0-9]\| v9\b\| v10\b" src/grep_analyzer/` で検出される対象:
+
+| ファイル | 行 | 表記 | 処理 |
+|---|---|---|---|
+| `proc_preprocess.py` | L40 | `spec §7 v9 Crit-1` | `v9` 削除 → `spec §7 Crit-1` |
+| `pipeline.py` | L1 | `spec §15 フェーズ2 Phase 2a` | `Phase 2a` 削除 → `spec §15` |
+| `automaton.py` | L26 | `spec v10 で実証` | `v10` 削除 |
+| `budget.py` | L8 | `Phase 3 perf の領分` | `Phase 3` 削除 |
+| `model.py` | L29 | `Phase 1 では ref_kind は常に "direct"` | `Phase 1 では` 削除（実装と乖離・現在は indirect も存在） |
+| `model.py` | L56 | `spec §9 v9 全順序キー` | `v9` 削除 |
+| `output_writer.py` | L1, L4, L27, L42 | `spec v4 §X` / `Inv-5` | `v4` / `Inv-5` 削除 |
+| `resume.py` | L1 | `spec v4 §4 WS1` | `v4` / `WS1` 削除 |
+| `classifiers/ts_classifier.py` | L16 | `Phase 1 は決定的基盤が目的` | `Phase 1 は` 削除 |
+| `fixedpoint/_options.py` | L15 | `（Phase 2a/2b 範囲）` | 削除 |
+| 他、各モジュール docstring の `Related:` 行 | - | refactor-design 参照 | **Phase 4 では維持**（リファクタ完了後の clean-up で再判断） |
+
+---
+
+## Task 一覧（実施順）
+
+設計 §7 V7 適用順序: (1) N1〜N4 inventory → (2) rename 適用 → (3) C1〜C5 → (4) R1 再検査。
+
+### Task 0: ベースライン
+
+- [ ] **Step 1: 全テスト pass 確認**
+
+Run: `cd /workspaces/grep_helpers2 && pytest -q 2>&1 | tail -5`
+
+Expected: `249 passed, 5 skipped`。
+
+- [ ] **Step 2: baseline hash 記録**
+
+Run: `git rev-parse HEAD` で `8fac007` 相当の hash を記録。
+
+No commits.
+
+---
+
+## Part [A]: 技術債務解消（Phase 3 引き継ぎ）
+
+### Task A-1: `_REF_KIND` を `_state.py` → `_finalize.py` へ移送 + 命名見直し
+
+**Files:**
+- Modify: `src/grep_analyzer/fixedpoint/_state.py`（`_REF_KIND` 削除）
+- Modify: `src/grep_analyzer/fixedpoint/_finalize.py`（`_REF_KIND` 追加 + import 修正）
+
+判定: `_REF_KIND` は indirect Hit 構築でのみ使用 → `_finalize.py` 内部定数として移送。命名は `_REF_KIND` のまま維持（Phase 4 で命名整理する第 2 提案は `INDIRECT_REF_KIND_BY_KIND` だが、長すぎ可読性低下 → 維持）。
+
+- [ ] **Step 1: `_state.py` から削除**
+
+`old_string`:
+```python
+_REF_KIND = {"constant": "indirect:constant", "var": "indirect:var",
+             "getter": "indirect:getter", "setter": "indirect:setter"}
+```
+`new_string`: 空文字列（削除）
+
+- [ ] **Step 2: `_finalize.py` に追加 + import 修正**
+
+`old_string`:
+```python
+from grep_analyzer.fixedpoint._state import ChaseState, _REF_KIND
+```
+`new_string`:
+```python
+from grep_analyzer.fixedpoint._state import ChaseState
+
+_REF_KIND = {"constant": "indirect:constant", "var": "indirect:var",
+             "getter": "indirect:getter", "setter": "indirect:setter"}
+```
+
+`_REF_KIND` は module top に置く（既存の import group 直後）。
+
+- [ ] **Step 3: 検証**
+
+Run: `pytest -q 2>&1 | tail -5`
+
+Expected: `249 passed, 5 skipped`。
+
+- [ ] **Step 4: `_state.py` を `state.py` にするかの判断**
+
+`_state.py` は引き続き `ChaseState` のみを持つ。public 化（`state.py`）の妥当性は:
+- `ChaseState` は型 hint として `_ingest`/`_budget_control`/`_seed`/`_finalize` から import される
+- 外部（pipeline.py, cli.py）からは触らない
+- → private 接頭辞 (`_state.py`) のまま維持。判断: 不変
+
+- [ ] **Step 5: Commit**
+
+```
+git add src/grep_analyzer/fixedpoint/_state.py src/grep_analyzer/fixedpoint/_finalize.py
+git commit -m "refactor(fixedpoint): _REF_KIND を _state.py から _finalize.py へ移送（Phase 3 引き継ぎ #5）"
+```
+
+---
+
+### Task A-2: `_estimate_items` 動的参照清潔化（Phase 3 V5 Major #1）
+
+**Files:**
+- Modify: `src/grep_analyzer/fixedpoint/_budget_control.py`（`_estimate_items` ラッパ削除、直接 import に戻す）
+- Modify: `src/grep_analyzer/fixedpoint/__init__.py`（`estimate_items` import + `__all__` から削除）
+- Modify: `tests/perf/test_perf.py`（monkeypatch ターゲットを `grep_analyzer.budget.estimate_items` に変更）
+
+判定: `_budget_control.py` を `from grep_analyzer import budget as _budget` の形に変えれば、`monkeypatch.setattr("grep_analyzer.budget.estimate_items", _spy)` で `_budget.estimate_items(...)` 経由の attribute lookup が spy に置き換わる。これは Python のモジュール属性 lookup の挙動として確実に動作する。
+
+- [ ] **Step 1: `_budget_control.py` の動的参照を整理**
+
+`old_string`:
+```python
+def _estimate_items(*, n_symbols, n_edges, n_intro):
+    """`grep_analyzer.fixedpoint.estimate_items` を動的参照する間接呼出。
+    （以下 docstring 全体）
+    """
+    from grep_analyzer import fixedpoint as _fp
+    return _fp.estimate_items(n_symbols=n_symbols, n_edges=n_edges, n_intro=n_intro)
+```
+`new_string`: 空文字列（削除）
+
+そして `_estimate_items(...)` 呼出 4 箇所を `_budget.estimate_items(...)` に置換。
+
+`old_string`:
+```python
+from grep_analyzer.fixedpoint._state import ChaseState
+```
+`new_string`:
+```python
+from grep_analyzer import budget as _budget
+from grep_analyzer.fixedpoint._state import ChaseState
+```
+
+`_estimate_items(n_symbols=keep_count, n_edges=0, n_intro=keep_count)` 等の 4 箇所を `_budget.estimate_items(n_symbols=..., n_edges=..., n_intro=...)` に `replace_all=True` で一括置換。
+
+- [ ] **Step 2: `__init__.py` から `estimate_items` import 削除**
+
+`old_string`:
+```python
+from grep_analyzer.budget import MemoryBudget, estimate_items  # estimate_items: perf test の monkeypatch 接点（tests/perf/test_perf.py:49）
+```
+`new_string`:（**削除しない**。`MemoryBudget` は `_seed.py` 内で使用されるが `__init__.py` から削除可。実機で `grep -n "MemoryBudget" src/grep_analyzer/fixedpoint/__init__.py` を実行して参照 0 を確認）
+
+→ 修正: `MemoryBudget` の使用が `__init__.py` 内になければ、import 行全体を削除。
+
+`old_string`:
+```python
+from grep_analyzer.budget import MemoryBudget, estimate_items  # estimate_items: perf test の monkeypatch 接点（tests/perf/test_perf.py:49）
+```
+`new_string`: 空文字列
+
+`__all__` から `estimate_items` を削除:
+
+`old_string`:
+```python
+__all__ = ["EngineOptions", "run_fixedpoint", "estimate_items"]
+```
+`new_string`:
+```python
+__all__ = ["EngineOptions", "run_fixedpoint"]
+```
+
+- [ ] **Step 3: `tests/perf/test_perf.py` の monkeypatch ターゲット変更**
+
+`old_string`:
+```python
+    monkeypatch.setattr("grep_analyzer.fixedpoint.estimate_items", _spy)
+```
+`new_string`:
+```python
+    monkeypatch.setattr("grep_analyzer.budget.estimate_items", _spy)
+```
+
+`docstring` も追従修正:
+
+`old_string`:
+```python
+    # fixedpoint は `from grep_analyzer.budget import estimate_items`（関数
+```
+`new_string`:
+```python
+    # _budget_control は `from grep_analyzer import budget as _budget`（モジュール
+```
+
+具体的な docstring 全体（L42-48）の修正は subagent が現状を `Read` で取得して文脈に合わせて修正する。
+
+- [ ] **Step 4: 検証**
+
+Run:
+```bash
+pytest -q 2>&1 | tail -5
+pytest tests/perf/test_perf.py -m perf -q -s 2>&1 | tail -10
+```
+
+Expected: `249 passed, 5 skipped` + perf test 全 pass（CALIB の spy が動作）。
+
+CALIB 出力で `bytes_per_item=...` が記録されることを確認。
+
+- [ ] **Step 5: Commit**
+
+```
+git add src/grep_analyzer/fixedpoint/_budget_control.py src/grep_analyzer/fixedpoint/__init__.py tests/perf/test_perf.py
+git commit -m "refactor(fixedpoint,perf): _estimate_items 動的参照を直接 import に戻す + monkeypatch 接点を grep_analyzer.budget へ（Phase 3 V5 Major #1）"
+```
+
+---
+
+### Task A-3: `_file_meta` / `_kinds_of` の private 接頭辞整理（Phase 3 V5 Minor）
+
+**Files:**
+- Modify: `src/grep_analyzer/fixedpoint/_scan.py`（`_file_meta` → `file_meta`、`_kinds_of` → `kinds_of`）
+- Modify: `src/grep_analyzer/fixedpoint/_seed.py`（import 修正）
+- Modify: `src/grep_analyzer/fixedpoint/_ingest.py`（import 修正）
+- Modify: `src/grep_analyzer/fixedpoint/_finalize.py`（import 修正）
+
+判定: `_file_meta` / `_kinds_of` は `_seed` / `_ingest` / `_finalize` から **共有 import** されており「module 内 private」の意味が破れている。public 接頭辞無しに昇格。`_scan_file` は worker 関数として `multiprocessing.Pool` に pickle されるため private 接頭辞のまま維持（外部から呼ばれないが pickle 由来）。
+
+- [ ] **Step 1: `_scan.py` の関数定義 rename**
+
+`replace_all=True` で `def _file_meta(` → `def file_meta(` 、 `def _kinds_of(` → `def kinds_of(`
+
+- [ ] **Step 2: `_scan.py` 内部呼出 rename**
+
+`_file_meta(...)` 呼出箇所を `file_meta(...)` に置換、`_kinds_of(...)` 呼出箇所を `kinds_of(...)` に置換。
+
+- [ ] **Step 3: import 修正（3 ファイル）**
+
+`_seed.py`:
+`old_string`:
+```python
+from grep_analyzer.fixedpoint._scan import _file_meta
+```
+`new_string`:
+```python
+from grep_analyzer.fixedpoint._scan import file_meta
+```
+そして関数本体内の `_file_meta(...)` 呼出を `file_meta(...)` に置換。
+
+`_ingest.py`:
+`old_string`:
+```python
+from grep_analyzer.fixedpoint._scan import _kinds_of
+```
+`new_string`:
+```python
+from grep_analyzer.fixedpoint._scan import kinds_of
+```
+そして関数本体内の `_kinds_of(...)` 呼出を `kinds_of(...)` に置換。
+
+`_finalize.py`:
+`old_string`:
+```python
+from grep_analyzer.fixedpoint._scan import _file_meta
+```
+`new_string`:
+```python
+from grep_analyzer.fixedpoint._scan import file_meta
+```
+そして関数本体内の `_file_meta(...)` 呼出を `file_meta(...)` に置換。
+
+- [ ] **Step 4: 検証**
+
+Run: `pytest -q 2>&1 | tail -5`
+
+Expected: `249 passed, 5 skipped`。
+
+- [ ] **Step 5: Commit**
+
+```
+git add src/grep_analyzer/fixedpoint/
+git commit -m "refactor(fixedpoint): _file_meta/_kinds_of を public 名（file_meta/kinds_of）に昇格（Phase 3 V5 Minor）"
+```
+
+---
+
+## Part [N]: N1〜N4 ローカル変数 rename
+
+### Task N-1: automaton.py の `au` rename + `sym` rename
+
+**Files:**
+- Modify: `src/grep_analyzer/automaton.py`
+- Modify: `src/grep_analyzer/fixedpoint/_scan.py`（`au` ローカル変数）
+
+- [ ] **Step 1: `automaton.py` の rename**
+
+`au = ahocorasick.Automaton()` を `automaton_obj = ahocorasick.Automaton()` に。`return au` を `return automaton_obj` に。
+
+ループ変数 `for s in syms` の `s` は N5 除外（ループ慣用）→ 維持。
+
+`syms` → `symbols`、`sym` → `symbol`（grep で範囲確認後 rename）。
+
+- [ ] **Step 2: `_scan.py` の `au` rename**
+
+`au = automaton.build(sym_list)` を `automaton_obj = automaton.build(sym_list)` に。`if au is not None` を `if automaton_obj is not None` に。`automaton.scan_line(au, line)` を `automaton.scan_line(automaton_obj, line)` に。
+
+`for sym in automaton.scan_line(...)` の `sym` は N5 除外（ループ慣用、2 行で終わる短い使用）→ 維持。
+
+ただし `found.append((sym, i, line))` の使用が 1 行下にあるため有効範囲は 2 行。N5 除外で維持。
+
+- [ ] **Step 3: 検証 + Commit**
+
+Run: `pytest -q 2>&1 | tail -5`
+
+Expected: `249 passed, 5 skipped`。
+
+Commit: `refactor(automaton): au → automaton_obj rename（N1 フルスペル）`
+
+---
+
+### Task N-2: fixedpoint 配下の cs / dia / agg / meta rename
+
+**Files:**
+- Modify: `src/grep_analyzer/fixedpoint/_scan.py`
+- Modify: `src/grep_analyzer/fixedpoint/_ingest.py`
+- Modify: `src/grep_analyzer/fixedpoint/_seed.py`
+- Modify: `src/grep_analyzer/fixedpoint/_finalize.py`
+- Modify: `src/grep_analyzer/stoplist.py`（`partition(cs: ChaseSymbols, ...)`）
+
+- [ ] **Step 1: `cs` → `chase_symbols` rename**
+
+各ファイルで `cs = extract_chase_symbols(...)` を `chase_symbols = extract_chase_symbols(...)` に。`cs.constants` / `cs.vars` / `cs.getters` / `cs.setters` を `chase_symbols.constants` / etc に。
+
+stoplist.py の `def partition(cs: ChaseSymbols, ...)` を `def partition(chase_symbols: ChaseSymbols, ...)` に。本体内の `cs.` 参照を全て `chase_symbols.` に。
+
+- [ ] **Step 2: `dia` → `dialect` rename**
+
+`_seed.py` / `_finalize.py` の `lang, dia = ...` / `meta_of[c.relpath] = (text, lang, dia)` / `ingest_one(state, occ, lang, dia, ...)` を全て `dialect` に統一。
+
+- [ ] **Step 3: `agg` / `meta` rename**
+
+`_scan.py` の `agg: dict[str, list] = {}` を `hits_by_relpath: dict[str, list] = {}` に。`meta: dict[str, tuple] = {}` を `file_meta_by_relpath: dict[str, tuple] = {}` に。本体内の参照も全て統一。
+
+`_finalize.py` の `meta_of: dict[str, tuple[str, str, str]] = {}` を `file_meta_of: dict[str, tuple[str, str, str]] = {}` に（または `file_meta_by_relpath` で統一）。
+
+- [ ] **Step 4: 検証 + Commit**
+
+Run: `pytest -q 2>&1 | tail -5`
+
+Expected: `249 passed, 5 skipped`。
+
+Commit: `refactor(fixedpoint): cs/dia/agg/meta をフルスペル名へ rename（N1）`
+
+---
+
+### Task N-3: snippet 配下のローカル変数 rename + test_encoding_wiring.py コメント追従
+
+**Files:**
+- Modify: `src/grep_analyzer/snippet/_clamp.py`（dn / up / ra / rb）
+- Modify: `src/grep_analyzer/snippet/_heuristic.py`（m / d / t / s, e）
+- Modify: `src/grep_analyzer/snippet/_ts.py`（lp / rps / n / t / cur 等）
+- Modify: `tests/integration/test_encoding_wiring.py`（コメント中の `enc_of` → `encoding_of`）
+
+- [ ] **Step 1: `_clamp.py` の rename**
+
+`dn` → `down_idx`、`up` → `up_idx`、`ra` → `above_count`、`rb` → `below_count` を `replace_all=True` で慎重に置換。短い識別子のため周辺コンテキスト一致で false-positive リスクあり、subagent は注意深く `grep -n "\bdn\b\|\bup\b\|\bra\b\|\brb\b" src/grep_analyzer/snippet/_clamp.py` で確認後実施。
+
+`s, e = 0, len(lines) - 1` の `s` / `e` は span を表す慣用識別子。**N5 除外**（span_start / span_end への rename は意味の冗長化）→ 維持。
+
+- [ ] **Step 2: `_heuristic.py` の rename**
+
+`m = [mask_literals(...) for ln in lines]` を `masked_lines = [...]` に。
+`def stop(i): x = m[i]` の `x` は N5 除外（局所変数）→ 維持。
+`_balanced(t: str)` の `t` パラメータは `text` に、本体内 `d = 0` の `d` は `paren_depth` に rename。`for c in t` の `c` はループ慣用 → 維持。
+
+- [ ] **Step 3: `_ts.py` の rename**
+
+`lp = next(...)` を `lparen = next(...)`、`rps = [c for c in ...]` を `rparens = [...]` に。
+`def _has_error(node)`、`def ts_span(language, file_text, lineno)` の引数名はそのまま。
+`n = node_at_line(...)` を `node = node_at_line(...)` に。
+`while cur is not None: t = cur.type` の `t` を `node_type` に。
+`for ch in node.children` の `ch` はループ慣用 → 維持。
+
+- [ ] **Step 4: `test_encoding_wiring.py` コメント追従**
+
+コメント中の `enc_of` を `encoding_of` に書換。
+
+- [ ] **Step 5: 検証 + Commit**
+
+Run: `pytest -q 2>&1 | tail -5`
+
+Expected: `249 passed, 5 skipped`。
+
+Commit: `refactor(snippet,tests): snippet 配下ローカル変数 rename + test_encoding_wiring.py コメント追従（N1）`
+
+---
+
+### Task N-4: 横断検証（V4 機械チェック）
+
+**Files:** None（検証のみ）
+
+- [ ] **Step 1: N1 違反検出**
+
+```bash
+cd /workspaces/grep_helpers2 && \
+  grep -rEn '\b(au|sym|syms|dia|prog|agg|meta|intro|estore|enc_of)\b' src/grep_analyzer/ | \
+    grep -v "__pycache__\|automaton\|symbol\|symbols\|dialect\|progress\|hits_by\|file_meta\|introducers\|edge_store\|encoding_of"
+```
+
+Expected: ヒット 0（rename 漏れなし）。
+
+ただし、`sym` のループ慣用識別子は N5 除外で `for sym in ...` の形で残るため、上記 grep は `sym` で false-positive する。subagent は手動で確認:
+- `for sym in ...` / `for symbol in ...` の使い分けは Phase 4 では混在許容（N5 除外との境界）
+- `automaton.py:15` の `for s in syms` → `for symbol in symbols` に既に rename 済か確認
+
+最終的に **ループ慣用識別子以外の N1 違反がゼロ** であることを確認。
+
+- [ ] **Step 2: N4 違反検出**
+
+```bash
+grep -rEn '\b(rel_path|relative_path|line_no|linenum)\b' src/grep_analyzer/
+```
+
+Expected: ヒット 0。
+
+---
+
+## Part [C]: C1〜C5 コメント整理
+
+### Task C-1: C5 違反マーカー除去（横断）
+
+**Files:** 各モジュール（C5 違反 inventory 参照）
+
+- [ ] **Step 1: 自動 grep でマーカー検出**
+
+```bash
+cd /workspaces/grep_helpers2 && \
+  grep -rEn 'Phase ?[0-9]([a-z]|\.[0-9])?|spec v[0-9]|Inv-[0-9]| v9\b| v10\b|WS[0-9]' src/grep_analyzer/ | \
+    grep -v "__pycache__\|Related:.*refactor-design"
+```
+
+Expected: 個別検出箇所が列挙される（C5 違反 inventory と一致）。
+
+- [ ] **Step 2: 各箇所を編集**
+
+| ファイル | 修正 |
+|---|---|
+| `proc_preprocess.py:40` | `spec §7 v9 Crit-1` → `spec §7 Crit-1` |
+| `pipeline.py:1` | `spec §15 フェーズ2 Phase 2a` → `spec §15` |
+| `automaton.py:26` | `2.1.0→2.3.1 版更新で出力 byte 不変＝spec v10 で実証` → `2.1.0→2.3.1 版更新で出力 byte 不変＝実機検証済` |
+| `budget.py:8` | `Phase 3 perf の領分。本定数は degrade 発火の決定的トリガとしてのみ機能。` → `perf の領分。本定数は degrade 発火の決定的トリガとしてのみ機能。` |
+| `model.py:29` | `TSV1行に対応する分類結果。Phase 1 では ref_kind は常に "direct"。` → `TSV1行に対応する分類結果（direct / indirect:* を含む）。` |
+| `model.py:56` | `spec §9 v9 全順序キー。` → `spec §9 全順序キー。` |
+| `output_writer.py:1` | `spec v4 §2/§3` → `spec §2/§3` |
+| `output_writer.py:4` | `Inv-5=テストが共有` → `テストが共有` |
+| `output_writer.py:27,42` | `spec v4 §3` → `spec §3` |
+| `resume.py:1` | `spec v4 §4 WS1・完了判定1〜5` → `spec §4・完了判定1〜5` |
+| `classifiers/ts_classifier.py:16` | `Phase 1 は決定的基盤が目的（分類精度は handcrafted の領分・spec §11）` → `決定的基盤が目的（分類精度は handcrafted の領分・spec §11）` |
+| `fixedpoint/_options.py:15` | `spec §8/§10.4 のエンジン挙動パラメータ（Phase 2a/2b 範囲）。` → `spec §8/§10.4 のエンジン挙動パラメータ。` |
+
+- [ ] **Step 3: 検証 + Commit**
+
+Run:
+```bash
+grep -rEn 'Phase ?[0-9]([a-z]|\.[0-9])?|spec v[0-9]|Inv-[0-9]| v9\b| v10\b|WS[0-9]' src/grep_analyzer/ | grep -v "__pycache__\|Related:.*refactor-design"
+```
+
+Expected: ヒット 0（C5 違反ゼロ。Related: 行のみは Phase 4 範囲外）。
+
+Run: `pytest -q 2>&1 | tail -5`
+
+Expected: `249 passed, 5 skipped`。
+
+Commit: `docs: フェーズマーカー・版マーカー除去（C5 横断適用）`
+
+---
+
+### Task C-2: C1〜C3 コメント整理（横断）
+
+**Files:** 各モジュール
+
+- [ ] **Step 1: 識別子で伝わる WHAT コメントの削除（C1）**
+
+各モジュールを順に確認し、識別子で伝わる WHAT コメントを削除する。具体的には:
+- `# 言語別 chaser の registry` のような繰り返し説明
+- `# spec §X 参照」のみのコメント（C2: 末尾 `Related:` に集約）
+
+判断は subagent が WHY/WHAT で個別判断。**機械化が困難なため、目視レビュー + 軽微修正**。
+
+- [ ] **Step 2: `_ingest.py` の hop 引数 docstring 統一（Phase 3 V5 Minor）**
+
+`ingest_one` docstring に hop 意味を明記:
+
+`old_string`:
+```python
+def ingest_one(state: ChaseState, parent: Occurrence, language: str,
+               dialect: str, line: str, hop: int, is_seed: bool = False):
+    """1 行を ChaseState に取り込む。spec §8.1 手順 1〜4。"""
+```
+`new_string`:
+```python
+def ingest_one(state: ChaseState, parent: Occurrence, language: str,
+               dialect: str, line: str, hop: int, is_seed: bool = False):
+    """1 行を ChaseState に取り込む（spec §8.1 手順 1〜4）。
+
+    `hop` は **このシンボルが投入される hop 番号**（seed の最初の ingest は
+    hop=1、scan 結果から再 ingest される子は hop+1）。`hop > opts.max_depth`
+    で prov_max_depth diag を立てて return（停止性の安全弁）。
+    """
+```
+
+`absorb_results` docstring の hop も統一:
+
+`old_string`:
+```python
+def absorb_results(state: ChaseState, pass_results, scan_chase: set[str],
+                   scan_term: set[str], hop: int):
+    """scan_hop の結果を ChaseState に反映する（edge 追加・diag・子の再 ingest）。
+
+    `hop` は呼出時点で完了済みの hop 番号。子の ingest_one には `hop + 1` を渡す。
+    """
+```
+`new_string`:
+```python
+def absorb_results(state: ChaseState, pass_results, scan_chase: set[str],
+                   scan_term: set[str], hop: int):
+    """scan_hop の結果を ChaseState に反映する（edge 追加・diag・子の再 ingest）。
+
+    `hop` は **直前に scan 完了した hop 番号**。子の `ingest_one` には `hop + 1`
+    を渡して「次 hop で投入される」semantics を維持する。
+    """
+```
+
+- [ ] **Step 3: `_budget_control.py` の `apply_global_cap` に discard コメント追加（Phase 3 V5 Suggestion）**
+
+`old_string`:
+```python
+    for s in live[keep_count:]:
+        if s not in state.capped:
+            diag.add("symbol_rejected", f"capped\t{s}")
+            state.capped.add(s)
+        state.chase_active.discard(s)
+        state.terminal_active.discard(s)
+```
+`new_string`:
+```python
+    for s in live[keep_count:]:
+        if s not in state.capped:
+            diag.add("symbol_rejected", f"capped\t{s}")
+            state.capped.add(s)
+        # 既 capped であっても discard は冪等。直前の hop で active になっていた
+        # 可能性があるため両 set から確実に除外する。
+        state.chase_active.discard(s)
+        state.terminal_active.discard(s)
+```
+
+- [ ] **Step 4: `snippet/__init__.py` の `__all__` 位置調整（Phase 3 V5 Suggestion）**
+
+現状: `__all__ = [...]` がモジュール末尾。
+変更: import 群末尾（`from grep_analyzer.tsv import _sanitize` の直後）に移動。
+
+- [ ] **Step 5: `snippet/_ts.py` の `_GRAN_*` 等定数集合に出典コメント追加（Phase 3 V5 Suggestion）**
+
+`old_string`:
+```python
+_GRAN_JAVA = {"if_statement", "while_statement", "for_statement",
+              "switch_expression", "switch_statement",
+              ...}
+```
+`new_string`:
+```python
+# tree-sitter 0.21 系のノード型集合（spec §9 表「ts_span 粒度」と対応）。
+# tree-sitter ライブラリ版更新時はこれらの集合を再点検する。
+_GRAN_JAVA = {"if_statement", "while_statement", "for_statement",
+              "switch_expression", "switch_statement",
+              ...}
+```
+
+- [ ] **Step 6: `snippet/__init__.py` の `build_snippet` docstring を C3 形式へ（Phase 3 引き継ぎ）**
+
+`build_snippet` docstring の `(spec §X)` 形式を末尾 `Related: spec §X` 形式に集約。
+
+- [ ] **Step 7: 検証 + Commit**
+
+Run: `pytest -q 2>&1 | tail -5`
+
+Expected: `249 passed, 5 skipped`。
+
+Commit: `docs: C1〜C3 コメント整理（hop docstring 統一・discard コメント・snippet __all__ 位置 ほか）`
+
+---
+
+## Part [R]: R1〜R4 再検査
+
+### Task R-1: patterns/literal_masking.py の java/c/proc 重複検査
+
+**Files:** `src/grep_analyzer/patterns/literal_masking.py`
+
+- [ ] **Step 1: 現状確認**
+
+```bash
+cat src/grep_analyzer/patterns/literal_masking.py
+```
+
+`MASK_SPECS` 内で java/c/proc が同一の regex 集合になっているか確認。同一なら設計 §5 R1 の判定:
+- (1) 同一知識か? java/c/proc は同じ literal/comment 文法を共有する? → **Yes**（C 系言語と Pro*C は基本的に同じリテラル文法。Pro*C は EXEC SQL を別途処理）
+- (2) 同じ用語で説明できるか? → "C 系リテラルマスク" として説明可
+- (3) Rule of Three: 3 箇所 → R1 集約条件を満たす
+
+判定: 同一なら共通名（例: `_C_FAMILY_MASK_SPECS`）に集約し、`MASK_SPECS = {"java": _C_FAMILY, "c": _C_FAMILY, "proc": _C_FAMILY, ...}` で参照。
+
+ただし Phase 4 範囲では **判定のみで実装は次フェーズ**（Pro*C 個別化が将来必要になる可能性がある）。判定結果を引き継ぎ事項として記録。
+
+- [ ] **Step 2: 引き継ぎ記録**
+
+`docs/superpowers/specs/2026-05-21-refactor-design.md` の §8 完了条件部分に判定結果を追記、または別途 ADR 形式で記録。本 Phase 4 では実装変更なし。
+
+- [ ] **Step 3: Commit（記録のみ）**
+
+No code changes. `pytest -q` で 249 passed 確認後、次 Task へ。
+
+---
+
+### Task R-2: classifiers/__init__.py eager import 失敗判断（Phase 2 #7）
+
+**Files:** `src/grep_analyzer/classifiers/__init__.py`
+
+- [ ] **Step 1: 現状確認**
+
+```bash
+cat src/grep_analyzer/classifiers/__init__.py
+```
+
+eager import（`from grep_analyzer.classifiers import (c_chaser, java_chaser, shell_chaser, sql_chaser)`）の失敗リスクを評価:
+- 各 chaser は `from grep_analyzer.patterns.X import Y` の standard import のみ
+- optional deps（chardet, tree-sitter）に依存する `ts_classifier` は import されていない
+- 失敗リスクなし
+
+判定: 現状維持（lazy import 化不要）。Phase 4 では実装変更なし。
+
+---
+
+### Task R-3: V7 R1 再検査（rename 後の同責務疑い構造検出）
+
+**Files:** None（検証のみ）
+
+設計 §7 V7 (b) の同責務疑い構造検出:
+
+```bash
+grep -rEn 'def (build|compute|extract|sanitize)_' src/grep_analyzer/
+```
+
+Expected: 既存関数群が列挙される。同名・同責務でないことを目視確認。
+
+```bash
+grep -rEn 'hits_by_relpath|file_meta_by_relpath|introducers|edge_store' src/grep_analyzer/
+```
+
+Expected: 各識別子が **責務上の出現箇所のみ**（誤集約による多重定義なし）。
+
+判定結果を `docs/superpowers/plans/2026-05-21-refactor-phase4.md` 末尾に記録。
+
+---
+
+## V3 / V4 / V5 / V6 ゲート（Phase 4 完了時）
+
+### V3 Import グラフ層分離
+
+設計 §7 V3 / Phase 3 V3 と同じ検査:
+
+```bash
+grep -rn "from grep_analyzer" \
+  src/grep_analyzer/snippet/ \
+  src/grep_analyzer/fixedpoint/ \
+  src/grep_analyzer/classifiers/ \
+  src/grep_analyzer/patterns/ 2>&1 | head -80
+```
+
+Phase 4 で構造変更なしのため、Phase 3 V3 結果と同一であることを確認。
+
+### V4 命名規約機械チェック
+
+```bash
+grep -rEn '\b(au|sym|syms|dia|prog|agg|meta)\b' src/grep_analyzer/ | \
+  grep -v "__pycache__\|symbol\|symbols\|dialect\|progress\|meta_of\|automaton"
+```
+
+Expected: ヒット 0（ループ慣用識別子の `sym` 等を除く）。
+
+```bash
+grep -rEn 'Phase ?[0-9]([a-z]|\.[0-9])?|spec v[0-9]|Inv-[0-9]| v9\b| v10\b|WS[0-9]' src/grep_analyzer/ | \
+  grep -v "__pycache__\|Related:.*refactor-design"
+```
+
+Expected: ヒット 0。
+
+### V5 Phase 4 ゲート
+
+実装完了後、批判的 AI レビュー（観点 A + 観点 B）を最低 2 巡実行し Critical/Major ゼロまで収束。
+
+### V6 性能リグレッション抑止
+
+Phase 4 は構造変更ではなく rename とコメント整理が中心のため、原理的に性能影響なし。`pytest tests/perf/test_perf.py -m perf -q -s 2>&1 | grep "PERF n=800"` を 3 回実行して baseline と比較。
+
+---
+
+## Phase 4 完了基準
+
+- [ ] Inv-A: golden 22 件 byte 同値
+- [ ] Inv-B: pytest 249 passed, 5 skipped 維持
+- [ ] Inv-C: 公開 API シグネチャ・戻り値・diagnostics キー文字列が無変更
+- [ ] Inv-D: V3 で層分離違反ゼロ
+- [ ] Inv-E: pyahocorasick 版差吸収・決定性保持
+- [ ] V4: N1〜N4 違反ゼロ（grep 機械チェック）+ C5 違反ゼロ
+- [ ] V5: AI レビュー Critical/Major ゼロに収束
+- [ ] V6: 性能リグレッション 10% / +5 秒以内
+
+---
+
+## Phase 4 → 完了後の引き継ぎ（任意残置）
+
+Phase 4 で対処しないが将来検討する項目:
+- `Related:` 行（`docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase X [Y]`）の整理 — リファクタリング完了後の clean-up で全削除 or 整理
+- `_state.py` を `state.py`（public）に rename する判断（現時点では維持判断、Phase 4 範囲外）
+- `_scan.py` の `_scan_file` の private 接頭辞（worker pickle 制約のため pickle 安全名として維持）
