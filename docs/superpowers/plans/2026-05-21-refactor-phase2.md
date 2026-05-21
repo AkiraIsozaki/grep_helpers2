@@ -302,11 +302,18 @@ L76 を削除することで PEP8 E402 違反も解消（Phase 1 引き継ぎ事
 
 Edit `/workspaces/grep_helpers2/tests/unit/test_chase.py`:
 
-`from grep_analyzer.chase import ChaseSymbols` のような行を:
+現状（L46 周辺の結合 import）:
 ```python
+from grep_analyzer.chase import ChaseSymbols, extract_chase_symbols, mask_literals
+```
+
+これを 2 つの import 行に分離:
+```python
+from grep_analyzer.chase import extract_chase_symbols, mask_literals
 from grep_analyzer.model import ChaseSymbols
 ```
-に変更。`extract_var_symbols` 等の他の chase 関数 import は維持。
+
+`extract_chase_symbols` と `mask_literals` は chase の public API として維持されるため、chase 経由 import を保持。`ChaseSymbols` のみ model 経由へ。
 
 - [ ] **Step 6: tests/unit/test_stoplist.py の import を model 経由に変更**
 
