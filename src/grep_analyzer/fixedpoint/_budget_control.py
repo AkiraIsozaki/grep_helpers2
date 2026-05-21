@@ -34,6 +34,8 @@ def apply_global_cap(state: ChaseState):
         if s not in state.capped:
             diag.add("symbol_rejected", f"capped\t{s}")
             state.capped.add(s)
+        # 既 capped であっても discard は冪等。直前の hop で active になっていた
+        # 可能性があるため両 set から確実に除外する。
         state.chase_active.discard(s)
         state.terminal_active.discard(s)
 

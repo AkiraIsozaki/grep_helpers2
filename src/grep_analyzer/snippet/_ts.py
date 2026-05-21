@@ -10,6 +10,8 @@ Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [C]
 from grep_analyzer.classifiers.ts_classifier import node_at_line, parse_tree
 from grep_analyzer.proc_preprocess import exec_spans, mask_exec_sql
 
+# tree-sitter 0.21 系のノード型集合（spec §9 表「ts_span 粒度」と対応）。
+# tree-sitter ライブラリ版更新時はこれらの集合を再点検する。
 _GRAN_JAVA = {"if_statement", "while_statement", "for_statement",
               "switch_expression", "switch_statement",
               "try_statement", "try_with_resources_statement",
