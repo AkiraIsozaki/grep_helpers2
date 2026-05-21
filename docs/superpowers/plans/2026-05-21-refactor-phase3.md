@@ -2388,4 +2388,4 @@ Phase 3 で発生・残置する Minor は Phase 4 plan 冒頭に記録する:
 - `_ingest.py` の `absorb_results` / `ingest_one` の `hop` 引数 docstring 統一（V5 観点 B Minor #4）
 - `apply_global_cap` の `discard` 行に「既 capped でも discard する理由」コメント付与（V5 観点 B Suggestion）
 - `snippet/__init__.py` の `__all__` を冒頭の import 群末尾へ移動（V5 観点 A Suggestion）
-- `snippet/_ts.py` の `_GRAN_*` 等定数集合に tree-sitter 0.21 由来の出典コメント追加
+- `snippet/_ts.py` の `_GRAN_*` 等定数集合に tree-sitter 0.21 由来の出典コメント追加（V5 観点 A Suggestion #2）
