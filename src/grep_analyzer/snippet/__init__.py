@@ -1,0 +1,56 @@
+"""snippet 切り出し（spec §9）パッケージ。
+
+公開エントリは build_snippet。clamp_lines / heuristic_span / ts_span /
+proc_exec_span は仕様検証用の test 由来公開 API として再 export する。
+
+Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [C]
+"""
+
+from grep_analyzer.snippet._clamp import clamp_lines
+from grep_analyzer.snippet._heuristic import heuristic_span
+from grep_analyzer.snippet._sanitize_line import _escape_sep, _physical_lines
+from grep_analyzer.snippet._ts import proc_exec_span, ts_span
+from grep_analyzer.tsv import _sanitize
+
+
+def build_snippet(language: str, dialect: str, file_text: str,
+                  lineno: int) -> str:
+    """spec §9 snippet 切り出しのエントリ。確定済み 1 セル文字列を返す。
+
+    java/c: ts_span→無ければ ヒット 1 行（spec §9 フォールバック: java/c に
+      sql/shell ヒューリスティックは適用しない）。
+    proc: EXEC 区間=proc_exec_span／区間外=ts_span("proc",..)（内部で
+      mask_exec_sql 後 C 解析）→ いずれも None なら ヒット 1 行（spec §7/§9）。
+    sql/shell: heuristic_span（AST 非使用）。
+    `dialect` は将来 cshell 境界用の予約引数（v1 未使用・呼出互換のため受領）。
+    連結前に各行へ _sanitize→_escape_sep を適用し clamp_lines。
+    """
+    lines = _physical_lines(file_text)
+    hit = lineno - 1
+    if hit < 0 or hit >= len(lines):
+        return ""
+    span = None
+    if language in ("java", "c"):
+        span = ts_span(language, file_text, lineno)
+    elif language == "proc":
+        span = proc_exec_span(file_text, lineno)
+        if span is None:
+            span = ts_span("proc", file_text, lineno)
+    elif language in ("sql", "shell"):
+        span = heuristic_span(lines, hit, language)
+    if span is None:
+        span = (hit, hit)
+    s, e = span
+    s = max(0, min(s, hit))
+    e = min(len(lines) - 1, max(e, hit))
+    body = [_escape_sep(_sanitize(x)) for x in lines[s:e + 1]]
+    return clamp_lines(body, hit - s)
+
+
+__all__ = [
+    "build_snippet",
+    "clamp_lines",
+    "heuristic_span",
+    "ts_span",
+    "proc_exec_span",
+]
