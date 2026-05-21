@@ -21,7 +21,14 @@ def mask(line: str) -> str:
 
 
 def _extract_var_symbols(dialect: str, line: str) -> list[str]:
-    """マスク前の生行から PL/SQL `:=` の左辺を抽出する。"""
+    """与えられた行から PL/SQL `:=` の左辺を抽出する（dispatcher 向け公開ヘルパ）。
+
+    呼出元はマスク前の生行 (chase.extract_var_symbols 経由) または
+    マスク済み行 (本モジュール extract 経由) のいずれかを渡す。
+    コメント内 `:=` を除外するにはマスク済み行を渡すこと
+    （extract 経路では既にマスク済み）。バインド `:v` / 置換 `&v` は
+    ORACLE_ASSIGN_RE の lookbehind で除外される。
+    """
     return [m.group(1) for m in ORACLE_ASSIGN_RE.finditer(line)]
 
 

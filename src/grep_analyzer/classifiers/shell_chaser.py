@@ -25,7 +25,12 @@ def mask(line: str) -> str:
 
 
 def _extract_var_symbols(dialect: str, line: str) -> list[str]:
-    """マスク前の生行から代入左辺を抽出する（dispatcher 向け公開ヘルパ）。
+    """与えられた行から代入左辺を抽出する（dispatcher 向け公開ヘルパ）。
+
+    呼出元はマスク前の生行 (chase.extract_var_symbols 経由) または
+    マスク済み行 (本モジュール extract 経由) のいずれかを渡す。
+    shell の代入規則は行頭アンカー (^\\s*) を持つため、マスク状態に依存しない
+    （コメントマスクで桁数を保存するため行頭位置が不変）。
 
     dialect=cshell: `set v =` / `setenv V` / `@ v =` の左辺
     dialect=その他: 行頭 `var=` の左辺
