@@ -17,9 +17,6 @@ from grep_analyzer.provenance import Occurrence, ProvenanceGraph
 from grep_analyzer.spill import EdgeStore
 from grep_analyzer.stoplist import SymbolPolicy
 
-_REF_KIND = {"constant": "indirect:constant", "var": "indirect:var",
-             "getter": "indirect:getter", "setter": "indirect:setter"}
-
 
 @dataclass
 class ChaseState:

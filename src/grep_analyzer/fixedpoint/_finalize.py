@@ -9,10 +9,13 @@ Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
 
 from grep_analyzer.classify import classify_hit
 from grep_analyzer.fixedpoint._scan import _file_meta
-from grep_analyzer.fixedpoint._state import ChaseState, _REF_KIND
+from grep_analyzer.fixedpoint._state import ChaseState
 from grep_analyzer.model import Hit
 from grep_analyzer.provenance import Occurrence
 from grep_analyzer.snippet import build_snippet
+
+_REF_KIND = {"constant": "indirect:constant", "var": "indirect:var",
+             "getter": "indirect:getter", "setter": "indirect:setter"}
 
 
 def build_indirect_hits(state: ChaseState) -> list[Hit]:
