@@ -20,12 +20,12 @@ from grep_analyzer.dispatch import detect_language, detect_shell_dialect
 from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
 
 
-def file_meta(rel: str, raw: bytes, lang_map: dict[str, str], fallback_chain=None):
+def file_meta(relpath: str, raw: bytes, lang_map: dict[str, str], fallback_chain=None):
     """1 度だけデコードし (text, encoding, replaced, language, dialect) を返す。"""
     chain = list(fallback_chain) if fallback_chain else DEFAULT_FALLBACK
     text, enc, replaced = decode_bytes(raw, chain)
-    language = detect_language(rel, text[:4096], lang_map)
-    dialect = detect_shell_dialect(rel, text[:4096]) if language == "shell" else "bourne"
+    language = detect_language(relpath, text[:4096], lang_map)
+    dialect = detect_shell_dialect(relpath, text[:4096]) if language == "shell" else "bourne"
     return text, enc, replaced, language, dialect
 
 
@@ -34,16 +34,16 @@ def _scan_file(args):
 
     ストリーミング化＝親に bytes 非常駐・abspath から読む。automaton 走査は raw 行。
     """
-    rel, abspath, symbol_list, lang_map, fallback = args
+    relpath, abspath, symbol_list, lang_map, fallback = args
     raw = Path(abspath).read_bytes()
-    text, enc, replaced, language, dialect = file_meta(rel, raw, lang_map, fallback_chain=fallback)
+    text, enc, replaced, language, dialect = file_meta(relpath, raw, lang_map, fallback_chain=fallback)
     automaton_obj = automaton.build(symbol_list)
     found = []
     if automaton_obj is not None:
         for i, line in enumerate(text.split("\n"), start=1):
             for symbol in automaton.scan_line(automaton_obj, line):
                 found.append((symbol, i, line))
-    return rel, enc, replaced, language, dialect, found
+    return relpath, enc, replaced, language, dialect, found
 
 
 def kinds_of(language: str, dialect: str, line: str) -> dict[str, str]:
@@ -58,7 +58,7 @@ def kinds_of(language: str, dialect: str, line: str) -> dict[str, str]:
 
 
 def scan_hop(scan_syms, scan_files, opts, nchunks):
-    """1 hop の走査を chunks に分けて実行し、rel 単位の集約済み結果を返す。
+    """1 hop の走査を chunks に分けて実行し、relpath 単位の集約済み結果を返す。
 
     `nchunks=1` の場合は単一 chunk として全 symbol を 1 度に走査する（既存
     fixedpoint.py L260-272 の単発経路と byte 同値）。`nchunks>1` の場合は
@@ -66,7 +66,7 @@ def scan_hop(scan_syms, scan_files, opts, nchunks):
     再ソート（既存 L273-289 と byte 同値）。
 
     戻り値: (pass_results, n_actual_chunks)
-      - pass_results: [(rel, enc, replaced, language, dialect, found)] の list
+      - pass_results: [(relpath, enc, replaced, language, dialect, found)] の list
       - n_actual_chunks: 呼出側 diag.add("automaton_split", ...) 用
     """
     if nchunks <= 1:
@@ -78,17 +78,17 @@ def scan_hop(scan_syms, scan_files, opts, nchunks):
     hits_by_relpath: dict[str, list] = {}
     file_meta_by_relpath: dict[str, tuple] = {}
     for chunk in chunks:
-        args = [(rel, str(abspath), chunk, opts.lang_map, list(opts.encoding_fallback))
-                for rel, abspath in scan_files]
+        args = [(relpath, str(abspath), chunk, opts.lang_map, list(opts.encoding_fallback))
+                for relpath, abspath in scan_files]
         if opts.jobs > 1:
             with multiprocessing.Pool(opts.jobs) as pool:
                 res = pool.map(_scan_file, args)
         else:
             res = [_scan_file(a) for a in args]
-        for rel, enc, replaced, language, dialect, found in res:
-            file_meta_by_relpath.setdefault(rel, (enc, replaced, language, dialect))
-            hits_by_relpath.setdefault(rel, []).extend(found)
-    pass_results = [(rel, *file_meta_by_relpath[rel],
-                     sorted(hits_by_relpath[rel], key=lambda t: (t[1], t[0])))
-                    for rel in sorted(hits_by_relpath)]
+        for relpath, enc, replaced, language, dialect, found in res:
+            file_meta_by_relpath.setdefault(relpath, (enc, replaced, language, dialect))
+            hits_by_relpath.setdefault(relpath, []).extend(found)
+    pass_results = [(relpath, *file_meta_by_relpath[relpath],
+                     sorted(hits_by_relpath[relpath], key=lambda t: (t[1], t[0])))
+                    for relpath in sorted(hits_by_relpath)]
     return pass_results, len(chunks)

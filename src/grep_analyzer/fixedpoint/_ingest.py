@@ -70,15 +70,15 @@ def absorb_results(state: ChaseState, pass_results, scan_chase: set[str],
     `hop` は呼出時点で完了済みの hop 番号。子の ingest_one には `hop + 1` を渡す。
     """
     diag = state.diagnostics
-    for rel, enc, replaced, language, dialect, found in pass_results:
-        state.encoding_of.setdefault(rel, (enc, replaced))
-        if replaced and rel not in state.replaced_logged:
-            diag.add("decode_replaced", rel)
-            state.replaced_logged.add(rel)
+    for relpath, enc, replaced, language, dialect, found in pass_results:
+        state.encoding_of.setdefault(relpath, (enc, replaced))
+        if replaced and relpath not in state.replaced_logged:
+            diag.add("decode_replaced", relpath)
+            state.replaced_logged.add(relpath)
         for symbol, lineno, line in found:
             if symbol not in scan_chase and symbol not in scan_term:
                 continue
-            child = Occurrence(symbol, rel, lineno)
+            child = Occurrence(symbol, relpath, lineno)
             for parent in state.introducers.get(symbol, []):
                 if parent != child:
                     state.edge_store.add(parent, child)

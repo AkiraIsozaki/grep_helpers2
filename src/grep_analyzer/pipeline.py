@@ -56,29 +56,29 @@ def run(
             if parsed is None:
                 diag.add("bad_grep_line", f"{grep_file.name}: {raw_line!r}")
                 continue
-            rel, lineno, content = parsed
-            target = Path(source_root) / rel
+            relpath, lineno, content = parsed
+            target = Path(source_root) / relpath
             if not target.is_file():
-                diag.add("missing_source", str(rel))
+                diag.add("missing_source", str(relpath))
                 continue
             file_text, enc, replaced = decode_bytes(target.read_bytes(), fb)
             if replaced:
-                diag.add("decode_replaced", str(rel))
+                diag.add("decode_replaced", str(relpath))
             sample = file_text[:4096]
-            language = detect_language(rel, sample, lang_map)
-            dialect = detect_shell_dialect(rel, sample) if language == "shell" else "bourne"
+            language = detect_language(relpath, sample, lang_map)
+            dialect = detect_shell_dialect(relpath, sample) if language == "shell" else "bourne"
             if (
-                not extension_resolves_language(rel, lang_map)
+                not extension_resolves_language(relpath, lang_map)
                 and language != "shell"
                 and shebang_dialect(sample) == "other"
             ):
-                diag.add("unsupported_shebang", str(rel))
+                diag.add("unsupported_shebang", str(relpath))
             category, confidence = classify_hit(language, dialect, file_text, lineno, content)
             hits.append(Hit(
-                keyword=keyword, language=language, file=rel, lineno=lineno,
+                keyword=keyword, language=language, file=relpath, lineno=lineno,
                 ref_kind="direct", category=category, category_sub="",
                 usage_summary=f"{category} ({language})", via_symbol="",
-                chain=f"{keyword}@{rel}:{lineno}",
+                chain=f"{keyword}@{relpath}:{lineno}",
                 snippet=build_snippet(language, dialect, file_text, lineno),
                 encoding=enc + (" 要確認" if replaced else ""), confidence=confidence,
             ))

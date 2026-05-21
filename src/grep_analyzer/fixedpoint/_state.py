@@ -1,7 +1,7 @@
 """ChaseState: run_fixedpoint の局所状態を集約するデータクラス。
 
 main process でのみ保持・更新する（multiprocessing worker には渡さない）。
-worker には _scan_file へ (rel, abspath, sym_list, lang_map, fallback) の
+worker には _scan_file へ (relpath, abspath, symbol_list, lang_map, fallback) の
 プリミティブのみ渡す（pickle 制約 + Inv-E 決定性維持）。
 
 Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
@@ -29,8 +29,8 @@ class ChaseState:
     `chase_active`/`chase_done`: chase 対象（constant/var）の active/done 集合
     `terminal_active`/`terminal_done`: terminal 対象（getter/setter）の集合
     `capped`: --memory-limit 等で切り捨てたシンボル
-    `rel_to_abs`: walk 結果（rel → abspath）。worker への送信用 abspath を保持
-    `encoding_of`: rel → (encoding, replaced)。scan 結果から逐次更新
+    `rel_to_abs`: walk 結果（relpath → abspath）。worker への送信用 abspath を保持
+    `encoding_of`: relpath → (encoding, replaced)。scan 結果から逐次更新
     `*_logged`: 同一事象の重複 diagnostics 抑止用
     """
 

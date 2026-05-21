@@ -1,7 +1,7 @@
 """任意 ripgrep 一次粗フィルタ（spec §8.2）。walk の上位集合（.gitignore/
 
 隠し/バイナリを除外しない＝バイナリ境界は walk の _is_binary 単一）。rg
-不在/失敗は None＝フィルタ無効（全件走査）。出力不変（除外 rel は部分
+不在/失敗は None＝フィルタ無効（全件走査）。出力不変（除外 relpath は部分
 文字列すら持たず automaton 0 ヒット確定）。
 """
 
@@ -21,9 +21,9 @@ def available() -> bool:
 def prefilter(
     root: Path, rel_to_abs: dict[str, Path], symbols: list[str]
 ) -> set[str] | None:
-    """symbols のいずれかの部分文字列を含む rel 集合（walk 上位集合）を返す。
+    """symbols のいずれかの部分文字列を含む relpath 集合（walk 上位集合）を返す。
 
-    rg 不在/失敗は None（呼出側はフィルタ無効＝全 rel 走査）。symbols 空は空集合。
+    rg 不在/失敗は None（呼出側はフィルタ無効＝全 relpath 走査）。symbols 空は空集合。
     -a で rg のバイナリ skip を無効化し walk の _is_binary を唯一の境界に統一。
     """
     if _RG is None:
@@ -47,7 +47,7 @@ def prefilter(
         return None
     hit = set()
     for ln in proc.stdout.splitlines():
-        rel = ln[2:] if ln.startswith("./") else ln
-        if rel in rel_to_abs:
-            hit.add(rel)
+        relpath = ln[2:] if ln.startswith("./") else ln
+        if relpath in rel_to_abs:
+            hit.add(relpath)
     return hit

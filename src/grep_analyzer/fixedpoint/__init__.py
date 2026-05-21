@@ -37,7 +37,7 @@ def run_fixedpoint(
 ) -> list[Hit]:
     """seed から不動点まで多ホップ追跡し indirect Hit を決定的に返す（spec §8.1）。
 
-    files 指定時は内部 walk を省き事前収集 (rel, abspath) 列を使う（同値）。
+    files 指定時は内部 walk を省き事前収集 (relpath, abspath) 列を使う（同値）。
     """
     source_root = Path(source_root)
     state = initialize_state(seed_hits, source_root, opts, diag)
@@ -47,7 +47,7 @@ def run_fixedpoint(
             source_root, include=opts.include, exclude=opts.exclude,
             follow_symlinks=opts.follow_symlinks,
             max_file_bytes=opts.max_file_bytes, diag=diag))
-    state.rel_to_abs = {rel: abspath for rel, abspath in files}
+    state.rel_to_abs = {relpath: abspath for relpath, abspath in files}
     progress = Progress(opts.progress)
     progress.start(len(files))
 

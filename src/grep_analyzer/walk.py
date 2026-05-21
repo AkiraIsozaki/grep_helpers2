@@ -16,8 +16,8 @@ DEFAULT_EXCLUDE: tuple[str, ...] = (
     "**/target/**", "**/build/**", "**/generated/**", "**/.git/**")
 
 
-def _match_one(rel: str, pat: str) -> bool:
-    rseg = rel.split("/")
+def _match_one(relpath: str, pat: str) -> bool:
+    rseg = relpath.split("/")
     pseg = pat.split("/")
 
     def m(ri: int, pi: int) -> bool:
@@ -32,10 +32,10 @@ def _match_one(rel: str, pat: str) -> bool:
     return m(0, 0)
 
 
-def _match_any(rel: str, patterns: list[str]) -> bool:
-    base = rel.rsplit("/", 1)[-1]
+def _match_any(relpath: str, patterns: list[str]) -> bool:
+    base = relpath.rsplit("/", 1)[-1]
     for p in patterns:
-        if _match_one(rel, p) or ("/" not in p and fnmatch.fnmatch(base, p)):
+        if _match_one(relpath, p) or ("/" not in p and fnmatch.fnmatch(base, p)):
             return True
     return False
 
@@ -57,33 +57,33 @@ def walk_files(
         dirnames.sort()
         for name in sorted(filenames):
             abspath = Path(dirpath) / name
-            rel = abspath.relative_to(root).as_posix()
+            relpath = abspath.relative_to(root).as_posix()
             if abspath.is_symlink() and not follow_symlinks:
-                diag.add("symlink_skipped", rel)
+                diag.add("symlink_skipped", relpath)
                 continue
-            if _match_any(rel, exclude):
-                diag.add("walk_excluded", rel)
+            if _match_any(relpath, exclude):
+                diag.add("walk_excluded", relpath)
                 continue
-            if include and not _match_any(rel, include):
+            if include and not _match_any(relpath, include):
                 continue
-            candidates.append((rel, abspath))
-    for rel, abspath in sorted(candidates):
+            candidates.append((relpath, abspath))
+    for relpath, abspath in sorted(candidates):
         try:
             if abspath.stat().st_size > max_file_bytes:
-                diag.add("walk_skipped_large", rel)
+                diag.add("walk_skipped_large", relpath)
                 continue
             if _is_binary(abspath):
-                diag.add("walk_skipped_binary", rel)
+                diag.add("walk_skipped_binary", relpath)
                 continue
             real = os.path.realpath(abspath)
         except OSError:
-            diag.add("walk_unreadable", rel)
+            diag.add("walk_unreadable", relpath)
             continue
         if real in seen_real:
-            diag.add("symlink_dedup", f"{rel} -> {seen_real[real]}")
+            diag.add("symlink_dedup", f"{relpath} -> {seen_real[real]}")
             continue
-        seen_real[real] = rel
-        yield rel, abspath
+        seen_real[real] = relpath
+        yield relpath, abspath
 
 
 def collect_files(
