@@ -6,7 +6,7 @@
 
 import re
 
-from grep_analyzer.patterns.literal_masking import MASK_SPECS
+from grep_analyzer.patterns.literal_masking import MASK_PATTERNS
 
 # `EXEC SQL ... ;` / `EXEC SQL ... END-EXEC` / `EXEC ORACLE ... ;` を行跨ぎで捕捉
 _EXEC_RE = re.compile(
@@ -25,7 +25,7 @@ def mask_exec_sql(source: str) -> str:
     return _EXEC_RE.sub(_blank, source)
 
 
-_PROC_LIT_RE = re.compile("|".join(MASK_SPECS["proc"]), re.DOTALL)
+_PROC_LIT_RE = MASK_PATTERNS["proc"]
 
 
 def _blank_literals(source: str) -> str:
