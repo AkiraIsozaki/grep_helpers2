@@ -3,7 +3,7 @@
 `_scan_file` は multiprocessing.Pool 用のトップレベル純関数（pickle 制約）。
 追跡状態オブジェクトは worker に渡さず、main process で構築した args タプル
 のみ渡す。`scan_hop` は呼出側から渡された必要プリミティブだけを引数に取り、
-worker からの戻り値を呼出側で追跡状態へ反映する（worker isolation 厳守・補-9）。
+worker からの戻り値を呼出側で追跡状態へ反映する（worker isolation 厳守）。
 
 `file_meta` / `kinds_of` は追跡状態を引数に取らない純関数 helper として
 `_seed` / `_ingest` / `_finalize` から共有 import される（pickle 制約と矛盾なし）。

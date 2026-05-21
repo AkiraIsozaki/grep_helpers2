@@ -1,7 +1,6 @@
 """非ゲート perf ベースライン（spec §11・@pytest.mark.perf）。"""
 
 import resource
-import sys
 import time
 import pytest
 from grep_analyzer.cli import main

@@ -44,20 +44,20 @@ def heuristic_span(lines: list[str], hit: int, language: str) -> tuple[int, int]
             return x.rstrip().endswith(";") or bool(SQL_CLAUSE_RE.search(x))
         return bool(SH_TERMINATOR_RE.search(x))
 
-    s = hit
+    span_start = hit
     for _ in range(LINE_MAX - 1):
-        if s == 0:
+        if span_start == 0:
             break
-        s -= 1
-        if stop(s):
+        span_start -= 1
+        if stop(span_start):
             break
-    e = hit
+    span_end = hit
     for _ in range(LINE_MAX - 1):
-        if e == len(lines) - 1:
+        if span_end == len(lines) - 1:
             break
-        e += 1
-        if stop(e):
+        span_end += 1
+        if stop(span_end):
             break
-        if (e - s + 1) >= LINE_MAX:
+        if (span_end - span_start + 1) >= LINE_MAX:
             break
-    return s, e
+    return span_start, span_end
