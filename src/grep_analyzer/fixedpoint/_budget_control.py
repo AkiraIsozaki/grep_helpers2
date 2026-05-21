@@ -1,4 +1,4 @@
-"""グローバル cap / spill / nchunks 計算（spec §8.2 L164 優先 1 / §8.3）。
+"""グローバル cap / spill / nchunks 計算（L164 優先 1）。
 
 - apply_global_cap: --memory-limit / --max-symbols でシンボル集合を切り詰める。
   単調縮小・決定的（キー: (symbol_hop, len(s), s)）。
@@ -9,7 +9,7 @@
 注: compute_nchunks は **chase_active/terminal_active を空にした直後**に呼ばれる
 前提（n_live はその時点の (chase|terminal)_done 集合のみから計算される）。
 
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
+Related: spec §8.2, §8.3 / docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
 """
 
 from grep_analyzer import budget as _budget

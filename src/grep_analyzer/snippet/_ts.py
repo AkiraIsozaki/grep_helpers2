@@ -1,10 +1,10 @@
-"""tree-sitter による java/c span（spec §9 段1→段2）+ Pro*C EXEC span。
+"""tree-sitter による java/c span（段1→段2）+ Pro*C EXEC span。
 
 node_at_line で最小内包葉を取り、.parent 上昇で粒度表へ昇格する。
 block 等到達は直近 statement。proc は mask_exec_sql 後を解析（行番号保存）。
 ERROR/MISSING は**確定した選択ノードの部分木のみ**で判定。
 
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [C]
+Related: spec §9 / docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [C]
 """
 
 from grep_analyzer.classifiers.ts_classifier import node_at_line, parse_tree

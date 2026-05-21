@@ -1,9 +1,9 @@
-"""snippet 切り出し（spec §9）パッケージ。
+"""snippet 切り出しパッケージ。
 
 公開エントリは build_snippet。clamp_lines / heuristic_span / ts_span /
 proc_exec_span は仕様検証用の test 由来公開 API として再 export する。
 
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [C]
+Related: spec §9 / docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [C]
 """
 
 from grep_analyzer.snippet._clamp import clamp_lines

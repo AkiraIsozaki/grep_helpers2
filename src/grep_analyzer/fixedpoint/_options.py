@@ -1,9 +1,9 @@
-"""EngineOptions: エンジン挙動パラメータ（spec §8/§10.4）。
+"""EngineOptions: エンジン挙動パラメータ。
 
 `run_fixedpoint` 経由でエンジン内部で参照される。`fixedpoint/__init__.py`
 から `from grep_analyzer.fixedpoint import EngineOptions` で再 export される。
 
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
+Related: spec §8, §10.4 / docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
 """
 
 from dataclasses import dataclass
