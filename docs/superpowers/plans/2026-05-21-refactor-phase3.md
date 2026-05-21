@@ -1700,11 +1700,17 @@ from grep_analyzer.fixedpoint._ingest import absorb_results, ingest_one
 
 未使用 import 削除:
 
-`old_string`:
-```python
-from grep_analyzer.budget import estimate_items
-```
-`new_string`:（空文字列で削除。`estimate_items` は `_budget_control` 内のみで参照）
+> **重要（A-C1 致命修正）**: `from grep_analyzer.budget import estimate_items` は **絶対に削除しない**。
+>
+> 理由: `tests/perf/test_perf.py:49` が `monkeypatch.setattr("grep_analyzer.fixedpoint.estimate_items", _spy)` で `grep_analyzer.fixedpoint` 名前空間の `estimate_items` 属性を差し替えて Inv-1 較正テストを行う。test docstring L47-48「fixedpoint は `from grep_analyzer.budget import estimate_items`（関数オブジェクト束縛）ゆえ fixedpoint 名前空間側を差し替える」と明記。
+>
+> 削除すると `pytest tests/perf/test_perf.py -m perf` 全件 fail → V6 baseline 計測自体が不可能になる。
+>
+> `__init__.py` の関数本体内で `estimate_items` が呼ばれなくなっても、**perf test の monkeypatch 接点として import 文を維持** する。インラインコメントで明示:
+>
+> ```python
+> from grep_analyzer.budget import estimate_items  # perf test の monkeypatch 接点（tests/perf/test_perf.py:49）
+> ```
 
 - [ ] **Step 3: 検証**
 
@@ -2151,6 +2157,216 @@ Expected: `OK`（collection エラーゼロ）。
 - [ ] Inv-E: pyahocorasick 版差吸収・決定性保持
 - [ ] V6: 性能リグレッション 10% / +5s 以内（超過時 user 判断）
 - [ ] V5: AI レビュー Critical/Major ゼロに収束
+
+---
+
+---
+
+## v3 修正補遺（2 巡目 AI レビュー反映）
+
+本 plan v2 に対して以下の修正を **subagent 実行時に併用** すること。本補遺の内容は plan 本体の指示に優先する。
+
+### 補-1（A-C1 / 致命）: `estimate_items` import を維持
+
+Task A4 Step 5 の指示通り、`from grep_analyzer.budget import estimate_items` は `fixedpoint/__init__.py` に **削除しないで保持** する（perf test の monkeypatch 接点として必須）。
+
+### 補-2（B-C3 / A-M1）: Task A1b Step 3 の Edit 順序を厳密化
+
+旧 Step 3 は `EngineOptions` class を `from ... import ...` に置換する `Edit` を最初に実施する指示だが、これは PEP8 E402（module-level import が冒頭でない）違反になる。以下の順序に書き換える:
+
+**Step 3 改訂（v3）**:
+
+1. **Edit 1**: ファイル冒頭の import 群末尾（`from grep_analyzer.stoplist import ...` の直後）に以下 2 行を追加:
+   ```python
+   from grep_analyzer.fixedpoint._options import EngineOptions
+   from grep_analyzer.fixedpoint._state import ChaseState, _REF_KIND
+   ```
+   - `old_string`: `from grep_analyzer.stoplist import SymbolPolicy, load_stoplist, partition`
+   - `new_string`: `from grep_analyzer.stoplist import SymbolPolicy, load_stoplist, partition\nfrom grep_analyzer.fixedpoint._options import EngineOptions\nfrom grep_analyzer.fixedpoint._state import ChaseState, _REF_KIND`
+
+2. **Edit 2**: `@dataclass(frozen=True) class EngineOptions: ...` ブロック（既存 L33-58）を完全削除。
+
+3. **Edit 3**: 元の `_REF_KIND = {...}` 定義行（既存 L61-62）を完全削除。
+
+4. **Edit 4**: `from dataclasses import dataclass` を削除（`EngineOptions` 移動後は `__init__.py` 内で `dataclass` を使わなくなるため）。
+
+これにより中間状態でも import が冒頭に集約され、PEP8 E402 違反なし。
+
+### 補-3（A-M2）: Task 0b に L110 関数内 import の削除を追加
+
+Task 0b Step 2 完了後、追加で以下を実施:
+
+**Step 2b**: `tests/unit/test_chase.py:110` の関数内 import を削除。
+- `old_string`:
+  ```python
+  def test_var抽出は既存extract_var_symbolsと一致する():
+      from grep_analyzer.chase import extract_var_symbols
+      line = 'CODE="X"'
+  ```
+- `new_string`:
+  ```python
+  def test_var抽出は既存extract_var_symbolsと一致する():
+      line = 'CODE="X"'
+  ```
+
+理由: L3 で既に `extract_var_symbols` が import 済み。関数内重複 import は Phase 2 引き継ぎ #1 の趣旨と整合させるべき。
+
+### 補-4（A-M3）: Task A1b Step 4 で policy/budget/graph の local 定義も同時削除
+
+Step 4 の old_string を以下に拡張（`policy = ...` 行から `maxdepth_logged: ...` 行までを含める）:
+
+```
+    policy = SymbolPolicy(opts.min_specificity, load_stoplist(opts.stoplist_path))
+    budget = MemoryBudget(opts.memory_limit_mb)
+    graph = ProvenanceGraph()
+    keyword = sorted({s.keyword for s in seed_hits})[0] if seed_hits else ""
+
+    intro: dict[str, list[Occurrence]] = {}   # symbol -> 実抽出元 Occurrence 群
+    sym_kind: dict[str, str] = {}
+    sym_hop: dict[str, int] = {}
+    estore = EdgeStore(opts.spill_dir, budget)
+    spill_logged = False
+    chase_active: set[str] = set()
+    chase_done: set[str] = set()
+    term_active: set[str] = set()
+    term_done: set[str] = set()
+    capped: set[str] = set()
+    no_expand_logged: set[str] = set()
+    replaced_logged: set[str] = set()
+    maxdepth_logged: set[Occurrence] = set()
+```
+
+`new_string`:
+```python
+    keyword = sorted({s.keyword for s in seed_hits})[0] if seed_hits else ""
+
+    state = ChaseState(
+        source_root=source_root,
+        options=opts,
+        diagnostics=diag,
+        policy=SymbolPolicy(opts.min_specificity, load_stoplist(opts.stoplist_path)),
+        budget=MemoryBudget(opts.memory_limit_mb),
+        graph=ProvenanceGraph(),
+        edge_store=EdgeStore(opts.spill_dir, budget),
+        keyword=keyword,
+    )
+```
+
+注: `EdgeStore(opts.spill_dir, budget)` の `budget` 引数は **同じ式 `MemoryBudget(opts.memory_limit_mb)` を 2 度書くと dataclass 内の参照が同一オブジェクトでなくなり挙動差リスク**。よって以下を採用:
+
+```python
+    keyword = sorted({s.keyword for s in seed_hits})[0] if seed_hits else ""
+    budget = MemoryBudget(opts.memory_limit_mb)
+    state = ChaseState(
+        source_root=source_root,
+        options=opts,
+        diagnostics=diag,
+        policy=SymbolPolicy(opts.min_specificity, load_stoplist(opts.stoplist_path)),
+        budget=budget,
+        graph=ProvenanceGraph(),
+        edge_store=EdgeStore(opts.spill_dir, budget),
+        keyword=keyword,
+    )
+```
+
+`budget` local 変数は ChaseState 構築後は使わない（後続コードでは `state.budget` 経由）。Step 5 の rename 表で local `budget` は対象外（直後に未使用化されるため）。
+
+### 補-5（A-M3 / B-M1）: Task A1b Step 5 の rename 表を更新 + 網羅性検証
+
+Step 5 表に以下を追加:
+
+| `policy` (関数内 / `partition(cs, language, policy)` 等) | `state.policy` |
+| `budget.unlimited` / `budget.exceeded` | `state.budget.unlimited` / `state.budget.exceeded`（補-4 で削除した local `budget` は使わない） |
+| `graph.add_seed` / `graph.add_edge` / `graph.is_seed_location` / `graph.chains_to` | `state.graph.xxx`（一括 replace_all） |
+
+**事前 grep カウント（Step 5 冒頭で実行）**:
+```bash
+cd /workspaces/grep_helpers2 && for name in intro sym_kind sym_hop estore enc_of \
+    chase_active chase_done term_active term_done capped spill_logged \
+    no_expand_logged replaced_logged maxdepth_logged rel_to_abs \
+    policy budget graph; do
+  count=$(grep -cE "\b${name}\b" src/grep_analyzer/fixedpoint/__init__.py)
+  echo "${name}: ${count}"
+done
+```
+
+**事後検証（Step 5 完了直後）**:
+```bash
+grep -nE "\b(intro|sym_kind|sym_hop|estore|enc_of|chase_active|chase_done|term_active|term_done|capped|spill_logged|no_expand_logged|replaced_logged|maxdepth_logged|rel_to_abs)\b" src/grep_analyzer/fixedpoint/__init__.py | grep -v "state\." || echo "OK: no bare references"
+```
+
+ヒット 0 件（または `OK: no bare references`）であることを確認。
+
+### 補-6（B-M2）: Task A1b Step 4-8 を 1 commit に統合（中間 pytest 禁止）
+
+Step 4 完了直後の `__init__.py` は「`state` 構築済みだが関数本体内の旧変数参照が残る」中間状態のため、Step 4 完了時点では pytest を **走らせない**。Step 4 → Step 5 → Step 6 → Step 7 を順次完了させ、Step 8 で初めて pytest を実行する。subagent への明示:
+
+> **重要**: Task A1b の Step 4〜7 は中間状態を許容する一連の Edit である。途中で pytest を走らせると確実に失敗する。Step 8（検証）に到達するまで pytest を試行しないこと。Step 5 完了後の grep 検証のみが中間チェック。
+
+### 補-7（B-M3 / B-M7）: Task A2 Step 0 の試作コード配置と `_pool_map` 撤廃
+
+Step 0 の試作版コード snippet 内の `_pool_map(opts.jobs, args)` は **擬似コードとして撤廃**。正規版（Step 1 の `_scan.py` 採用版）と同じく `multiprocessing.Pool(opts.jobs)` 直接呼出で書く。
+
+試作配置:
+- 試作（並存案・統合案）コードは `/tmp/phase3_r4_proto/scan_split.py` と `/tmp/phase3_r4_proto/scan_unified.py` に書く（`src/grep_analyzer/` には**書かない**）
+- 試作実行の検証は subagent が自由判断で行う（plan 必須化なし。試作の主目的はコード量・diag 局所性の比較のみ）
+- Step 1 の `_scan.py` 作成時に試作版は流用しない（責務 docstring・import が異なる）
+- Phase 3 完了時に `/tmp/phase3_r4_proto/` は **手動削除推奨**（subagent タスクには含めない）
+
+### 補-8（A-C2）: Task A2 Step 0 に byte 同値の論証追記
+
+「挙動同値性」判定の根拠を以下に明記:
+
+> automaton.scan_line() の戻り値は内部 `set` を `sorted()` で正規化した list であり同一行内 sym は昇順。`_scan_file` の二重ループは外側が `enumerate(text.split("\n"), start=1)` で line 昇順、内側が sorted sym 列挙のため、戻り値 found は (line 昇順, 同一 line 内 sym 昇順) 順となる。これは統合案の `sorted(agg[rel], key=lambda t: (t[1], t[0]))` と完全一致するため、`nchunks=1` ⇔ 単一 chunk 統合案の出力は (rel ソート, found 内ソート) ともに恒等に保たれる。
+>
+> さらに `diag.add("automaton_split", f"hop={hop} chunks={n_actual_chunks}")` の発火条件 `nchunks > 1` も既存と一致（既存は `else` ブロックで発火＝nchunks>1 経路のみ）。`n_actual_chunks = len(chunks)` だが、`compute_nchunks` が `>= 2` を返した場合は `len(chunks) >= 1`、`len(scan_syms) >= 1` のもとで `chunks` の `or [[]]` フォールバックは発動しないため `len(chunks) == nchunks` が成立し、既存 `f"chunks={len(chunks)}"` と数値一致。
+>
+> golden 22 件 + integration 全件 + perf monkeypatch test の 3 軸が pass する場合のみ Step 0 判定確定。
+
+### 補-9（A-M4）: V3 worker isolation 検証強化
+
+V3 Step 2 の `inspect.signature` 検証だけでは関数の型 annotation が無い場合 false-positive で常に pass する（実害なし）。これに加えてソース文字列 grep を追加:
+
+```bash
+cd /workspaces/grep_helpers2 && \
+  grep -n "ChaseState\|_state" src/grep_analyzer/fixedpoint/_scan.py
+```
+
+Expected: ヒット 0（`_scan.py` 内で `ChaseState` 型名・`_state` モジュール参照が無いこと）。
+
+### 補-10（B-M5 / B-M6）: Task A5 Step 3 を Edit ベース化
+
+Step 3 の Write 全置換を以下の Edit 列に置換:
+
+1. ChaseState 構築 + seed_hits ループ全体（補-4 で書いた `state = ChaseState(..., keyword=keyword)` + 後続 `for s in seed_hits: ...` 全ブロック）を `state = initialize_state(seed_hits, source_root, opts, diag)` 1 行に Edit
+2. `for p, c in state.edge_store.sorted_unique(): graph.add_edge(p, c)` 以降の indirect Hit 構築ブロック全体 を `indirect = build_indirect_hits(state)` 1 行に Edit
+3. import 整理:
+   - 不要 import 削除: `multiprocessing` / `dataclass` / `automaton`（既に削除済の可能性）/ `Occurrence` / `ProvenanceGraph` / `EdgeStore`（_seed.py 内で使用） / `SymbolPolicy`, `load_stoplist`, `partition` / `MemoryBudget` / `DEFAULT_FALLBACK`, `decode_bytes` / `detect_language`, `detect_shell_dialect` / `extract_chase_symbols` / `classify_hit` / `build_snippet` / `Hit`（型 hint で使用なら残す）
+   - 追加 import: `from grep_analyzer.fixedpoint._seed import initialize_state` / `from grep_analyzer.fixedpoint._finalize import build_indirect_hits`
+4. `from pathlib import Path` を module 冒頭 import 群に置く（関数内 import 廃止）
+
+`Hit` import は `run_fixedpoint` の型 hint `seed_hits: list[Hit]` / 戻り値 `list[Hit]` で使用されるため残す。`estimate_items` は補-1 で維持必須。
+
+### 補-11（B-C1 / B-C2 / B-M8）: Edit old_string の byte 一致リスク対策
+
+Task A1b / A2 / A3 / A4 の各 Edit 実行前に、subagent は実ファイルから対象範囲を `Read` で取得し、plan の old_string と byte 比較する。不一致時は実ファイル内容を優先（コメント・空白を含めて完全コピー）。subagent への明示:
+
+> Edit が `old_string not found` で失敗した場合、`Read` でファイル該当範囲を取得し、コメント・行末空白・空行も含めて完全コピーした文字列を old_string に使う。plan に書かれた old_string は **指示の意図** であり、最終的な byte 一致は実ファイルが正本。
+
+### 補-12（B-M9）: `_REF_KIND` の所在判定
+
+Task A1b 時点では `_REF_KIND` を `_state.py` に置く（plan 通り）。Phase 4 で `_finalize.py` へ移動する。これは plan L2165 の引き継ぎ事項として既に記録されており、Phase 3 範囲では `_state.py` のままで問題ない（_finalize.py が `from grep_analyzer.fixedpoint._state import _REF_KIND` を行うため）。
+
+### 補-13（B-M10）: Task A3 Step 2 の `_ingest` クロージャ削除の old_string
+
+A1b 完了後の `_ingest` クロージャ全文（state.xxx 化された 40 行）を subagent は Read で取得し、old_string に貼る。plan に明示的に「`def _ingest(parent: Occurrence, ...): ... state.terminal_active.add(sym)` までの全 40 行を `Read` で取得して old_string に使う」と注記する。
+
+### 補-14（A-M2 派生）: Phase 3 → 4 引き継ぎへの Minor 移送
+
+以下の Minor は Phase 3 内では対処せず、Phase 4 plan の引き継ぎ枠に移送:
+- _options.py の docstring `（Phase 2a/2b 範囲）` 削除（C5 予備適用 vs 厳格化判断）
+- Task A4/A5 で生じる潜在的な未使用 import の lint 警告
+- ingest_one docstring の hop 引数 semantics 強化
 
 ---
 
