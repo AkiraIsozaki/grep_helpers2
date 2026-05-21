@@ -23,6 +23,11 @@ from grep_analyzer.provenance import Occurrence, ProvenanceGraph
 from grep_analyzer.snippet import build_snippet
 from grep_analyzer.spill import EdgeStore
 from grep_analyzer.stoplist import SymbolPolicy, load_stoplist
+from grep_analyzer.fixedpoint._budget_control import (
+    apply_global_cap,
+    compute_nchunks,
+    maybe_spill,
+)
 from grep_analyzer.fixedpoint._options import EngineOptions
 from grep_analyzer.fixedpoint._ingest import absorb_results, ingest_one
 from grep_analyzer.fixedpoint._scan import _file_meta, _kinds_of, _scan_file, scan_hop
@@ -76,40 +81,11 @@ def run_fixedpoint(
     prog = Progress(opts.progress)
     prog.start(len(files))
 
-    def _apply_global_cap():
-        live = sorted(state.chase_active | state.chase_done | state.terminal_active | state.terminal_done,
-                      key=lambda s: (state.symbol_hop.get(s, 0), len(s), s))
-        keep_count = opts.max_symbols
-        if not budget.unlimited:
-            # spec §8.2 L164 優先1: --memory-limit 超過時の §8.3 決定的切り捨て。
-            # edges は priority-2 spill で退避(n_edges=0)、intro はシンボル連動
-            # (n_intro≈keep_count)。キー不変・単調縮小・決定的。keep_count=0 は memory 0 等。
-            while keep_count > 0 and budget.exceeded(estimate_items(
-                    n_symbols=keep_count, n_edges=0, n_intro=keep_count)):
-                keep_count -= 1
-        if len(live) <= keep_count:
-            return
-        for s in live[keep_count:]:
-            if s not in state.capped:
-                diag.add("symbol_rejected", f"capped\t{s}")
-                state.capped.add(s)
-            state.chase_active.discard(s)
-            state.terminal_active.discard(s)  # chase_done 単調維持・scan は capped で除外
-
     try:
         hop = 1
         while state.chase_active or state.terminal_active:
-            _apply_global_cap()
-            if not budget.unlimited and not state.edge_store.spilled:
-                n_intro = sum(len(v) for v in state.introducers.values())
-                n_live = len(state.chase_active | state.chase_done | state.terminal_active | state.terminal_done)
-                if budget.exceeded(estimate_items(
-                        n_symbols=n_live, n_edges=state.edge_store.in_memory_len(),
-                        n_intro=n_intro)):
-                    state.edge_store.maybe_spill_now()
-                    if not state.spill_logged:
-                        diag.add("graph_spilled", f"hop={hop}")
-                        state.spill_logged = True
+            apply_global_cap(state)
+            maybe_spill(state, hop)
             scan_chase = {s for s in state.chase_active if s not in state.capped}
             scan_term = {s for s in state.terminal_active if s not in state.capped}
             scan_syms = sorted(scan_chase | scan_term)
@@ -124,20 +100,7 @@ def run_fixedpoint(
                 keep_rels = _rg.prefilter(source_root, state.rel_to_abs, scan_syms)
                 if keep_rels is not None:
                     scan_files = [(r, a) for r, a in files if r in keep_rels]
-            n_intro = sum(len(v) for v in state.introducers.values())
-            n_live = len(state.chase_active | state.chase_done | state.terminal_active | state.terminal_done)
-            nchunks = 1
-            if opts.force_chunks and opts.force_chunks > 1:
-                nchunks = min(opts.force_chunks, opts.max_passes,
-                              max(1, len(scan_syms)))
-            elif not budget.unlimited and budget.exceeded(estimate_items(
-                    n_symbols=n_live, n_edges=state.edge_store.in_memory_len(),
-                    n_intro=n_intro)):
-                while nchunks < opts.max_passes and nchunks < len(scan_syms) and \
-                        budget.exceeded(estimate_items(
-                            n_symbols=-(-len(scan_syms) // (nchunks + 1)),
-                            n_edges=state.edge_store.in_memory_len(), n_intro=n_intro)):
-                    nchunks += 1
+            nchunks = compute_nchunks(state, scan_syms)
             pass_results, n_actual_chunks = scan_hop(scan_syms, scan_files, opts, nchunks)
             if nchunks > 1:
                 diag.add("automaton_split", f"hop={hop} chunks={n_actual_chunks}")
