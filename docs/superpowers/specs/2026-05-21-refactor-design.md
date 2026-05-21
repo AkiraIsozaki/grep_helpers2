@@ -18,7 +18,7 @@ Related: spec §5, §8, §9, §11
 |---|---|
 | Inv-A | TSV 出力の byte 列が現行 golden と完全一致（spec §11 v9 機構で検証） |
 | Inv-B | unit / integration / golden / spec §15 ベースラインが全件 pass |
-| Inv-C | `cli.py` の引数・終了コード・diagnostics キー名は不変 |
+| Inv-C | **CLI コマンドライン引数**（`--max-depth` 等のユーザ可視オプション）、終了コード、diagnostics の **キー文字列**（`"prov_max_depth"`, `"symbol_rejected"` 等）は不変。cli.py 内部の Python 関数シグネチャ・ローカル変数名は rename 対象（外部に露出しないため）|
 | Inv-D | spec §5.1 / §8.1 で確立済の層分離違反を再導入しない |
 | Inv-E | `pyahocorasick` 版差吸収など、現行の決定性ガードを保持 |
 
@@ -31,7 +31,13 @@ Phase 3: [C] snippet 分割 + [A] fixedpoint 分割（ChaseState 化）
 Phase 4: 命名・コメントの全モジュール横断適用
 ```
 
-各 Phase は独立に spec → plan → 実装 → AI レビュー → ユーザーレビューのサイクルを回す。Phase 移行前に批判的 AI レビューを最低 2 巡し、指摘ゼロに収束させる（V5）。
+各 Phase は独立に spec → plan → 実装 → AI レビュー → ユーザーレビューのサイクルを回す。Phase 移行前に批判的 AI レビューを最低 2 巡し、Critical / Major ゼロに収束させる（V5）。
+
+**Phase 順序の正当化**:
+- **Phase 1 (regex 集約) を先行**: 各言語固有の regex 定数を `patterns/` に局所化することで、Phase 2 で classifiers/* が「自分の文法定義をどこから取るか」が一意に決まり、分割境界の認知負荷が下がる
+- **Phase 2 (層分離強化) を中盤**: Phase 1 で文法定数が局所化された後に dispatcher 化することで、各 *_chaser.py が `patterns/*` のみに依存し、循環依存を構造的に避けられる
+- **Phase 3 (大ファイル分割) を後半**: Phase 2 で chase が dispatcher 化された後に fixedpoint を分割することで、fixedpoint/_*.py が classifiers/* に依存する構造が完成形になる
+- **Phase 4 (横断 rename) を最後**: Phase 1〜3 で構造が確定したあとに rename を行うことで、(i) 移動先で最終命名を一度に確定でき、(ii) 移動と rename の merge conflict を避けられる。先行 rename → 後続移動の順だと、移動時に名前と内容が二重に変化し diff レビューが困難
 
 ## 3. 命名規約
 
@@ -55,8 +61,8 @@ Phase 4: 命名・コメントの全モジュール横断適用
 | `cs` | `chase_symbols` | chase.py, fixedpoint.py |
 | `dia` | `dialect` | fixedpoint.py |
 | `prog` | `progress` | fixedpoint.py |
-| `agg` | `hits_by_relpath` 等の意図名 | fixedpoint.py |
-| `meta` | `file_meta_by_relpath` | fixedpoint.py |
+| `agg` | `hits_by_relpath` 等の意図名 | fixedpoint.py（マルチパス内ローカル、有効範囲 15 行で N5 除外には該当しない） |
+| `meta` | `file_meta_by_relpath` | fixedpoint.py（マルチパス内ローカル、有効範囲 15 行で N5 除外には該当しない） |
 | `m` (mask) | `masked_lines` | snippet.py |
 | `t` (type/text) | `node_type` / `text` | snippet.py |
 | `d` (balance) | `paren_depth` | snippet.py |
@@ -186,7 +192,7 @@ patterns/
 ### Phase 1 — 規約確定 + [D] regex 集約（small・低リスク）
 
 **前提チェック**:
-- aarch64 wheel availability を `pip install --dry-run` または `pip-compile` で確認（pyahocorasick 2.3.1 / tree-sitter 系は memory `dgx-spark-aarch64-wheel-policy.md` で解決済だが、Phase 開始時点で再確認）
+- aarch64 wheel availability を `pip index versions <pkg>` で各依存パッケージごとに確認、または `pip-compile` で lock 再生成して wheelhouse 構成可能性を確認（pyahocorasick 2.3.1 / tree-sitter 系は memory `dgx-spark-aarch64-wheel-policy.md` で解決済だが、Phase 開始時点で再確認）
 
 **変更**:
 - 命名規約・コメント規約・Refactoring Discipline 規約をこの設計ドキュメントで確定
@@ -239,6 +245,11 @@ chase.py（薄い dispatcher）
 - 現状 `classifiers/__init__.py` は実質空に近い。Phase 2 [B] 着手前に `_CHASERS: dict[str, ChaserProtocol]` registry を追加し、各 `*_chaser.py` を import 時に登録する形を確立する
 - `chase.py` 側で `_CHASERS[language].extract(...)` / `_CHASERS[language].mask(...)` を呼ぶ薄い dispatcher 関数を用意
 - cyclic import 検査: 各 `*_chaser.py` 追加ごとに `python -c "import grep_analyzer"` が成功することを確認（V3 と連動）
+
+**実装方式の選択肢（Phase 2 plan で確定）**:
+- **方式α (eager import)**: `classifiers/__init__.py` で全 `*_chaser.py` を import し、各モジュールが import 副作用で `_CHASERS` に自己登録。利点: lookup 時の追加コスト無し。欠点: 起動時に全 chaser が読まれる
+- **方式β (lazy import)**: `chase.py` の dispatcher 内で `if language not in _CHASERS: importlib.import_module(...)`。利点: 必要言語のみロード。欠点: 並列実行時の競合に注意
+- 判定: 起動時間と並列安全性を Phase 2 plan で計測し決定（既定は方式α）
 
 #### [E] TSV 書込経路の正本化（small〜medium）
 
@@ -315,6 +326,12 @@ class ChaseState:
 - `_scan.scan_hop()` の役割は: ChaseState から必要なプリミティブ（`sym_list`, `lang_map`, `fallback_chain`）を抽出して args タプルを作り、`Pool.map(_scan_file, args)` を呼び、結果を ChaseState へ書き戻す
 - worker 側（`_scan_file`）は ChaseState を知らず、トップレベル純関数のまま維持（Inv-B/E 維持）
 
+**`rel_to_abs` / `encoding_of` の初期化タイミング（Phase 3 plan で確定）**:
+- 現状 `rel_to_abs` は `walk.walk_files()` 結果から L192 で構築、`enc_of`（→ `encoding_of`）は scan 結果から L290 で蓄積
+- ChaseState への取り込みで、(i) **main process 側で事前構築**（worker 前に確定し ChaseState に格納）と (ii) **scan_hop 結果からの遅延構築** の 2 方式がある
+- pickle 制約上、いずれの場合も worker には ChaseState ではなく必要な値のみ渡す
+- 既定方針: `rel_to_abs` は `_seed.initialize()` 内で eager 構築、`encoding_of` は scan_hop 結果から `_ingest.absorb_results()` 内で逐次更新（現行挙動と同等）
+
 **`run_fixedpoint` after（概形）**:
 
 ```python
@@ -389,6 +406,13 @@ cli → pipeline → fixedpoint/_* → classifiers/* → patterns/*
 - `fixedpoint/_*.py`（分割後）は `_state` 経由でやり取り（相互依存禁止）
 - すべての依存は **葉からルートへの一方向**（A → B → A の循環禁止）
 
+**禁止する逆依存の具体例**（spec §5.1 / §8.1 の層分離要請に基づく）:
+- `classifiers/*_chaser.py` が `fixedpoint`, `pipeline`, `ingest`, `spill` を import すること
+- `patterns/*` が `classifiers/*`, `chase.py`, `snippet/*` を import すること
+- `snippet/*` が `fixedpoint`, `pipeline` を import すること
+- `tsv.py` / `output_writer.py` が `fixedpoint`, `chase.py` を import すること
+- `model.py` が下位以外のモジュールを import すること
+
 **検証手段**:
 - `grep -r "from grep_analyzer" src/` で依存関係を抽出し、上記規約に違反がないか目視確認
 - **cyclic import 実機検証**: `python -c "import grep_analyzer; import grep_analyzer.cli; import grep_analyzer.fixedpoint"` がエラーなく完了することを確認
@@ -410,14 +434,27 @@ grep -rEn 'Phase ?[0-9][a-z]|spec v[0-9]+|Inv-[0-9]+' src/
 1. 批判的 AI レビューを起動（できれば異なる視点で並列 2 件）
 2. 指摘事項を **Critical / Major / Minor / Suggestion** に分類
 3. 反復で **Critical / Major をゼロに収束** させる（最低 2 巡）
-4. Minor / Suggestion は次 Phase の plan で吸収可（収束必須ではない）
-5. 収束時点で次 Phase に進む
+4. 収束時点で次 Phase に進む
 
 **深刻度の判定基準**:
 - **Critical**: 設計通り進めると確実に Inv 違反 / テスト破綻 / 配備不能になる
 - **Major**: 完了基準を満たせない、または plan が書けなくなる
-- **Minor**: 改善すべきだが当該 Phase 完了は妨げない、次 Phase plan で吸収可
+- **Minor**: 改善すべきだが当該 Phase 完了は妨げない
 - **Suggestion**: 任意の改善案、採否はその場で判断
+
+**V5 通過の必要十分条件**: Critical / Major の指摘数がゼロ
+**Minor / Suggestion の扱い**: V5 通過の妨げではないが、**消えるわけではない**。次 Phase の plan 冒頭に「前 Phase 引き継ぎ事項」として全件記録し、当該 Phase の作業範囲で吸収するか、最終 Phase 4 完了時の総点検で再判定する
+
+### V7 規約の適用順序（Phase 4 内部の順序規定）
+
+N1〜N4 と R1〜R4 は **同 Phase 内で適用順序を持つ**。Phase 4 plan で以下の順序で実施:
+
+1. **N1〜N4 の inventory 化**（全モジュール走査で違反列挙）
+2. **N1〜N4 の rename 適用**（公開 API → 内部識別子 → test fixture の順）
+3. **C1〜C5 の適用**（コメント整理）
+4. **R1 (DRY 判定) の再検査**: rename 完了後、同名・同責務に見える構造が新たに発生していないか確認。発生していれば R2〜R4 に従って判定
+
+理由: rename 前の `rel` / `relative_path` / `rel_path` のように N4 違反が混在している段階では、R1 の「同じ用語で説明できるか」を判定できない。表記揺れを先に N4 で潰してから DRY 判定を行う。
 
 ### V6 性能リグレッション抑止
 
@@ -427,7 +464,9 @@ fixedpoint 分割は ChaseState 受け渡しが増えるため、Phase 3 [A] 完
 - 対象データセット: `tests/` 配下で最大サイズの integration ケース（Phase 3 plan で固定 ID を指定）
 - 計測コマンド: `time python -m grep_analyzer <args>`（壁時計時間）
 - **最低 3 回実行し中央値を採用**（multiprocessing Pool 初期化のばらつき吸収）
-- single-pass / chunked 双方の経路を測定
+- 経路の数は R4（Rule of Three）判定結果に応じる:
+  - **R4 で統合した場合**: 1 経路のみ測定
+  - **R4 で並存（`_scan_hop_single` / `_scan_hop_chunked` の 2 関数）とした場合**: 2 経路を個別に測定
 - 比較は Phase 3 [A] 着手直前の HEAD を baseline とする
 
 **判定基準**:
