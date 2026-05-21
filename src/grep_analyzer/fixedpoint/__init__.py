@@ -14,7 +14,6 @@ from pathlib import Path
 
 from grep_analyzer import walk
 from grep_analyzer.budget import MemoryBudget, estimate_items  # estimate_items: perf test の monkeypatch 接点（tests/perf/test_perf.py:49）
-from grep_analyzer.chase import extract_chase_symbols
 from grep_analyzer.classify import classify_hit
 from grep_analyzer.diagnostics import Diagnostics
 from grep_analyzer.model import Hit
@@ -23,8 +22,9 @@ from grep_analyzer import ripgrep as _rg
 from grep_analyzer.provenance import Occurrence, ProvenanceGraph
 from grep_analyzer.snippet import build_snippet
 from grep_analyzer.spill import EdgeStore
-from grep_analyzer.stoplist import SymbolPolicy, load_stoplist, partition
+from grep_analyzer.stoplist import SymbolPolicy, load_stoplist
 from grep_analyzer.fixedpoint._options import EngineOptions
+from grep_analyzer.fixedpoint._ingest import absorb_results, ingest_one
 from grep_analyzer.fixedpoint._scan import _file_meta, _kinds_of, _scan_file, scan_hop
 from grep_analyzer.fixedpoint._state import ChaseState, _REF_KIND
 
@@ -51,46 +51,6 @@ def run_fixedpoint(
         keyword=keyword,
     )
 
-    def _ingest(parent: Occurrence, language: str, dialect: str, line: str,
-                hop: int, is_seed: bool = False):
-        if hop > opts.max_depth:
-            if parent not in state.maxdepth_logged:
-                diag.add("prov_max_depth", f"{parent.symbol}@{parent.relpath}:"
-                         f"{parent.lineno} (hop {hop} > --max-depth {opts.max_depth})")
-                state.maxdepth_logged.add(parent)
-            return
-        cs = extract_chase_symbols(language, dialect, line)
-        kinds = _kinds_of(language, dialect, line)
-        part = partition(cs, language, state.policy)
-        for sym, reason in sorted(part.rejected):
-            diag.add("symbol_rejected", f"{reason}\t{sym}")
-        for sym in part.chase:
-            if sym in state.capped:
-                continue
-            # 非 seed の自己定義行が自分自身を再抽出しても発見元ではない
-            # （spec §8.2「発見元≠発見」）。seed は keyword 原点なので例外。
-            if not is_seed and sym == parent.symbol:
-                continue
-            state.symbol_kind.setdefault(sym, kinds.get(sym, "var"))
-            state.symbol_hop.setdefault(sym, hop)
-            lst = state.introducers.setdefault(sym, [])
-            if parent not in lst:
-                lst.append(parent)
-            if sym not in state.chase_done:
-                state.chase_active.add(sym)
-        for sym in part.terminal:
-            if sym in state.capped:
-                continue
-            if not is_seed and sym == parent.symbol:
-                continue
-            state.symbol_kind.setdefault(sym, kinds.get(sym, "getter"))
-            state.symbol_hop.setdefault(sym, hop)
-            lst = state.introducers.setdefault(sym, [])
-            if parent not in lst:
-                lst.append(parent)
-            if sym not in state.terminal_done:
-                state.terminal_active.add(sym)
-
     # hop0→hop1: seed ファイル実読で spec §5.1 決定的に言語/方言確定
     for s in seed_hits:
         occ = Occurrence(s.keyword, s.file, s.lineno)
@@ -105,7 +65,7 @@ def run_fixedpoint(
         else:
             lang, dia = s.language, "bourne"
             seed_line = ""
-        _ingest(occ, lang, dia, seed_line, hop=1, is_seed=True)
+        ingest_one(state, occ, lang, dia, seed_line, hop=1, is_seed=True)
 
     if files is None:
         files = list(walk.walk_files(
@@ -181,24 +141,7 @@ def run_fixedpoint(
             pass_results, n_actual_chunks = scan_hop(scan_syms, scan_files, opts, nchunks)
             if nchunks > 1:
                 diag.add("automaton_split", f"hop={hop} chunks={n_actual_chunks}")
-            for rel, enc, replaced, language, dialect, found in pass_results:
-                state.encoding_of.setdefault(rel, (enc, replaced))
-                if replaced and rel not in state.replaced_logged:
-                    diag.add("decode_replaced", rel)
-                    state.replaced_logged.add(rel)
-                for sym, i, line in found:
-                    if sym not in scan_chase and sym not in scan_term:
-                        continue
-                    child = Occurrence(sym, rel, i)
-                    for parent in state.introducers.get(sym, []):
-                        if parent != child:
-                            state.edge_store.add(parent, child)
-                    if sym in scan_term:
-                        if sym not in state.no_expand_logged:
-                            diag.add("getter_setter_no_expand", sym)
-                            state.no_expand_logged.add(sym)
-                        continue
-                    _ingest(child, language, dialect, line, hop + 1)
+            absorb_results(state, pass_results, scan_chase, scan_term, hop)
             prog.hop(hop, len(scan_syms), len(scan_files))
             hop += 1
 
