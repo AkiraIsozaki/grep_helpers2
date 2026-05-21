@@ -123,7 +123,12 @@ Step 2/3 の結果から判定:
 | `tsv.write_tsv` が pipeline 以外の src/ からも呼ばれている | **active legacy path** | 呼出元を `output_writer.finalize` に切替（または並存命名整理） |
 | `tsv.write_tsv` が pipeline 経由で呼ばれている | **co-existing implementations** | 統合 or 並存命名整理（R1 判定） |
 
-判定結果を Step 4 のレポートに記録（次 Task の入力）。
+判定結果を Step 4 のレポートに **明示的に記録**。判定は以下 3 値のいずれか:
+- `dead_code` （`tsv.write_tsv` は src/ からは未呼出、tests からのみ）
+- `active_legacy` （src/ の pipeline 以外から呼ばれている）
+- `co_existing` （pipeline 経由で両方使われている）
+
+**subagent-driven 実行時の引き渡し**: controller (親 Claude) は Task 2 完了報告から判定値を読み取り、Task 3 dispatch 時の prompt に「Task 2 の判定結果: `<dead_code|active_legacy|co_existing>`」として明示的に含める。Task 3 の subagent はその判定値に応じた手順を実行する。
 
 No code changes, no commits.
 
@@ -190,83 +195,23 @@ Task 2 の判定が「dead code in production」**ではなかった**場合:
 
 ---
 
-### Task 4: classifiers/base.py に Chaser Protocol を追加
+### Task 4: Chaser Protocol 追加 + ChaseSymbols を model.py へ移動 (atomic)
 
 **Files:**
 - Modify: `src/grep_analyzer/classifiers/base.py`（既存 `ClassifyResult` 型は維持、`Chaser` Protocol を追記）
-
-- [ ] **Step 1: base.py に Chaser Protocol を追加**
-
-Edit `/workspaces/grep_helpers2/src/grep_analyzer/classifiers/base.py`:
-
-現状（全 4 行）:
-```python
-"""分類器の共通型。Phase 1 は direct 行の分類のみ（spec §15 フェーズ1）。"""
-
-# 分類結果 = (共通上位カテゴリ, confidence)。category_sub は v1 空固定（spec §9）。
-ClassifyResult = tuple[str, str]
-```
-
-変更後:
-```python
-"""分類器の共通型と Chaser プロトコル。
-
-ClassifyResult: direct 行の分類結果型。
-Chaser: 言語別 Chaser サブモジュールが実装する抽出 IF。
-
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 2 [B]
-"""
-
-from typing import Protocol
-
-from grep_analyzer.model import ChaseSymbols
-
-ClassifyResult = tuple[str, str]
-
-
-class Chaser(Protocol):
-    """言語別 Chaser モジュールの抽出 IF。各 `*_chaser.py` がモジュールレベルで
-    extract / mask を関数として公開し、`_CHASERS[language] = module` で登録する。
-    """
-
-    def extract(self, dialect: str, line: str) -> ChaseSymbols:
-        """マスク後の行から ChaseSymbols を返す（dialect は shell のみ意味を持つ）。"""
-        ...
-
-    def mask(self, line: str) -> str:
-        """言語別リテラル/コメントを同字数空白に置換する。"""
-        ...
-```
-
-注: 各 `*_chaser.py` は Python モジュール (`types.ModuleType`) として登録するため、`Chaser` Protocol は `self` の代わりにモジュールレベル関数として `extract` / `mask` を公開する形を取る。Python の Protocol は duck typing で、モジュールにも適用可能。
-
-- [ ] **Step 2: ChaseSymbols が model.py に未存在の場合、import で失敗することを確認**
-
-Run: `cd /workspaces/grep_helpers2 && python -c "from grep_analyzer.classifiers.base import Chaser, ClassifyResult" 2>&1 | head -5`
-
-Expected: `ImportError: cannot import name 'ChaseSymbols' from 'grep_analyzer.model'`（Task 5 で model.py に追加するまでこのエラーが出る）。
-
-このまま Task 5 に進む。Task 5 完了後に再 import が通る。
-
-- [ ] **Step 3: commit (intermediate state — base.py は単体では import failure する)**
-
-待つ。**Task 5 と一緒に atomic commit する**（intermediate broken state を main に残さない）。
-
-このタスクではコミットしない。
-
----
-
-### Task 5: ChaseSymbols を model.py へ移動
-
-**Files:**
 - Modify: `src/grep_analyzer/model.py`（`ChaseSymbols` dataclass を追加）
 - Modify: `src/grep_analyzer/chase.py`（`ChaseSymbols` 定義を削除、`model` から import）
+- Modify: `src/grep_analyzer/stoplist.py`（mid-file `from grep_analyzer.chase import ChaseSymbols` を `from grep_analyzer.model import ChaseSymbols` に変更し、ファイル先頭の import セクションへ集約）
+- Modify: `tests/unit/test_chase.py`（`from grep_analyzer.chase import ChaseSymbols` を `from grep_analyzer.model import ChaseSymbols` に変更）
+- Modify: `tests/unit/test_stoplist.py`（同上）
+
+注: subagent-driven の各タスク = 1 commit 原則に従い、Task 4 と旧 Task 5 を 1 タスクに統合。intermediate broken state を残さない（C-1 / M-2 反映）。
 
 - [ ] **Step 1: model.py に ChaseSymbols を追加**
 
 Edit `/workspaces/grep_helpers2/src/grep_analyzer/model.py`:
 
-現状 L1-9 の `from dataclasses import dataclass` の直下、`Hit` 定義の前に追加:
+現状の `from dataclasses import dataclass` の直下、`Hit` 定義の前に追加:
 
 ```python
 @dataclass(frozen=True)
@@ -283,7 +228,52 @@ class ChaseSymbols:
     setters: tuple[str, ...] = ()
 ```
 
-- [ ] **Step 2: chase.py から ChaseSymbols 定義を削除し、import を追加**
+- [ ] **Step 2: classifiers/base.py に Chaser Protocol を追加**
+
+Edit `/workspaces/grep_helpers2/src/grep_analyzer/classifiers/base.py`:
+
+現状（全 4 行）:
+```python
+"""分類器の共通型。Phase 1 は direct 行の分類のみ（spec §15 フェーズ1）。"""
+
+# 分類結果 = (共通上位カテゴリ, confidence)。category_sub は v1 空固定（spec §9）。
+ClassifyResult = tuple[str, str]
+```
+
+変更後（属性形式の Protocol を採用 — mypy/pyright で module オブジェクトに対しても structural にマッチする形）:
+```python
+"""分類器の共通型と Chaser プロトコル。
+
+ClassifyResult: direct 行の分類結果型。
+Chaser: 言語別 Chaser サブモジュールが実装する抽出 IF。
+
+Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 2 [B]
+"""
+
+from typing import Callable, Protocol
+
+from grep_analyzer.model import ChaseSymbols
+
+ClassifyResult = tuple[str, str]
+
+
+class Chaser(Protocol):
+    """言語別 Chaser モジュールの抽出 IF。
+
+    各 `*_chaser.py` がモジュールレベルで `extract` / `mask` を関数として
+    公開し、`_CHASERS[language] = module` で登録する。属性形式の Protocol
+    を採用することで、module オブジェクトを `Chaser` 型として扱える
+    （mypy/pyright の structural 互換性）。
+    """
+
+    extract: Callable[[str, str], ChaseSymbols]
+    """(dialect, line) → ChaseSymbols。line は生行（マスクは extract 内で実施）。"""
+
+    mask: Callable[[str], str]
+    """line → masked_line。同字数空白へ置換する。"""
+```
+
+- [ ] **Step 3: chase.py から ChaseSymbols 定義を削除し、import を追加**
 
 Edit `/workspaces/grep_helpers2/src/grep_analyzer/chase.py`:
 
@@ -295,38 +285,64 @@ L43 の `from dataclasses import dataclass` と L56-66 の `@dataclass(frozen=Tr
 from grep_analyzer.model import ChaseSymbols
 ```
 
-- [ ] **Step 3: chase.py の ChaseSymbols 使用箇所が変更なく動くことを確認**
+- [ ] **Step 4: stoplist.py の mid-file import を先頭集約 + model から import**
 
-Run: `cd /workspaces/grep_helpers2 && grep -n 'ChaseSymbols' src/grep_analyzer/chase.py`
+Edit `/workspaces/grep_helpers2/src/grep_analyzer/stoplist.py`:
 
-Expected: 1 行（import 行）+ 関数内の使用箇所が同じ参照名 `ChaseSymbols` で動く。
+L76 の mid-file `from grep_analyzer.chase import ChaseSymbols` を削除。
+ファイル先頭の import セクション（`from dataclasses import dataclass` の近辺）に追加:
 
-- [ ] **Step 4: Task 4 と Task 5 をまとめて atomic commit する準備**
+```python
+from grep_analyzer.model import ChaseSymbols
+```
 
-Task 4 で classifiers/base.py に Chaser Protocol を追加済（commit せず）、本 Task 5 で model.py に ChaseSymbols を追加 + chase.py の定義削除。
+L76 を削除することで PEP8 E402 違反も解消（Phase 1 引き継ぎ事項の 1 つを併せて消化）。
 
-Run: `cd /workspaces/grep_helpers2 && python -c "from grep_analyzer.classifiers.base import Chaser; from grep_analyzer.chase import ChaseSymbols, extract_chase_symbols; print('OK')"`
+- [ ] **Step 5: tests/unit/test_chase.py の import を model 経由に変更**
 
-Expected: `OK`（base.py の Chaser Protocol も chase.py の ChaseSymbols も解決される）。
+Edit `/workspaces/grep_helpers2/tests/unit/test_chase.py`:
 
-- [ ] **Step 5: 全テスト pass 確認**
+`from grep_analyzer.chase import ChaseSymbols` のような行を:
+```python
+from grep_analyzer.model import ChaseSymbols
+```
+に変更。`extract_var_symbols` 等の他の chase 関数 import は維持。
+
+- [ ] **Step 6: tests/unit/test_stoplist.py の import を model 経由に変更**
+
+Edit `/workspaces/grep_helpers2/tests/unit/test_stoplist.py`:
+
+`from grep_analyzer.chase import ChaseSymbols` を:
+```python
+from grep_analyzer.model import ChaseSymbols
+```
+に変更。
+
+- [ ] **Step 7: 旧 import が残っていないことを確認**
+
+Run:
+```bash
+cd /workspaces/grep_helpers2 && grep -rn 'from grep_analyzer\.chase import ChaseSymbols\|from grep_analyzer\.chase import.*ChaseSymbols' src/ tests/
+```
+
+Expected: 空出力（chase 経由の ChaseSymbols import が src/ tests/ から完全消滅）。
+
+- [ ] **Step 8: 全テスト pass 確認**
 
 Run: `cd /workspaces/grep_helpers2 && pytest -q 2>&1 | tail -5`
 
 Expected: 252 passed, 5 skipped。
 
-特に: `tests/unit/test_chase.py` が ChaseSymbols を参照しているなら、移動後も pass することが必須。
-
-Run: `cd /workspaces/grep_helpers2 && pytest tests/unit/test_chase.py tests/unit/test_model.py -v 2>&1 | tail -15`
+Run: `cd /workspaces/grep_helpers2 && pytest tests/unit/test_chase.py tests/unit/test_model.py tests/unit/test_stoplist.py -v 2>&1 | tail -25`
 
 Expected: 全件 PASSED。
 
-- [ ] **Step 6: atomic commit（Task 4 + Task 5 を 1 commit）**
+- [ ] **Step 9: atomic commit**
 
 ```bash
 cd /workspaces/grep_helpers2 && \
-  git add src/grep_analyzer/classifiers/base.py src/grep_analyzer/model.py src/grep_analyzer/chase.py && \
-  git commit -m "refactor(model): ChaseSymbols を chase から model へ移動 + classifiers/base に Chaser Protocol 追加"
+  git add src/grep_analyzer/classifiers/base.py src/grep_analyzer/model.py src/grep_analyzer/chase.py src/grep_analyzer/stoplist.py tests/unit/test_chase.py tests/unit/test_stoplist.py && \
+  git commit -m "refactor(model): ChaseSymbols を model.py へ移動 + Chaser Protocol 追加（stoplist/tests も合わせて更新）"
 ```
 
 ---
@@ -389,22 +405,40 @@ def extract(dialect: str, line: str) -> ChaseSymbols:
     return ChaseSymbols(consts, vars_, getters, setters)
 ```
 
-- [ ] **Step 2: import smoke 確認**
+- [ ] **Step 2: import smoke 確認 + Inv-A 回帰テスト（マスク経由の挙動互換性）**
 
 Run:
 ```bash
 cd /workspaces/grep_helpers2 && python -c "
 from grep_analyzer.classifiers import java_chaser
 from grep_analyzer.model import ChaseSymbols
+
+# 基本動作
 result = java_chaser.extract('', 'public static final int FOO = 1;')
 assert 'FOO' in result.constants, f'expected FOO in constants, got {result}'
+
+# マスク動作
 masked = java_chaser.mask('// comment')
 assert masked.strip() == '', f'expected blank after mask, got {masked!r}'
+
+# Inv-A 回帰: マスク後の代入抽出が現行 chase.extract_chase_symbols と一致
+# コメント内の代入はマスクで消えるべき
+r2 = java_chaser.extract('', 'public static final int FOO = 1; // x = 2')
+assert 'FOO' in r2.constants, f'FOO must be in constants: {r2}'
+assert 'x' not in r2.vars, f'x in comment must not be extracted: {r2}'
+
+# 文字列内の代入もマスクで消える
+r3 = java_chaser.extract('', 'String s = \"y = 1\"; int z = 1;')
+assert 'z' in r3.vars, f'z must be in vars: {r3}'
+assert 'y' not in r3.vars, f'y in string literal must not be extracted: {r3}'
+
 print('OK')
 "
 ```
 
-Expected: `OK`
+Expected: `OK`。
+
+これは Inv-A 直接保証（マスク前/後で代入抽出結果が変わらないこと）。Phase 1 で patterns/* に regex を移した後の挙動と完全同等を確認。
 
 - [ ] **Step 3: 既存テスト pass 確認**
 
@@ -778,6 +812,24 @@ cd /workspaces/grep_helpers2 && \
 
 これが Phase 2 [B] の中核タスク。chase.py の現状 96 行が約 40-50 行（dispatcher のみ）に縮約される。
 
+**事前検証**: 実装前に `MASK_PATTERNS` と `_CHASERS` の言語キー集合が一致することを assert する（M-3 反映）。これにより `mask_literals` の旧挙動（`MASK_PATTERNS.get(language)` → `None` 時に原行返却）と新 dispatcher 経由（`_CHASERS.get(language)` → `None` 時に原行返却）の挙動同等性が構造的に保証される。
+
+```bash
+cd /workspaces/grep_helpers2 && python -c "
+from grep_analyzer.classifiers import _CHASERS
+from grep_analyzer.patterns.literal_masking import MASK_PATTERNS
+assert set(MASK_PATTERNS.keys()) == set(_CHASERS.keys()), \
+    f'key mismatch: MASK_PATTERNS={set(MASK_PATTERNS.keys())} vs _CHASERS={set(_CHASERS.keys())}'
+print('key set match OK:', sorted(_CHASERS.keys()))
+"
+```
+
+Expected: `key set match OK: ['c', 'java', 'proc', 'shell', 'sql']`。キー不一致なら BLOCKED 報告（Task 6-9 / Task 10 のいずれかでキー追加漏れ）。
+
+**masked vs raw 引数の論点**（M2 反映）: 旧 `extract_chase_symbols` は内部で `mask_literals` してから `extract_var_symbols(language, dialect, masked)` を呼んでいた（chase.py:95）。新 dispatcher の `extract_chase_symbols` は `chaser.extract(dialect, line)` に **生行** を渡し、各 Chaser の `extract` が内部で `mask` を呼ぶ実装になる（Task 6-9 で確認済）。そのため、生行を渡しても Chaser 内で一度マスクされ、結果は旧実装と完全同等。`_extract_var_symbols` も同様に各 Chaser 内で `masked` を受けて動作する（shell_chaser:_extract_var_symbols / sql_chaser:_extract_var_symbols）。
+
+**`_extract_var_symbols` が leaky private API である件**: chase.py dispatcher が `_extract_var_symbols` を shell_chaser / sql_chaser から import するのは、`extract_var_symbols` (fixedpoint が直接呼ぶ言語非依存 IF) と `Chaser.extract` (Chaser Protocol) が **別経路** だから。java / c は `extract_var_symbols` が空リストを返す既存挙動を維持するため、Chaser に第 3 メソッドを追加しなくて済むよう dispatcher の if 分岐で表現する。Phase 4 横断 rename で再整理する候補（regex `_extract_var_symbols` を `extract_var_assignments` 等に rename しつつ、Chaser に第 3 メソッドとして追加する選択肢あり）。
+
 - [ ] **Step 1: chase.py を dispatcher 化**
 
 Replace `/workspaces/grep_helpers2/src/grep_analyzer/chase.py` entirely with:
@@ -1016,7 +1068,7 @@ Expected: tests/golden 配下の 22 ケース全件 PASSED。
 
 Run: `cd /workspaces/grep_helpers2 && git log --oneline 6cf2ca2..HEAD`
 
-Expected: Phase 2 の commit 一覧。Task 3 / Task 5 / Task 6 / Task 7 / Task 8 / Task 9 / Task 10 / Task 11 / Task 12 の 9 commit（または Task 3 が「dead code 削除」になった場合は同様の数）。
+Expected: Phase 2 の commit 一覧。Task 3 / Task 4 / Task 6 / Task 7 / Task 8 / Task 9 / Task 10 / Task 11 / Task 12 の 9 commit。Task 5 はラベル統合により独立 commit を持たない（Task 4 に atomic に含まれる）。Task 4-5 を 1 commit にまとめる atomic 設計のため、計数は 9 件で正しい。
 
 - [ ] **Step 4: ファイル構造確認**
 
