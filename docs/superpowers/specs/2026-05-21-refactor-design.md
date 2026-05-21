@@ -61,8 +61,8 @@ Phase 4: 命名・コメントの全モジュール横断適用
 | `cs` | `chase_symbols` | chase.py, fixedpoint.py |
 | `dia` | `dialect` | fixedpoint.py |
 | `prog` | `progress` | fixedpoint.py |
-| `agg` | `hits_by_relpath` 等の意図名 | fixedpoint.py（マルチパス内ローカル、有効範囲 15 行で N5 除外には該当しない） |
-| `meta` | `file_meta_by_relpath` | fixedpoint.py（マルチパス内ローカル、有効範囲 15 行で N5 除外には該当しない） |
+| `agg` | `hits_by_relpath` 等の意図名 | fixedpoint.py L273-288（マルチパス分岐内ローカル、定義から最終参照まで 16 物理行で N5 除外境界の 3 行を大幅に超える） |
+| `meta` | `file_meta_by_relpath` | fixedpoint.py L274-286（同上、ループ内頻繁参照） |
 | `m` (mask) | `masked_lines` | snippet.py |
 | `t` (type/text) | `node_type` / `text` | snippet.py |
 | `d` (balance) | `paren_depth` | snippet.py |
@@ -95,7 +95,13 @@ Phase 4: 命名・コメントの全モジュール横断適用
 - 内包表記 / ジェネレータ式内の束縛変数（`[x for x in xs]` の `x`）
 - ループカウンタの慣用識別子（`for i in range(...)` の `i`/`j`/`k`）
 - アンダースコア単独（`_`）の意図的破棄
-- **関数定義開始から最後の参照までが 3 行以内** のローカル変数（plan で目視判定。AST 解析は不要）
+- **定義から最終参照までの物理行数（コメント・空行含む）が 3 行以内**のローカル変数（plan で目視判定。AST 解析は不要）
+
+**N5 計数方法（plan で適用する判定規約）**:
+- 計数対象は **当該識別子のスコープ内の最初の binding 行から最後の参照行まで**
+- 物理行数で計数（コメント行・空行も含む）
+- 同名の再 binding がある場合は最初の binding 行から数える
+- ループ内で何度も再代入される一時辞書（例: `agg = {}` を毎反復作成）はループ全体を有効範囲とする
 
 **除外しない**（規約対象）:
 - 関数引数（公開・内部問わず）
@@ -293,6 +299,28 @@ fixedpoint/
 
 **`ChaseState` 構造（概形）**:
 
+注: `ChaseState` は **Phase 3 [A] で新規作成する**データクラス。現状の `run_fixedpoint()` 内 14 個の局所変数 + `policy` / `budget` / `graph` / `keyword` / `edge_store` を移植する。下表はマッピング:
+
+| 現状（fixedpoint.py 内） | ChaseState フィールド |
+|---|---|
+| `policy` (L112) | `policy` |
+| `budget` (L113) | `budget` |
+| `graph` (L114) | `graph` |
+| `keyword` (L115) | `keyword` |
+| `intro` (L117) | `introducers` |
+| `sym_kind` (L118) | `symbol_kind` |
+| `sym_hop` (L119) | `symbol_hop` |
+| `estore` (L120) | `edge_store` |
+| `spill_logged` (L121) | `spill_logged` |
+| `chase_active`/`chase_done` (L122-123) | 同名 |
+| `term_active`/`term_done` (L124-125) | `terminal_active` / `terminal_done` |
+| `capped` (L126) | `capped` |
+| `no_expand_logged`/`replaced_logged`/`maxdepth_logged` (L127-129) | 同名 |
+| `rel_to_abs` (L192) | `rel_to_abs` |
+| `enc_of` (L217) | `encoding_of` |
+
+最終的なフィールド一覧は Phase 3 plan で確定する。
+
 ```python
 @dataclass
 class ChaseState:
@@ -455,6 +483,21 @@ N1〜N4 と R1〜R4 は **同 Phase 内で適用順序を持つ**。Phase 4 plan
 4. **R1 (DRY 判定) の再検査**: rename 完了後、同名・同責務に見える構造が新たに発生していないか確認。発生していれば R2〜R4 に従って判定
 
 理由: rename 前の `rel` / `relative_path` / `rel_path` のように N4 違反が混在している段階では、R1 の「同じ用語で説明できるか」を判定できない。表記揺れを先に N4 で潰してから DRY 判定を行う。
+
+**R1 再検査の具体手段**（Phase 4 plan で実施）:
+
+(a) **同名 import 横断検出**: rename 後に同じ識別子名がモジュール間で参照されている箇所を機械抽出。例:
+```bash
+grep -rEn 'hits_by_relpath|file_meta_by_relpath|introducers|edge_store' src/
+```
+出現が複数モジュールに跨る場合、(i) 共通定義を 1 モジュールに寄せるべきか、(ii) たまたま同名で責務が違うかを目視判定。
+
+(b) **同責務疑い構造の検出**: 同じ動詞 (`build_*` / `compute_*` / `extract_*`) を持つ複数関数を grep で抽出し、シグネチャと docstring を 1 行で並べて比較。
+```bash
+grep -rEn 'def (build|compute|extract|sanitize)_' src/
+```
+
+(c) (a)(b) のいずれかでヒットがあれば、R1 の 3 判定基準（同一知識か / 同じ用語で説明できるか / Rule of Three）に照らして判定。集約する場合は R2 の用途別サブモジュール原則に従う。
 
 ### V6 性能リグレッション抑止
 
