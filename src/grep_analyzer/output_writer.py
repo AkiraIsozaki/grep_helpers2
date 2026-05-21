@@ -15,12 +15,12 @@ from pathlib import Path
 
 from grep_analyzer import __version__
 from grep_analyzer.model import TSV_COLUMNS, Hit, sort_key
-from grep_analyzer.tsv import _sanitize
+from grep_analyzer.tsv import sanitize_field
 
 
 def _data_line(h: Hit) -> str:
-    """1 データ行を生成する（tsv._sanitize 適用後にタブ結合）。"""
-    return "\t".join(_sanitize(c) for c in h.to_row())
+    """1 データ行を生成する（tsv.sanitize_field 適用後にタブ結合）。"""
+    return "\t".join(sanitize_field(c) for c in h.to_row())
 
 
 def _blob_from_data_rows(data_rows: list[str]) -> bytes:
@@ -41,7 +41,7 @@ def _rows_from_part_text(text: str) -> list[str]:
 
     書込時 `"\\n".join([header]+data_lines)+"\\n"`（_part_bytes の整形）の厳密逆＝先頭 BOM 除去 → rstrip("\\n")
     → split("\\n") → 先頭ヘッダ 1 行除去。splitlines() は使わない
-    （_sanitize 非対象の U+2028/U+0085 等で水増しするため＝spec §3 手順1）。
+    （sanitize_field 非対象の U+2028/U+0085 等で水増しするため＝spec §3 手順1）。
     decode 済 utf-8-sig は BOM 自動除去だが、防御的に先頭 U+FEFF も剥がす。
     """
     if text and text[0] == "\ufeff":   # 防御的 BOM 除去（明示）

@@ -1,7 +1,7 @@
 """TSV フィールドのサニタイズ規約。
 
 行 / 改ページ分割クラス（\\t \\r \\n \\v \\f U+0085 U+2028 U+2029）を
-半角空白 1 個に置換する `_sanitize` のみを提供する。書込本体は output_writer.py。
+半角空白 1 個に置換する `sanitize_field` のみを提供する。書込本体は output_writer.py。
 
 Related: spec §9 規約① / docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 2 [E]
 """
@@ -12,6 +12,6 @@ Related: spec §9 規約① / docs/superpowers/specs/2026-05-21-refactor-design.
 _SANITIZE_MAP = {ord(c): " " for c in "\t\r\n\x0b\x0c\x85  "}
 
 
-def _sanitize(cell: str) -> str:
+def sanitize_field(cell: str) -> str:
     """フィールド内のタブ・改行・行分割クラスを空白へ置換する（spec §9）。"""
     return cell.translate(_SANITIZE_MAP)

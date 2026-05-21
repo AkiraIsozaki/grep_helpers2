@@ -14,8 +14,8 @@ def _hit(file, lineno, snippet):
 
 
 def test_canonical_blob_はsanitize後_split改行で安定():
-    # _sanitize は \t \r \n のみ空白化（U+2028 非対象）。split("\n") 固定ゆえ
-    # U+2028 で水増しせず、かつ snippet 内タブは _sanitize で空白化される。
+    # sanitize_field は \t \r \n のみ空白化（U+2028 非対象）。split("\n") 固定ゆえ
+    # U+2028 で水増しせず、かつ snippet 内タブは sanitize_field で空白化される。
     h = _hit("a.java", 1, "x y\tz")
     blob = _canonical_data_blob([h])
     assert blob.count(b"\n") == 0          # 1 データ行（U+2028 で割れない）

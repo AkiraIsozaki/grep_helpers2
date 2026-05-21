@@ -10,7 +10,7 @@ from grep_analyzer.snippet._clamp import clamp_lines
 from grep_analyzer.snippet._heuristic import heuristic_span
 from grep_analyzer.snippet._sanitize_line import _escape_sep, _physical_lines
 from grep_analyzer.snippet._ts import proc_exec_span, ts_span
-from grep_analyzer.tsv import _sanitize
+from grep_analyzer.tsv import sanitize_field
 
 __all__ = [
     "build_snippet",
@@ -31,7 +31,7 @@ def build_snippet(language: str, dialect: str, file_text: str,
       mask_exec_sql 後 C 解析）→ いずれも None なら ヒット 1 行（spec §7/§9）。
     sql/shell: heuristic_span（AST 非使用）。
     `dialect` は将来 cshell 境界用の予約引数（v1 未使用・呼出互換のため受領）。
-    連結前に各行へ _sanitize→_escape_sep を適用し clamp_lines。
+    連結前に各行へ sanitize_field→_escape_sep を適用し clamp_lines。
 
     Related: spec §7, §9
     """
@@ -53,5 +53,5 @@ def build_snippet(language: str, dialect: str, file_text: str,
     span_start, span_end = span
     span_start = max(0, min(span_start, hit))
     span_end = min(len(lines) - 1, max(span_end, hit))
-    body = [_escape_sep(_sanitize(x)) for x in lines[span_start:span_end + 1]]
+    body = [_escape_sep(sanitize_field(x)) for x in lines[span_start:span_end + 1]]
     return clamp_lines(body, hit - span_start)
