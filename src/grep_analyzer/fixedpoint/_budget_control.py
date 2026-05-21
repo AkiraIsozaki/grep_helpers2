@@ -1,4 +1,4 @@
-"""グローバル cap / spill / nchunks 計算（L164 優先 1）。
+"""グローバル cap / spill / nchunks 計算。
 
 - apply_global_cap: --memory-limit / --max-symbols でシンボル集合を切り詰める。
   単調縮小・決定的（キー: (symbol_hop, len(s), s)）。

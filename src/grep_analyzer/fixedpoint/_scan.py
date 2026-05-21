@@ -60,10 +60,9 @@ def kinds_of(language: str, dialect: str, line: str) -> dict[str, str]:
 def scan_hop(scan_symbols, scan_files, opts, nchunks):
     """1 hop の走査を chunks に分けて実行し、relpath 単位の集約済み結果を返す。
 
-    `nchunks=1` の場合は単一 chunk として全 symbol を 1 度に走査する（既存
-    fixedpoint.py L260-272 の単発経路と byte 同値）。`nchunks>1` の場合は
-    chunk 別に Pool.map し、relpath 単位で found を集約してから (lineno, symbol) で
-    再ソート（既存 L273-289 と byte 同値）。
+    `nchunks=1` の場合は単一 chunk として全 symbol を 1 度に走査する。`nchunks>1`
+    の場合は chunk 別に Pool.map し、relpath 単位で found を集約してから
+    (lineno, symbol) で再ソートする。いずれの経路も出力 byte は同値。
 
     戻り値: (pass_results, n_actual_chunks)
       - pass_results: [(relpath, enc, replaced, language, dialect, found)] の list
