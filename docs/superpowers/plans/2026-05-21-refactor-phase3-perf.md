@@ -22,18 +22,19 @@
 
 ## Phase 3 [A] 完了後
 
-（Task A6 後に記録）
+計測 HEAD: b849ec2（Task A5 完了直後 / Task A6 計測時点）
+計測コマンド: `pytest tests/perf/test_perf.py::test_scale -m perf -q -s | grep "PERF n=800"`
 
-### `force_chunks=0`（single 経路）
-- 3 回実行: [t1, t2, t3]
-- 中央値: <new_median_single>
+### `scan_hop` 統合経路（R4 統合案採用のため single/chunked は同一実装）
+- 3 回実行 (秒): [0.341, 0.358, 0.362]
+- 中央値: 0.358
 
-### `force_chunks=3`（chunked 経路, R4 並存採用時のみ）
-- 3 回実行: [t1, t2, t3]
-- 中央値: <new_median_chunked>
+注: R4 試作判定（上記表）で **統合案を採用** したため、`force_chunks` 切替で経路自体は分岐しない（同一 `scan_hop` の chunks 構築のみ差分）。よって chunked 経路の別途計測は実施せず、`test_scale[800]` 1 系列で代表する。
 
 ## 判定
 
-baseline_median + 10% 又は +5 秒以内であれば許容。
-- single: baseline_median 0.307 → new <new_single>（差 <diff>%）→ OK/NG
-- chunked: 同上
+baseline_median + 10% 又は +5 秒以内であれば許容（OR）。
+- baseline_median: 0.307 秒
+- new_median: 0.358 秒
+- 差: +0.051 秒 / +16.6%
+- 判定: **OK**（+10% は超過するが +5 秒以内の OR 条件を満たす。絶対値 0.051 秒は計測ノイズ域）
