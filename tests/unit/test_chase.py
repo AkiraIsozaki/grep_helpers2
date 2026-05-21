@@ -1,6 +1,10 @@
 """追跡シンボル抽出規則の仕様（spec §8.1・Phase 2 が消費）。"""
 
-from grep_analyzer.chase import extract_var_symbols
+from grep_analyzer.chase import (
+    extract_chase_symbols,
+    extract_var_symbols,
+    mask_literals,
+)
 
 
 def test_Oracleの代入左辺を抽出する():
@@ -41,10 +45,6 @@ def test_Oracleのトリガ相関名とレコードフィールドはv1既知境
     assert extract_var_symbols("sql", "", ":new.col := 1") == ["col"]
     assert extract_var_symbols("sql", "", ":old.col := 1") == ["col"]
     assert extract_var_symbols("sql", "", "rec.field := 1") == ["field"]
-
-
-from grep_analyzer.chase import extract_chase_symbols, mask_literals
-from grep_analyzer.model import ChaseSymbols
 
 
 def test_文字列とコメントをマスクし行長を保つ():
@@ -107,7 +107,6 @@ def test_bourneのreadonlyは定数SQLとcshellはvarのみ():
 
 
 def test_var抽出は既存extract_var_symbolsと一致する():
-    from grep_analyzer.chase import extract_var_symbols
     line = 'CODE="X"'
     assert list(extract_chase_symbols("shell", "bourne", line).vars) == extract_var_symbols(
         "shell", "bourne", line)
