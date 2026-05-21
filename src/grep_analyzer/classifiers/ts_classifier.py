@@ -39,11 +39,12 @@ def _parser(language: str) -> Parser:
     return p
 
 
-def _node_at_line(root, lineno: int):
-    """対象行（0始まり=lineno-1）を内包する最小ノードを決定的に返す。
+def node_at_line(root, lineno: int):
+    """対象行（lineno は1始まり=内部で-1）を内包する最小ノードを決定的に返す。
 
     同スパンの曖昧さを除くため、`(行スパン, start_byte, end_byte, ノード型)` の最小で
     一意に選ぶ（走査順に依存しない決定的な全順序・spec §9 決定性）。
+    classify_ts（内部）と snippet/_ts.py（公開）が共有する。
     """
     target = lineno - 1
     best = None
@@ -63,7 +64,7 @@ def classify_ts(language: str, source: str, lineno: int) -> ClassifyResult:
     """ファイル全体を AST 解析し、対象行を含む構文要素から分類する。"""
     src = mask_exec_sql(source) if language == "proc" else source
     tree = _parser(language).parse(src.encode("utf-8"))
-    node = _node_at_line(tree.root_node, lineno)
+    node = node_at_line(tree.root_node, lineno)
     while node is not None:
         cat = _CATEGORY_BY_NODE.get(node.type)
         if cat is not None:
@@ -75,8 +76,3 @@ def classify_ts(language: str, source: str, lineno: int) -> ClassifyResult:
 def parse_tree(language: str, source: str):
     """snippet 用: ソースを parse し root_node を返す（lang は "java"/"c"）。"""
     return _parser(language).parse(source.encode("utf-8")).root_node
-
-
-def node_at_line(root, lineno: int):
-    """snippet 用公開ラッパ。lineno は1始まり（_node_at_line 互換・内部で-1）。"""
-    return _node_at_line(root, lineno)
