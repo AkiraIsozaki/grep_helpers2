@@ -1,8 +1,10 @@
-"""任意 ripgrep 一次粗フィルタ（spec §8.2）。walk の上位集合（.gitignore/
+"""任意 ripgrep 一次粗フィルタ。walk の上位集合（.gitignore/
 
 隠し/バイナリを除外しない＝バイナリ境界は walk の _is_binary 単一）。rg
 不在/失敗は None＝フィルタ無効（全件走査）。出力不変（除外 relpath は部分
 文字列すら持たず automaton 0 ヒット確定）。
+
+Related: spec §8.2
 """
 
 import shutil

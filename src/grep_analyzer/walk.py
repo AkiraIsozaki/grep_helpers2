@@ -1,6 +1,8 @@
-"""決定的ツリー走査（spec §8.2）。relpath 昇順・glob・サイズ/バイナリ skip・
+"""決定的ツリー走査。relpath 昇順・glob・サイズ/バイナリ skip・
 
 生成コード既定除外・symlink は既定で辿らず realpath 重複排除。走査順非依存決定的。
+
+Related: spec §8.2
 """
 
 import fnmatch

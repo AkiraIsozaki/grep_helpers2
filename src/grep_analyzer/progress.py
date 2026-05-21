@@ -1,6 +1,8 @@
-"""標準エラー進捗（spec §8.2）。level=="on" 以外は完全無音。注入された
+"""標準エラー進捗。level=="on" 以外は完全無音。注入された
 
 stream（既定 sys.stderr）専用で TSV/diagnostics/終了コードに無影響。
+
+Related: spec §8.2
 """
 
 import sys

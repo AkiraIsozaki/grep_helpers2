@@ -1,4 +1,7 @@
-"""言語別行分類の共有実装（spec §7）。pipeline と fixedpoint が共通利用する。"""
+"""言語別行分類の共有実装。pipeline と fixedpoint が共通利用する。
+
+Related: spec §7
+"""
 
 from grep_analyzer.classifiers.base import ClassifyResult
 from grep_analyzer.classifiers.regex_classifier import classify_shell, classify_sql

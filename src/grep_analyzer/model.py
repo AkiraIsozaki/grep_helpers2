@@ -1,4 +1,7 @@
-"""ドメインモデル（Hit）とTSVスキーマ・決定的ソート（spec §9）。"""
+"""ドメインモデル（Hit）とTSVスキーマ・決定的ソート。
+
+Related: spec §9
+"""
 
 from dataclasses import dataclass
 

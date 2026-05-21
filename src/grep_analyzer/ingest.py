@@ -1,4 +1,7 @@
-"""input/*.grep の行パース（spec §6）。"""
+"""input/*.grep の行パース。
+
+Related: spec §6
+"""
 
 import re
 

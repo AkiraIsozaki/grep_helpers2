@@ -1,7 +1,9 @@
-"""出力確定モジュール（spec §2/§3）。
+"""出力確定モジュール。
 
 安定ソート→正規化→part分割→各part原子書込→manifest原子確定→孤児クリーン。
 正規形は _canonical_data_blob に一元化（書込側=完了判定=テストが共有）。
+
+Related: spec §2, §3
 """
 
 import hashlib

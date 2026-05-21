@@ -1,4 +1,7 @@
-"""来歴グラフと chain 正規形（spec §9・07e81bb 明確化準拠）。単純パスのみ列挙。"""
+"""来歴グラフと chain 正規形。単純パスのみ列挙（07e81bb 明確化準拠）。
+
+Related: spec §9
+"""
 
 from dataclasses import dataclass
 

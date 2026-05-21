@@ -1,7 +1,9 @@
-"""Pro*C前処理: EXEC SQL / EXEC ORACLE 区間を行数保存で中立トークンに置換（spec §7）。
+"""Pro*C前処理: EXEC SQL / EXEC ORACLE 区間を行数保存で中立トークンに置換。
 
 行番号を原ソースと不変に保つため、置換は各物理行を「同じ行数の空文字列」に潰し
 改行のみ残す（桁ズレは許容、行番号は不変）。
+
+Related: spec §7
 """
 
 import re

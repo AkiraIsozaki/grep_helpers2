@@ -1,4 +1,7 @@
-"""非致命の診断を集約する（spec §10.3）。先頭にカテゴリ別件数サマリ、続いて詳細。"""
+"""非致命の診断を集約する。先頭にカテゴリ別件数サマリ、続いて詳細。
+
+Related: spec §10.3
+"""
 
 from collections import Counter, defaultdict
 

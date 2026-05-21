@@ -1,4 +1,7 @@
-"""direct＋不動点 indirect 併合パイプライン（spec §15）。"""
+"""direct＋不動点 indirect 併合パイプライン。
+
+Related: spec §15
+"""
 
 from dataclasses import replace
 from pathlib import Path

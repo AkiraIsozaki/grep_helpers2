@@ -1,4 +1,7 @@
-"""ファイルの言語判定（spec §5.1）。"""
+"""ファイルの言語判定。
+
+Related: spec §5.1
+"""
 
 import os
 import re

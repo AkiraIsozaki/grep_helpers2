@@ -1,4 +1,7 @@
-"""tree-sitter による Java/C/Pro*C 分類（spec §7、py-tree-sitter 0.21 API）。"""
+"""tree-sitter による Java/C/Pro*C 分類。py-tree-sitter 0.21 API に依存。
+
+Related: spec §7
+"""
 
 import tree_sitter_c
 import tree_sitter_java

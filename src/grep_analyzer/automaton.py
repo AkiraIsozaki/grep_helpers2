@@ -1,4 +1,7 @@
-"""pyahocorasick ラッパ（spec §8.2）。識別子語境界一致のみ採用し決定的に返す。"""
+"""pyahocorasick ラッパ。識別子語境界一致のみ採用し決定的に返す。
+
+Related: spec §8.2
+"""
 
 import ahocorasick
 

@@ -1,10 +1,12 @@
-"""来歴エッジのディスクスピル（spec §8.2 priority-2）。予算内メモリ・超過で
+"""来歴エッジのディスクスピル（priority-2）。予算内メモリ・超過で
 
 ディスク追記退避。sorted_unique は in-memory/spill いずれでも
 sorted(set(edges)) と同一（出力透過・決定的）。in_memory_len はメモリ常駐数
 （スピル後 0＝estimate_items にスピルが圧解消として反映）。maybe_spill_now は
 engine priority-2 用で内部 _spill_now 直呼び（_force_spill_threshold は
 Task2 unit 専用・本番経路から設定しない）。
+
+Related: spec §8.2
 """
 
 import os

@@ -1,13 +1,15 @@
-"""不動点・ターゲットスキャン・エンジン（spec §8.1/§8.2/§8.3）。
+"""不動点・ターゲットスキャン・エンジン。
 
 direct ヒットを seed に constant/var を多ホップ追跡し indirect ヒットと chain を
 出す。getter/setter は §8.3 で横展開しないが全反復走査・全件 low 報告(§8.4)。
-来歴エッジは introducers（実抽出元 Occurrence 群）ベース＝spec §8.2 を精密化(偽 chain 根治)。
-出力は走査順・並列完了順に非依存で決定的(spec §9)。
+来歴エッジは introducers（実抽出元 Occurrence 群）ベース＝§8.2 を精密化(偽 chain 根治)。
+出力は走査順・並列完了順に非依存で決定的(§9)。
 
-停止性(spec §8.1 手順5): 追跡シンボルは原ソース字句のみ。母集合有限・採用集合
+停止性(§8.1 手順5): 追跡シンボルは原ソース字句のみ。母集合有限・採用集合
 単調増加(state.chase_done から削らない＝cap は state.capped で scan 除外のみ)。よって高々
 |母集合| ステップで飽和。--max-depth/max_symbols/max_paths は安全弁。
+
+Related: spec §8.1, §8.2, §8.3, §8.4, §9
 """
 
 from pathlib import Path

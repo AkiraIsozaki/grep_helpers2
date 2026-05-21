@@ -1,4 +1,7 @@
-"""SQL/Shell の正規表現分類（spec §7）。"""
+"""SQL/Shell の正規表現分類。
+
+Related: spec §7
+"""
 
 import re
 
