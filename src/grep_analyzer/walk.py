@@ -19,19 +19,21 @@ DEFAULT_EXCLUDE: tuple[str, ...] = (
 
 
 def _match_one(relpath: str, pat: str) -> bool:
-    rseg = relpath.split("/")
-    pseg = pat.split("/")
+    rel_segs = relpath.split("/")
+    pat_segs = pat.split("/")
 
-    def m(ri: int, pi: int) -> bool:
-        if pi == len(pseg):
-            return ri == len(rseg)
-        if pseg[pi] == "**":
-            return any(m(k, pi + 1) for k in range(ri, len(rseg) + 1))
-        if ri == len(rseg):
+    def match_segments(rel_idx: int, pat_idx: int) -> bool:
+        if pat_idx == len(pat_segs):
+            return rel_idx == len(rel_segs)
+        if pat_segs[pat_idx] == "**":
+            return any(match_segments(k, pat_idx + 1)
+                       for k in range(rel_idx, len(rel_segs) + 1))
+        if rel_idx == len(rel_segs):
             return False
-        return fnmatch.fnmatch(rseg[ri], pseg[pi]) and m(ri + 1, pi + 1)
+        return (fnmatch.fnmatch(rel_segs[rel_idx], pat_segs[pat_idx])
+                and match_segments(rel_idx + 1, pat_idx + 1))
 
-    return m(0, 0)
+    return match_segments(0, 0)
 
 
 def _match_any(relpath: str, patterns: list[str]) -> bool:

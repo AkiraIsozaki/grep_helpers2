@@ -20,9 +20,9 @@ _EXEC_RE = re.compile(
 def mask_exec_sql(source: str) -> str:
     """EXEC SQL/ORACLE 区間を中立化。区間内の各行を空行化し改行数を保存する。"""
 
-    def _blank(m: re.Match) -> str:
+    def _blank(match: re.Match) -> str:
         # マッチ内の改行数を保ち、各行の中身を消す（行番号不変）
-        return "\n" * m.group(0).count("\n")
+        return "\n" * match.group(0).count("\n")
 
     return _EXEC_RE.sub(_blank, source)
 
@@ -32,7 +32,8 @@ _PROC_LIT_RE = MASK_PATTERNS["proc"]
 
 def _blank_literals(source: str) -> str:
     return _PROC_LIT_RE.sub(
-        lambda m: "".join(c if c == "\n" else " " for c in m.group(0)), source)
+        lambda match: "".join(c if c == "\n" else " " for c in match.group(0)),
+        source)
 
 
 def exec_spans(source: str) -> list[tuple[int, int]]:
