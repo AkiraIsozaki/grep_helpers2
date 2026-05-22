@@ -17,7 +17,9 @@
       "Skill(superpowers:finishing-a-development-branch)",
       "Skill(superpowers:using-superpowers)",
       "Skill(superpowers:executing-plans)",
-      "Skill(superpowers:dispatching-parallel-agents)"
+      "Skill(superpowers:dispatching-parallel-agents)",
+      "Skill(superpowers:requesting-code-review)",
+      "WebFetch(domain:pypi.org)"
     ]
   }
 }
