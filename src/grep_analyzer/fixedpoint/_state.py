@@ -3,8 +3,6 @@
 main process でのみ保持・更新する（multiprocessing worker には渡さない）。
 worker には _scan_file へ (relpath, abspath, symbol_list, lang_map, fallback) の
 プリミティブのみ渡す（pickle 制約 + Inv-E 決定性維持）。
-
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
 """
 
 from dataclasses import dataclass, field

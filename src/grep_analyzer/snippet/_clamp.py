@@ -3,7 +3,7 @@
 ヒット行を中心に上下対称に拡張し、行数 LINE_MAX / 文字数 CHAR_MAX で
 頭打ちにする。文字数は連結後 body の Python `len()`（コードポイント数）。
 
-Related: spec §9 / docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [C]
+Related: spec §9
 """
 
 SEP = " \\n "

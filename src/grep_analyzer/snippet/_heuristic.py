@@ -3,7 +3,7 @@
 mask_literals を行ごとに適用し、句境界・文末・shell 終端で停止する。
 heredoc は mask 非対応＝§8.4 既知境界。LINE_MAX で必ず有限停止。
 
-Related: spec §9 / docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [C]
+Related: spec §9
 """
 
 from grep_analyzer.chase import mask_literals

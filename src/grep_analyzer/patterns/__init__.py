@@ -4,6 +4,4 @@
 - snippet_boundaries: スニペット切り出しの境界判定用
 - literal_masking: 言語別リテラル/コメントのマスク用
 - symbol_extraction: 言語別シンボル抽出用
-
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §5 R2, §6 Phase 1
 """

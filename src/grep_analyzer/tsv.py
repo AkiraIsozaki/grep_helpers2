@@ -3,7 +3,7 @@
 行 / 改ページ分割クラス（\\t \\r \\n \\v \\f U+0085 U+2028 U+2029）を
 半角空白 1 個に置換する `sanitize_field` のみを提供する。書込本体は output_writer.py。
 
-Related: spec §9 規約① / docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 2 [E]
+Related: spec §9 規約①
 """
 
 # spec §9 サニタイズ規約①: 行/改ページ分割クラスを半角空白1個へ

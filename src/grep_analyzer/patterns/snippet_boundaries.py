@@ -2,8 +2,6 @@
 
 `heuristic_span` が sql / shell のスパン停止条件として参照する。
 判定対象はマスク後の行末・句境界・shell 終端構文。
-
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 1
 """
 
 import re

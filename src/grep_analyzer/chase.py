@@ -4,8 +4,6 @@
 `_CHASERS[language]` で取得する。本ファイルは public API
 （extract_var_symbols / mask_literals / extract_chase_symbols）を保持しつつ
 内部実装を Chaser に委譲する薄い dispatcher のみ。
-
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 2 [B]
 """
 
 from grep_analyzer.classifiers import _CHASERS

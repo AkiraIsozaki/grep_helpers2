@@ -8,8 +8,6 @@
 - Shell (cshell): `set v =` / `setenv V` / `@ v =` の左辺
 - Java: getter/setter, static final 定数, 一般変数代入
 - C / Pro*C: `#define`, `const ... var =`, 一般変数代入
-
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 1
 """
 
 import re

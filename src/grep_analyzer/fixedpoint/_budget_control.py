@@ -9,7 +9,7 @@
 注: compute_nchunks は **chase_active/terminal_active を空にした直後**に呼ばれる
 前提（n_live はその時点の (chase|terminal)_done 集合のみから計算される）。
 
-Related: spec §8.2, §8.3 / docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
+Related: spec §8.2, §8.3
 """
 
 from grep_analyzer import budget as _budget

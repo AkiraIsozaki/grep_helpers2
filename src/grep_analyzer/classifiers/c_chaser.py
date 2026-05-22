@@ -3,8 +3,6 @@
 C と Pro*C は同じ抽出規則を共有する（Pro*C は C のスーパーセット）。
 chase.py の dispatcher が `_CHASERS["c"]` / `_CHASERS["proc"]` 経由で呼び出す。
 Pro*C のホスト変数 `:var` は追跡投入しない（spec §8.1 手順1 外部・ホスト境界）。
-
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 2 [B]
 """
 
 from grep_analyzer.model import ChaseSymbols

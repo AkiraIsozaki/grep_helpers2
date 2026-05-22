@@ -3,7 +3,7 @@
 物理行分解は末尾改行由来の人工空要素を 1 個だけ除去する。
 区切り衝突エスケープは行中の ' \\n ' と同一 4 文字並びの \\ を二重化する。
 
-Related: spec §9 / docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [C]
+Related: spec §9
 """
 
 from grep_analyzer.snippet._clamp import SEP

@@ -4,7 +4,7 @@ edge_store の (parent, child) を graph に追加し、終端 Occurrence ごと
 chain_to を列挙して indirect Hit を生成する。seed と同じ (relpath, lineno) は
 除外する（seed は direct 側で既に出力されている）。
 
-Related: spec §8.2, §9 / docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
+Related: spec §8.2, §9
 """
 
 from grep_analyzer.classify import classify_hit

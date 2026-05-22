@@ -5,8 +5,6 @@ dialect 引数で bourne / cshell を分岐する。
 - cshell: `set v =` / `setenv V` / `@ v =` の左辺
 
 chase.py の dispatcher が `_CHASERS["shell"]` 経由で呼び出す。
-
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 2 [B]
 """
 
 from grep_analyzer.model import ChaseSymbols

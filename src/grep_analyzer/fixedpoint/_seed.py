@@ -3,8 +3,6 @@
 seed ファイルを実読してその行から spec §5.1 決定的に language/dialect を確定し、
 hop=1 で initial ingest を行う。is_seed=True なので「自分が自分を再抽出」も
 許容する（seed は keyword 原点）。
-
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
 """
 
 from pathlib import Path

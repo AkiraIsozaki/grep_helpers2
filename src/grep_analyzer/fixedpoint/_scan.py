@@ -7,8 +7,6 @@ worker からの戻り値を呼出側で追跡状態へ反映する（worker iso
 
 `file_meta` / `kinds_of` は追跡状態を引数に取らない純関数 helper として
 `_seed` / `_ingest` / `_finalize` から共有 import される（pickle 制約と矛盾なし）。
-
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 3 [A]
 """
 
 import multiprocessing

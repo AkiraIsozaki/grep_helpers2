@@ -5,8 +5,6 @@ PL/SQL の `var := 式` の左辺を var として抽出する。
 constant / getter / setter は SQL では発生しないため常に空タプル。
 
 chase.py の dispatcher が `_CHASERS["sql"]` 経由で呼び出す。
-
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 2 [B]
 """
 
 from grep_analyzer.model import ChaseSymbols

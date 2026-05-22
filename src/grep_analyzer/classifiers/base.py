@@ -2,8 +2,6 @@
 
 ClassifyResult: direct 行の分類結果型。
 Chaser: 言語別 Chaser サブモジュールが実装する抽出 IF。
-
-Related: docs/superpowers/specs/2026-05-21-refactor-design.md §6 Phase 2 [B]
 """
 
 from typing import Callable, Protocol
