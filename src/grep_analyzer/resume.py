@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from grep_analyzer import __version__
+from grep_analyzer.budget import _ITEMS_PER_MB
 from grep_analyzer.output_writer import _blob_from_data_rows, _rows_from_part_text
 
 
@@ -38,7 +39,6 @@ def is_complete(out_dir: Path, keyword: str, opts) -> bool:
     sha = hashlib.sha256(_blob_from_data_rows(data_rows)).hexdigest()
     if sha != m.get("data_sha256"):                           # 条件4（書込側と同一関数）
         return False
-    from grep_analyzer.budget import _ITEMS_PER_MB
     if m.get("tool_version") != __version__:                  # 条件5
         return False
     if m.get("items_per_mb") != _ITEMS_PER_MB:                # 条件5
