@@ -27,8 +27,10 @@ def _blob_from_data_rows(data_rows: list[str]) -> bytes:
     """データ行列→正規バイト列（唯一の正規化終端）。書込側・完了判定側が共有。
 
     末尾改行無・LF 連結・"utf-8"（BOM 無 codec）。spec §3 手順1。
+    surrogate（FS 走査由来パス等）は errors="replace" で潰す＝_part_bytes と同規約に
+    揃え、書込側 sha・完了判定側 sha・TSV 実体の round-trip を一致させる。
     """
-    return "\n".join(data_rows).encode("utf-8")
+    return "\n".join(data_rows).encode("utf-8", errors="replace")
 
 
 def _canonical_data_blob(ordered: list[Hit]) -> bytes:
@@ -82,8 +84,10 @@ def _part_bytes(header: str, data_rows: list[str], encoding: str) -> bytes:
 
 def _write_manifest(out_dir: "Path", keyword: str, manifest: dict) -> None:
     """manifest を原子確定（②フェーズ・テストの monkeypatch フック点）。"""
+    # keyword（=.grep 名）に surrogate が混じっても落とさない（errors="replace"）。
+    # ensure_ascii=False は surrogate を str のまま残すため strict だと encode で倒れる。
     blob = json.dumps(manifest, sort_keys=True, ensure_ascii=False,
-                       separators=(",", ":")).encode("utf-8")
+                       separators=(",", ":")).encode("utf-8", errors="replace")
     _atomic_write(out_dir / f"{keyword}.manifest.json", blob)
 
 

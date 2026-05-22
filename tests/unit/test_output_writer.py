@@ -57,6 +57,24 @@ def _mk(n):
     return [_hit(f"f{i:05d}.java", i, f"s{i}") for i in range(n)]
 
 
+def test_canonical_blob_サロゲート文字でも落ちずreplaceで潰れる():
+    # surrogateescape 由来の孤立サロゲート（FS 走査由来の indirect パス等）を
+    # 含む Hit でも data_sha256 用 encode が落ちない（strict UTF-8 だと crash）。
+    h = _hit("a_\udc95.java", 1, "s")
+    blob = _canonical_data_blob([h])
+    assert b"a_?.java" in blob          # replace で "?" に潰れる
+
+
+def test_finalize_サロゲートkeywordでもmanifestが落ちない(tmp_path):
+    # keyword（=.grep ファイル名）にサロゲートが混じっても manifest json encode が
+    # 落ちず、純UTF-8で読み戻せる。
+    finalize(tmp_path, "K_\udc95", [], _opts())
+    mfiles = list(tmp_path.glob("*.manifest.json"))
+    assert mfiles
+    m = json.loads(mfiles[0].read_text("utf-8"))   # 純UTF-8で復号できる
+    assert m["keyword"] == "K_?"
+
+
 def test_n0は単一ファイル_ヘッダのみ(tmp_path):
     finalize(tmp_path, "K", [], _opts())
     assert (tmp_path / "K.tsv").exists()

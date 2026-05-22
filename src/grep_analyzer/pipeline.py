@@ -3,6 +3,7 @@
 Related: spec §15
 """
 
+import os
 from dataclasses import replace
 from pathlib import Path
 
@@ -51,18 +52,28 @@ def run(
         if opts.resume and resume.is_complete(output_dir, keyword, opts):
             diag.add("resume_skipped", keyword)
             continue
-        text, _, _ = decode_bytes(grep_file.read_bytes(), fb)
+        grep_bytes = grep_file.read_bytes()
+        # content 復号用にファイル単位で文字コードを 1 回だけ判定（chardet 1回・行間一貫）。
+        # パスは生バイトのまま os.fsdecode するため、ここでは encoding のみ使う。
+        _, grep_enc, _ = decode_bytes(grep_bytes, fb)
         hits: list[Hit] = []
 
-        for raw_line in text.splitlines():
+        lines = grep_bytes.split(b"\n")
+        if lines and lines[-1] == b"":
+            lines.pop()                       # 末尾改行による空要素（splitlines 相当）
+        for raw_line in lines:
             parsed = parse_grep_line(raw_line)
             if parsed is None:
                 diag.add("bad_grep_line", f"{grep_file.name}: {raw_line!r}")
                 continue
-            relpath, lineno, content = parsed
+            path_bytes, lineno, content_bytes = parsed
+            # パスは生バイト由来＝os.fsdecode（FS codec＋surrogateescape）で FS と一致。
+            # walk.py の relpath 表現とも統一され、SJIS 混在名でも is_file が当たる。
+            relpath = os.fsdecode(path_bytes)
+            content = content_bytes.decode(grep_enc, errors="replace")
             target = Path(source_root) / relpath
             if not target.is_file():
-                diag.add("missing_source", str(relpath))
+                diag.add("missing_source", relpath)
                 continue
             file_text, enc, replaced = decode_bytes(target.read_bytes(), fb)
             if replaced:
@@ -91,8 +102,11 @@ def run(
         rows = [replace(h, file=f"{src_abs}/{h.file}") for h in hits + indirect]
         output_writer.finalize(output_dir, keyword, rows, opts)
 
+    # SJIS 混在環境では FS 走査由来のファイル名に surrogateescape の孤立サロゲート
+    # (U+DC80〜U+DCFF) が混じる。strict UTF-8 だと "surrogates not allowed" で全体が
+    # 倒れるため backslashreplace で可視化（純UTF-8維持・原因ファイルは復元可能）。
     (output_dir / "diagnostics.txt").write_text(
         diag.render(detail_limit=opts.diagnostics_detail_limit,
                     exempt=SECTION_8_4_CATEGORIES),
-        encoding="utf-8")
+        encoding="utf-8", errors="backslashreplace")
     return 0
