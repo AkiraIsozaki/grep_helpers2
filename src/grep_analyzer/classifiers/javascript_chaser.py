@@ -87,10 +87,32 @@ def handle_binding(node, consts, vars_, getters, setters):
             (getters if kind == "get" else setters).append(name.text.decode("utf-8", "replace"))
 
 
+def _binding_at_line(root, lineno):
+    """対象行を内包する最小スパンの束縛ノードを返す。
+
+    node_at_line は最小ノード（葉トークンになりやすい）を返すため、
+    単一行クラス本体内のメソッド等では binding まで climb できない。
+    本関数は全ノードをスキャンして _BINDING に属し target 行を内包する
+    最小スパンノードを直接選ぶ（spec §6.5 決定性要件を満たす）。
+    """
+    target = lineno - 1
+    best = None
+    best_key = None
+    cursor = [root]
+    while cursor:
+        node = cursor.pop()
+        if node.start_point[0] <= target <= node.end_point[0]:
+            if node.type in _BINDING:
+                key = (node.end_point[0] - node.start_point[0],
+                       node.start_byte, node.end_byte, node.type)
+                if best_key is None or key < best_key:
+                    best, best_key = node, key
+            cursor.extend(node.children)
+    return best
+
+
 def extract_tree(language, root, lineno):
-    node = node_at_line(root, lineno)
-    while node is not None and node.type not in _BINDING:
-        node = node.parent
+    node = _binding_at_line(root, lineno)
     if node is None:
         return ChaseSymbols()
     consts, vars_, getters, setters = [], [], [], []

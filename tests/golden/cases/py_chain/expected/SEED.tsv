@@ -1,0 +1,5 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+SEED	python	{SOURCE_ROOT}/m.py	1	direct	代入		代入 (python)		SEED@m.py:1	SEED = compute()	utf-8	high
+SEED	python	{SOURCE_ROOT}/m.py	2	indirect:constant	代入		代入 (python)	SEED	SEED@m.py:1 -> SEED@m.py:2	DERIVED = SEED + 1	utf-8	high
+SEED	python	{SOURCE_ROOT}/m.py	2	indirect:constant	代入		代入 (python)	DERIVED	SEED@m.py:1 -> SEED@m.py:2 -> DERIVED@m.py:2	DERIVED = SEED + 1	utf-8	high
+SEED	python	{SOURCE_ROOT}/m.py	4	indirect:constant	return		return (python)	DERIVED	SEED@m.py:1 -> SEED@m.py:2 -> DERIVED@m.py:4	    return DERIVED	utf-8	high

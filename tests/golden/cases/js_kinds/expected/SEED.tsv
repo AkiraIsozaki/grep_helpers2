@@ -1,0 +1,8 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+SEED	javascript	{SOURCE_ROOT}/a.js	1	direct	宣言		宣言 (javascript)		SEED@a.js:1	const SEED = init();	utf-8	high
+SEED	javascript	{SOURCE_ROOT}/a.js	2	indirect:constant	宣言		宣言 (javascript)	SEED	SEED@a.js:1 -> SEED@a.js:2	const MIRROR = SEED;	utf-8	high
+SEED	javascript	{SOURCE_ROOT}/a.js	2	indirect:constant	宣言		宣言 (javascript)	MIRROR	SEED@a.js:1 -> SEED@a.js:2 -> MIRROR@a.js:2	const MIRROR = SEED;	utf-8	high
+SEED	javascript	{SOURCE_ROOT}/a.js	3	indirect:constant	宣言		宣言 (javascript)	SEED	SEED@a.js:1 -> SEED@a.js:3	let alias = SEED;	utf-8	high
+SEED	javascript	{SOURCE_ROOT}/a.js	3	indirect:var	宣言		宣言 (javascript)	alias	SEED@a.js:1 -> SEED@a.js:3 -> alias@a.js:3	let alias = SEED;	utf-8	high
+SEED	javascript	{SOURCE_ROOT}/a.js	4	indirect:constant	その他		その他 (javascript)	SEED	SEED@a.js:1 -> SEED@a.js:4	class C { get cached() { return SEED; } }	utf-8	high
+SEED	javascript	{SOURCE_ROOT}/a.js	4	indirect:getter	その他		その他 (javascript)	cached	SEED@a.js:1 -> SEED@a.js:4 -> cached@a.js:4	class C { get cached() { return SEED; } }	utf-8	low

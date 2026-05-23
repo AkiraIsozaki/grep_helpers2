@@ -1,0 +1,4 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+TITLE	tsx	{SOURCE_ROOT}/a.tsx	1	direct	宣言		宣言 (tsx)		TITLE@a.tsx:1	const TITLE = load();	utf-8	high
+TITLE	tsx	{SOURCE_ROOT}/a.tsx	2	indirect:constant	宣言		宣言 (tsx)	TITLE	TITLE@a.tsx:1 -> TITLE@a.tsx:2	const App = () => <div>{TITLE}</div>;	utf-8	high
+TITLE	tsx	{SOURCE_ROOT}/a.tsx	2	indirect:constant	宣言		宣言 (tsx)	App	TITLE@a.tsx:1 -> TITLE@a.tsx:2 -> App@a.tsx:2	const App = () => <div>{TITLE}</div>;	utf-8	high

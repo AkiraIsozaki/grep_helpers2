@@ -1,0 +1,6 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+RED	typescript	{SOURCE_ROOT}/t.ts	1	direct	宣言		宣言 (typescript)		RED@t.ts:1	enum Color { RED, GREEN }	utf-8	high
+RED	typescript	{SOURCE_ROOT}/t.ts	3	indirect:constant	宣言		宣言 (typescript)	RED	RED@t.ts:1 -> GREEN@t.ts:1 -> RED@t.ts:3	  readonly base = RED;	utf-8	high
+RED	typescript	{SOURCE_ROOT}/t.ts	3	indirect:constant	宣言		宣言 (typescript)	base	RED@t.ts:1 -> GREEN@t.ts:1 -> RED@t.ts:3 -> base@t.ts:3	  readonly base = RED;	utf-8	high
+RED	typescript	{SOURCE_ROOT}/t.ts	3	indirect:constant	宣言		宣言 (typescript)	RED	RED@t.ts:1 -> RED@t.ts:3	  readonly base = RED;	utf-8	high
+RED	typescript	{SOURCE_ROOT}/t.ts	3	indirect:constant	宣言		宣言 (typescript)	base	RED@t.ts:1 -> RED@t.ts:3 -> base@t.ts:3	  readonly base = RED;	utf-8	high
