@@ -260,3 +260,23 @@ def test_memory_limit0は分割スピル切り捨て併発でも2回実行決定
     r2 = run_fixedpoint([seed], src, _opts(memory_limit_mb=0, spill_dir=tmp_path,
                                            max_passes=8), Diagnostics())
     assert k(r1) == k(r2)
+
+
+def test_kinds_of_はChaseSymbolsを受けconstant優先():
+    from grep_analyzer.fixedpoint._scan import kinds_of
+    from grep_analyzer.model import ChaseSymbols
+    cs = ChaseSymbols(constants=("C",), vars=("v",), getters=("g",), setters=("s",))
+    k = kinds_of(cs)
+    assert k == {"C": "constant", "v": "var", "g": "getter", "s": "setter"}
+
+
+def test_found_tupleは4要素_chase_symbols同梱_():
+    from grep_analyzer.fixedpoint._scan import _scan_file
+    import pathlib
+    # python ファイルを 1 つ走査し found が4要素 tuple であることを表明
+    src = pathlib.Path(__import__("tempfile").mkdtemp()) / "m.py"
+    src.write_text("SEED = 1\nDER = SEED + 1\n", "utf-8")
+    relpath, enc, replaced, language, dialect, found = _scan_file(
+        (str(src.name), str(src), ["SEED"], {".py": "python"}, []))
+    assert language == "python"
+    assert all(len(t) == 4 for t in found)

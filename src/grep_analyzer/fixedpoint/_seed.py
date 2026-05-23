@@ -8,12 +8,14 @@ hop=1 で initial ingest を行う。is_seed=True なので「自分が自分を
 from pathlib import Path
 
 from grep_analyzer.budget import MemoryBudget
+from grep_analyzer.chase import extract_chase_symbols, extract_chase_symbols_tree
+from grep_analyzer.classifiers import _AST_CHASERS
 from grep_analyzer.diagnostics import Diagnostics
 from grep_analyzer.fixedpoint._ingest import ingest_one
 from grep_analyzer.fixedpoint._options import EngineOptions
-from grep_analyzer.fixedpoint._scan import file_meta
+from grep_analyzer.fixedpoint._scan import file_meta, kinds_of
 from grep_analyzer.fixedpoint._state import ChaseState
-from grep_analyzer.model import Hit
+from grep_analyzer.model import ChaseSymbols, Hit
 from grep_analyzer.provenance import Occurrence, ProvenanceGraph
 from grep_analyzer.spill import EdgeStore
 from grep_analyzer.stoplist import SymbolPolicy, load_stoplist
@@ -46,10 +48,14 @@ def initialize_state(seed_hits: list[Hit], source_root: Path,
             text, _, _, lang, dialect = file_meta(
                 s.file, sp.read_bytes(), opts.lang_map,
                 fallback_chain=list(opts.encoding_fallback))
-            _ls = text.split("\n")
-            seed_line = _ls[s.lineno - 1] if 0 <= s.lineno - 1 < len(_ls) else ""
+            if lang in _AST_CHASERS:
+                cs = extract_chase_symbols_tree(lang, text, s.lineno)
+            else:
+                _ls = text.split("\n")
+                seed_line = _ls[s.lineno - 1] if 0 <= s.lineno - 1 < len(_ls) else ""
+                cs = extract_chase_symbols(lang, dialect, seed_line)
         else:
             lang, dialect = s.language, "bourne"
-            seed_line = ""
-        ingest_one(state, occ, lang, dialect, seed_line, hop=1, is_seed=True)
+            cs = ChaseSymbols()
+        ingest_one(state, occ, lang, cs, kinds_of(cs), hop=1, is_seed=True)
     return state

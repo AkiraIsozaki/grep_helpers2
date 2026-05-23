@@ -19,10 +19,11 @@ from grep_analyzer.stoplist import partition
 
 
 def ingest_one(state: ChaseState, parent: Occurrence, language: str,
-               dialect: str, line: str, hop: int, is_seed: bool = False):
-    """1 行を ChaseState に取り込む。spec §8.1 手順 1〜4。
+               chase_symbols, kinds: dict[str, str], hop: int, is_seed: bool = False):
+    """事前抽出済 (chase_symbols, kinds) を ChaseState に投入する（spec §6.1）。
 
-    `hop` は呼出時点で完了済みの hop 番号。子の ingest_one には `hop + 1` を渡す。
+    抽出は呼出側（seed/absorb/worker）の責務。language は partition→admit の
+    keyword 篩（LANG_KEYWORDS.get(language)）に必須＝Inv-A 保持のため保持する。
     """
     diag = state.diagnostics
     opts = state.options
@@ -32,8 +33,6 @@ def ingest_one(state: ChaseState, parent: Occurrence, language: str,
                      f"{parent.lineno} (hop {hop} > --max-depth {opts.max_depth})")
             state.maxdepth_logged.add(parent)
         return
-    chase_symbols = extract_chase_symbols(language, dialect, line)
-    kinds = kinds_of(language, dialect, line)
     part = partition(chase_symbols, language, state.policy)
     for symbol, reason in sorted(part.rejected):
         diag.add("symbol_rejected", f"{reason}\t{symbol}")
@@ -75,7 +74,7 @@ def absorb_results(state: ChaseState, pass_results, scan_chase: set[str],
         if replaced and relpath not in state.replaced_logged:
             diag.add("decode_replaced", relpath)
             state.replaced_logged.add(relpath)
-        for symbol, lineno, line in found:
+        for symbol, lineno, line, chase_symbols in found:
             if symbol not in scan_chase and symbol not in scan_term:
                 continue
             child = Occurrence(symbol, relpath, lineno)
@@ -87,4 +86,6 @@ def absorb_results(state: ChaseState, pass_results, scan_chase: set[str],
                     diag.add("getter_setter_no_expand", symbol)
                     state.no_expand_logged.add(symbol)
                 continue
-            ingest_one(state, child, language, dialect, line, hop + 1)
+            cs = chase_symbols if chase_symbols is not None \
+                else extract_chase_symbols(language, dialect, line)
+            ingest_one(state, child, language, cs, kinds_of(cs), hop + 1)

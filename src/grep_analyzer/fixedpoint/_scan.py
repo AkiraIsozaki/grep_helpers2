@@ -13,9 +13,12 @@ import multiprocessing
 from pathlib import Path
 
 from grep_analyzer import automaton
-from grep_analyzer.chase import extract_chase_symbols
+from grep_analyzer.chase import extract_chase_symbols_from_root
+from grep_analyzer.classifiers import _AST_CHASERS
+from grep_analyzer.classifiers.ts_classifier import parse_tree
 from grep_analyzer.dispatch import detect_language, detect_shell_dialect
 from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
+from grep_analyzer.model import ChaseSymbols
 
 
 def file_meta(relpath: str, raw: bytes, lang_map: dict[str, str], fallback_chain=None):
@@ -38,15 +41,24 @@ def _scan_file(args):
     automaton_obj = automaton.build(symbol_list)
     found = []
     if automaton_obj is not None:
+        root = None
+        if language in _AST_CHASERS:
+            try:
+                root = parse_tree(language, text)   # parse 失敗は AST 抽出を諦め row 動作（堅牢化）
+            except Exception:
+                root = None
         for i, line in enumerate(text.split("\n"), start=1):
-            for symbol in automaton.scan_line(automaton_obj, line):
-                found.append((symbol, i, line))
+            symbols = list(automaton.scan_line(automaton_obj, line))
+            if not symbols:
+                continue
+            cs = extract_chase_symbols_from_root(language, root, i) if root is not None else None
+            for symbol in symbols:
+                found.append((symbol, i, line, cs))
     return relpath, enc, replaced, language, dialect, found
 
 
-def kinds_of(language: str, dialect: str, line: str) -> dict[str, str]:
-    """1 行の各シンボル→種別。同名は逆順ループで最後に書き込む constant が優先。"""
-    chase_symbols = extract_chase_symbols(language, dialect, line)
+def kinds_of(chase_symbols: ChaseSymbols) -> dict[str, str]:
+    """ChaseSymbols の各シンボル→種別。同名は constant 優先（最後に書く）。"""
     out: dict[str, str] = {}
     for kind, names in (("setter", chase_symbols.setters), ("getter", chase_symbols.getters),
                         ("var", chase_symbols.vars), ("constant", chase_symbols.constants)):
