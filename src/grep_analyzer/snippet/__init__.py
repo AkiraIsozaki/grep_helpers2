@@ -46,7 +46,7 @@ def build_snippet(language: str, dialect: str, file_text: str,
         span = proc_exec_span(file_text, lineno)
         if span is None:
             span = ts_span("proc", file_text, lineno)
-    elif language in ("sql", "shell"):
+    elif language in ("sql", "shell", "perl", "groovy"):
         span = heuristic_span(lines, hit, language)
     if span is None:
         span = (hit, hit)

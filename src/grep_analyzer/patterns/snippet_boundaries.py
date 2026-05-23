@@ -10,3 +10,6 @@ SQL_CLAUSE_RE = re.compile(
     r"\b(WHERE|SET|VALUES|SELECT|FROM|GROUP\s+BY|ORDER\s+BY|HAVING)\b", re.I)
 
 SH_TERMINATOR_RE = re.compile(r"(?:^|\s)(fi|done|esac|breaksw)\b|;")
+
+PERL_TERMINATOR_RE = re.compile(r";|}|^\s*sub\b")
+GROOVY_TERMINATOR_RE = re.compile(r";|}|^\s*(?:class|def)\b")

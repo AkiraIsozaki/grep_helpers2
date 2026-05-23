@@ -8,6 +8,8 @@ Related: spec §9
 
 from grep_analyzer.chase import mask_literals
 from grep_analyzer.patterns.snippet_boundaries import (
+    GROOVY_TERMINATOR_RE,
+    PERL_TERMINATOR_RE,
     SH_TERMINATOR_RE,
     SQL_CLAUSE_RE,
 )
@@ -42,7 +44,11 @@ def heuristic_span(lines: list[str], hit: int, language: str) -> tuple[int, int]
             return False
         if language == "sql":
             return x.rstrip().endswith(";") or bool(SQL_CLAUSE_RE.search(x))
-        return bool(SH_TERMINATOR_RE.search(x))
+        if language == "perl":
+            return bool(PERL_TERMINATOR_RE.search(x))
+        if language == "groovy":
+            return bool(GROOVY_TERMINATOR_RE.search(x))
+        return bool(SH_TERMINATOR_RE.search(x))   # shell（既定・既存挙動不変）
 
     span_start = hit
     for _ in range(LINE_MAX - 1):
