@@ -78,3 +78,10 @@ def test_jsp_式とELはその他():
 
 def test_html_は常にその他_high():
     assert classify_hit("html", "", "<p>x</p>\n", 1, "<p>x</p>") == ("その他", "high")
+
+
+def test_angular_classify():
+    src = '<p>{{ user.code }}</p>\n'
+    assert classify_hit("angular", "", src, 1, src)[0] == "その他"
+    src2 = '<button (click)="x = 1">b</button>\n'
+    assert classify_hit("angular", "", src2, 1, src2)[0] == "代入"

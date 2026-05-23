@@ -120,3 +120,12 @@ def test_python_single_line_class_body():
 
 def test_python_single_line_if_body():
     assert _py("if True: yy = COMPUTED\n", 1).vars == ("yy",)
+
+
+from grep_analyzer.chase import extract_chase_symbols_tree
+
+
+def test_angular_ngFor_束縛をAST抽出():
+    src = '<li *ngFor="let item of TRACKED">{{item}}</li>\n'
+    cs = extract_chase_symbols_tree("angular", src, 1)
+    assert "item" in cs.vars

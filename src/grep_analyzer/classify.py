@@ -23,7 +23,7 @@ def classify_hit(
     perl/groovy は正規表現分類(medium)。
     """
     if language in ("java", "c", "proc", "python", "javascript", "typescript",
-                    "tsx", "jsp"):
+                    "tsx", "jsp", "angular"):
         return classify_ts(language, file_text, lineno)
     if language == "html":
         return ("その他", "high")
