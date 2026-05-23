@@ -50,7 +50,7 @@ def _scan_file(args):
                 ts_root = parse_tree(language, text)
             except Exception:
                 ts_root = None
-            if language == "typescript":
+            if ts_root is not None and language == "typescript":
                 spans = inline_template_spans(text)
         for i, line in enumerate(text.split("\n"), start=1):
             symbols = list(automaton.scan_line(automaton_obj, line))
