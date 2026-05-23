@@ -15,6 +15,13 @@ _SQL_RULES = [
     (re.compile(r"\bWHERE\b.*?[=<>]", re.IGNORECASE), "比較"),
     (re.compile(r"\bCASE\s+WHEN\b|\bDECODE\s*\(|\|\|", re.IGNORECASE), "分岐"),
     (re.compile(r"\b(?:INSERT|UPDATE)\b", re.IGNORECASE), "代入"),
+    # --- PL/SQL append（設計 §4.1・出力先頭・宣言/ループ行頭アンカー） ---
+    (re.compile(r"^\s*(?:DBMS_OUTPUT\.PUT_LINE|RAISE_APPLICATION_ERROR)\b", re.IGNORECASE), "出力"),
+    (re.compile(r"^\s*(?:CREATE\s+(?:OR\s+REPLACE\s+)?)?"
+                r"(?:PROCEDURE|FUNCTION|PACKAGE(?:\s+BODY)?|TRIGGER|TYPE)\b", re.IGNORECASE), "宣言"),
+    (re.compile(r"^\s*CURSOR\b", re.IGNORECASE), "宣言"),
+    (re.compile(r"\bIF\b.*\bTHEN\b|^\s*ELSIF\b", re.IGNORECASE), "比較"),
+    (re.compile(r"^\s*(?:WHILE|FOR)\b|\bLOOP\s*$", re.IGNORECASE), "分岐"),
 ]
 _SHELL_RULES_BOURNE = [
     (re.compile(r"^\s*\w+="), "代入"),

@@ -1,7 +1,7 @@
 """共有行分類の仕様（pipeline と fixedpoint が共通利用）。"""
 
 from grep_analyzer.classify import classify_hit
-from grep_analyzer.classifiers.regex_classifier import classify_groovy, classify_perl
+from grep_analyzer.classifiers.regex_classifier import classify_groovy, classify_perl, classify_sql
 
 
 def test_ts言語はtree_sitterでhigh分類():
@@ -42,3 +42,19 @@ def test_Groovy分類():
 
 def test_Groovy型付き宣言は初期化子があれば代入になる():
     assert classify_groovy("List<String> xs = []") == ("代入", "medium")
+
+
+def test_PLSQL手続き型分類():
+    assert classify_sql("PROCEDURE do_x IS") == ("宣言", "medium")
+    assert classify_sql("  FUNCTION calc RETURN NUMBER IS") == ("宣言", "medium")
+    assert classify_sql("IF v_x > 0 THEN") == ("比較", "medium")
+    assert classify_sql("WHILE i < 10 LOOP") == ("分岐", "medium")
+    assert classify_sql("DBMS_OUTPUT.PUT_LINE('hi');") == ("出力", "medium")
+
+
+def test_PLSQL誤爆回避():
+    # 行頭でない手続き型語・文字列内語は誤分類しない（C-B）。
+    # DBMS_OUTPUT は出力（行内 'FUNCTION' を宣言と誤らない）。
+    assert classify_sql("DBMS_OUTPUT.PUT_LINE('FUNCTION x');") == ("出力", "medium")
+    # OPEN c FOR ... は FOR が行頭でないため新ループ規則は不発＝既存規則にも該当せず その他。
+    assert classify_sql("OPEN c FOR SELECT 1 FROM dual;") == ("その他", "medium")
