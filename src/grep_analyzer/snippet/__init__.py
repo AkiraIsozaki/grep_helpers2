@@ -9,6 +9,7 @@ Related: spec §9
 from grep_analyzer.snippet._clamp import clamp_lines
 from grep_analyzer.snippet._heuristic import heuristic_span
 from grep_analyzer.snippet._sanitize_line import _escape_sep, _physical_lines
+from grep_analyzer.embed_preprocess import jsp_region_span
 from grep_analyzer.snippet._ts import proc_exec_span, ts_span
 from grep_analyzer.tsv import sanitize_field
 
@@ -46,6 +47,8 @@ def build_snippet(language: str, dialect: str, file_text: str,
         span = proc_exec_span(file_text, lineno)
         if span is None:
             span = ts_span("proc", file_text, lineno)
+    elif language == "jsp":
+        span = jsp_region_span(file_text, lineno)
     elif language in ("sql", "shell", "perl", "groovy"):
         span = heuristic_span(lines, hit, language)
     if span is None:

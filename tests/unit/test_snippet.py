@@ -145,3 +145,15 @@ def test_build_snippet_python():
     from grep_analyzer.snippet import build_snippet
     s = build_snippet("python", "bourne", "X = (\n  1 + 2\n)\n", 1)
     assert "X = (" in s
+
+
+def test_jsp_snippet_多行scriptletはregion_span():
+    src = "<html>\n<%\n  int x = 1;\n%>\n</html>\n"
+    out = build_snippet("jsp", "", src, 3)
+    assert "int x = 1;" in out
+
+
+def test_html_snippetは1行():
+    src = "<p>line1</p>\n<p>TRACKED</p>\n<p>line3</p>\n"
+    out = build_snippet("html", "", src, 2)
+    assert "TRACKED" in out and "line1" not in out and "line3" not in out
