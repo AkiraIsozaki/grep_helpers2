@@ -29,6 +29,7 @@ def test_jsp_多バイト混在でも行数保存():
     src = "<%-- 日本語 --%>\n<% String 名前 = TRACKED; %>\n"
     out = extract_jsp_java(src)
     assert out.count("\n") == src.count("\n")
+    assert len(out) == len(src)            # char 長保存（lineno/桁写像の前提）
     assert "TRACKED" in out and "名前" in out
     assert "日本語" not in out
 
@@ -55,7 +56,7 @@ def test_jsp_region_span_区間外はNone():
 
 
 def test_host_grammar_既存言語は恒等():
-    for lang in ("java", "c", "python", "javascript", "typescript", "tsx"):
+    for lang in ("java", "c", "python", "javascript", "typescript", "tsx", "html"):
         assert host_grammar(lang) == lang
 
 

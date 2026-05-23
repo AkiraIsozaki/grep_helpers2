@@ -15,6 +15,8 @@ _JSP_DIRECTIVE = re.compile(r"<%@.*?%>", re.DOTALL)
 _JSP_ACTION = re.compile(r"</?jsp:[^>]*?/?>", re.DOTALL)
 _JSP_CODE = re.compile(r"<%[=!]?(.*?)%>", re.DOTALL)
 _EL = re.compile(r"[$#]\{(.*?)\}", re.DOTALL)
+# JSTL 関数接頭辞（fn: 等）除去。best-effort（spec §3.4/§6）＝EL 内の URL
+# プロトコル `http:` や空白なし三項 `a?b:c` の `b:` も除去しうる（稀・許容）。
 _EL_PREFIX = re.compile(r"\b[A-Za-z_]\w*:")
 
 
