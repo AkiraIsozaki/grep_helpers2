@@ -30,6 +30,10 @@ def _names_from_pattern(node, out):
                 for c in ch.children:
                     if c.type == "identifier":
                         out.append(c.text.decode("utf-8", "replace"))
+    elif t == "assignment_pattern":
+        left = node.child_by_field_name("left")
+        if left is not None:
+            _names_from_pattern(left, out)
     elif t == "array_pattern":
         for ch in node.children:
             if ch.type == "identifier":

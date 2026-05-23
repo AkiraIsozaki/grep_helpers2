@@ -103,3 +103,12 @@ def test_ts_interface_type_は抽出しない():
 
 def test_tsx_は同規則():
     assert _ts("const App = () => null;\n", 1, language="tsx").constants == ("App",)
+
+
+def test_js_object_destructure_default():
+    assert _js("const {a: x = 5} = o;\n", 1).constants == ("x",)
+    assert _js("const {a: {b} = {}} = o;\n", 1).constants == ("b",)
+
+
+def test_ts_object_destructure_default():
+    assert _ts("const {a: x = 5} = o;\n", 1).constants == ("x",)
