@@ -34,6 +34,24 @@ def test_jsp_多バイト混在でも行数保存():
     assert "日本語" not in out
 
 
+def test_jsp_レガシー文字コードのbyteからdecode後に抽出が成立する():
+    """spec §8: レガシー JSP の SJIS/EUC-JP ＝ 抽出は復号後 char 単位で encoding 非依存。
+
+    パイプラインが byte→decode 済の str を渡す前提を、SJIS(cp932)/EUC-JP の
+    実 byte からの round-trip で表明する（検出→復号は言語非依存の共通経路
+    ＝既存 cp932_resume/encoding_utf8 golden が固定。本テストは jsp 抽出が
+    復号後 str に対し encoding 非依存であることを直接表明する）。
+    """
+    text = "<%-- 日本語コメント --%>\n<% String shori = TRACKED; %>\n"
+    for codec in ("cp932", "euc_jp"):
+        raw = text.encode(codec)            # レガシー byte 列
+        decoded = raw.decode(codec)         # パイプライン相当の復号
+        out = extract_jsp_java(decoded)
+        assert out.count("\n") == decoded.count("\n")   # 行数保存（encoding 非依存）
+        assert "TRACKED" in out and "shori" in out      # scriptlet java を抽出
+        assert "日本語コメント" not in out               # コメントは空白化
+
+
 def test_jsp_ディレクティブとコメントと標準アクションを空白化():
     src = ('<%@ page import="java.util.*" %>\n'
            "<%-- comment ${secret} --%>\n"
