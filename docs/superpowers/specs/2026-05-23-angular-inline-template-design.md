@@ -61,7 +61,7 @@ effective_language(file_lang, file_text, lineno):
 ```python
 _INLINE_TEMPLATE = re.compile(r"\btemplate\s*:\s*`(.*?)`", re.DOTALL)
 ```
-- `template: \`...\`` を捕捉し group(1) = テンプレ内容。`templateUrl:` は `:` が直後でないため非マッチ。
+- `template: \`...\`` を捕捉し group(1) = テンプレ内容。`templateUrl:` は `template` の後に `Url` が続き `\s*:` にマッチしないため非マッチ。`styles: [\`...\`]` も `\btemplate\s*:` にマッチしないため非マッチ（複数バッククォート文字列があっても影響しない）。
 
 ### 3.2 `inline_template_spans(ts_source) -> list[tuple[int,int]]`
 各 `_INLINE_TEMPLATE` マッチについて group(1) の行スパン `(start,end)`（0始まり）を返す:
@@ -98,18 +98,35 @@ def extract_inline_angular(ts_source):
 | 4 | `stoplist.py` | `LANG_KEYWORDS["angular_inline"]=_ANGULAR_KW` |
 | 5 | `classify.py` | `classify_hit` 冒頭で `language = effective_language(language, file_text, lineno)`、classify_ts 分岐タプルに `angular_inline` 追加（direct/indirect 共有経路） |
 | 6 | `snippet/__init__.py` | `build_snippet` 冒頭で `effective_language` 解決。`angular_inline` は ts_span 分岐に**入れず1行**（template_string 巨大スパン誤適用回避＝精度向上） |
-| 7 | `fixedpoint/_seed.py` | seed の AST/行判定前に `effective_language(lang, text, lineno)` で解決（seed は少数＝regex 許容） |
-| 8 | `fixedpoint/_scan.py` | AST 分岐で `spans = inline_template_spans(text)` を **file 単位1回**算出。occurrence が span 内なら `angular_inline` root（`parse_tree("angular_inline",text)` を**遅延1回**）＋`extract_chase_symbols_from_root("angular_inline",...)`、否なら従来 typescript root。**file 単位1パース最適化を維持**（template occurrence がある時のみ追加1パース） |
+| 7 | `fixedpoint/_seed.py` | seed の AST/行判定前に `eff = effective_language(lang, text, lineno)` で解決し、`extract_chase_symbols_tree(eff, ...)` と `ingest_one(..., eff, ...)` に **eff（テンプレ行なら angular_inline）** を渡す（seed は少数＝regex 許容） |
+| 8 | `fixedpoint/_scan.py` | AST 分岐で **typescript root と angular_inline root の2変数を分離管理**（下記擬似コード）。occurrence が span 内なら angular_inline、否なら typescript。**file 単位1パース最適化を維持**（template occurrence がある時のみ angular_inline を遅延1パース） |
 
-- **`fixedpoint/_ingest.py`（absorb）は無改修**: worker が正しい cs を found タプルに同梱済（既存 4-tuple 契約のまま）。
+**§4 #8 `_scan.py` AST 分岐の擬似コード**（2変数分離・遅延パース・実装者の誤上書き防止）:
+```python
+if language in _AST_CHASERS:
+    ts_root = parse_tree(language, text)          # 従来どおり（typescript）
+    spans = inline_template_spans(text) if language == "typescript" else []
+    ang_root = None                                # angular_inline 用・遅延
+    for i, line, symbol in occurrences:
+        if spans and any(s <= i-1 <= e for s, e in spans):
+            if ang_root is None:
+                ang_root = parse_tree("angular_inline", text)   # file 単位1回
+            cs = extract_chase_symbols_from_root("angular_inline", ang_root, i)
+        else:
+            cs = extract_chase_symbols_from_root(language, ts_root, i)
+        found.append((symbol, i, line, cs))
+```
+（`ts_root` と `ang_root` を別変数にし `root` への上書きを避ける。`i-1` は0始まり行への換算＝spans と一致。）
+
+- **`fixedpoint/_ingest.py`（absorb）は無改修**: worker が正しい cs を found タプルに同梱済（既存 4-tuple 契約のまま）。**stoplist 非対称（許容）**: absorb は `ingest_one` に dispatch 言語 `typescript` を渡すため、scan 由来の angular_inline cs は `partition` で `_TS_KW` 篩になる（seed 経路は eff＝angular_inline で `_ANGULAR_KW` 篩）。`_TS_KW ⊂ _ANGULAR_KW` ＝真シンボルの過剰除去は起きず、差分は angular 固有語（`ngIf`/`ngFor`/`$event` 等）のみ。これらは field-directed 束縛抽出では生成されない（属性キー・`$event` は束縛名にならない）ため実害なし。4-tuple へ effective 言語を載せない（absorb 無改修維持）判断＝§6 既知限界。
 - **`effective_language` 高速短絡**: `file_language != "typescript"` は即 file_language 返却＝既存全言語・非 Angular .ts はゼロ追加コスト（regex も走らない）。
 - **`pipeline.py`/`_finalize.py` 無改修**: classify_hit/build_snippet の共有エントリで direct/indirect 両方カバー。
 - 循環 import なし（classify/snippet/_scan/_seed → embed_preprocess → proc_preprocess の単方向）。
 
 ### 4.1 効率（hot path）
-- 非 typescript ファイル: `effective_language` 即短絡＝ゼロコスト。
-- inline template 無し typescript: `inline_template_spans` の regex 1回（O(n)・空返却）＝追加パースなし。
-- inline template 有り typescript: span 内 occurrence がある時のみ `angular_inline` バッファを **file 単位1回**追加 parse。
+- 非 typescript ファイル: `effective_language` 即短絡＝ゼロコスト（regex も走らない）。
+- **classify_hit / build_snippet**（per-hit 呼出）: `effective_language` 内 `inline_template_spans` の regex がヒット毎に走る。ただし**両者は元々ヒット毎にファイルを tree-sitter パースする**（classify_ts/ts_span）ため、O(n) regex は既存パースと同等以下＝**新たなボトルネックではない**（file 単位キャッシュは不要）。
+- **`fixedpoint/_scan.py`**（worker・最適化対象）: `inline_template_spans` を **file 単位1回**算出。inline template 有り typescript で span 内 occurrence がある時のみ `angular_inline` バッファを **file 単位1回**追加 parse。inline template 無し typescript は spans 空＝追加パースなし。
 
 ---
 
@@ -133,18 +150,20 @@ def extract_inline_angular(ts_source):
 - `template:` がコメント/文字列内に出る稀ケースで誤検出（best-effort）。
 - テンプレ内容に `\``（ネスト/エスケープ template literal）が出ると非貪欲マッチ早期終端（稀）。
 - `.tsx` 非対象（Angular 非使用）。`@Component` デコレータ非限定（`template:` パターンのみ＝非 Angular の `template:` リテラルを誤 angular 化しうる・稀）。
-- **TSV `language` 列は inline template ヒットでも `typescript`**（内部実効言語のみ angular_inline・§2.2）。
+- **TSV `language` 列は inline template ヒットでも `typescript`**（内部実効言語のみ angular_inline・§2.2）。外部テンプレ `.html`（language=`angular`）とは非対称＝同じ Angular テンプレ束縛でもインラインは `typescript` 表記（master §208 でユーザー向けに明記）。
+- **テンプレ内 JS template literal 式 `${...}`**（Angular 補間 `{{}}` ではなく JS 側式）: `extract_angular_ts` は `${}` を非マッチ＝angular_inline 経路では chase されない。直接ヒットは automaton 生行走査で出るが indirect chase は空（best-effort・許容）。
+- **absorb 経路の stoplist 篩は typescript**（angular 固有語のみ非対称・§4 注・実害なし）。
 - track C angular のテンプレ限界を継承（パイプ名/`#ref`/`*ngFor` 別名 `as`/`index as i`/多行補間/`[ngClass]` オブジェクトキー過抽出）。
 
 ---
 
 ## 7. テスト
-- **単体**: `inline_template_spans`（`template:` 検出・`templateUrl:` 非検出・多行スパン）／`extract_inline_angular`（テンプレ領域のみ angular 抽出・TS コードの `selector:"x"` 等を誤抽出しない・`*ngFor` 正規化・行数保存）／`effective_language`（typescript+テンプレ内→angular_inline、typescript+コード行→typescript、非 ts→恒等、template 無し .ts→typescript）。
+- **単体**: `inline_template_spans`（`template:` 検出・`templateUrl:`/`styles:[\`...\`]` 非検出・多行スパン。**span の start_line は `template: \`` 開き行を含む**＝その行は angular_inline 扱いだが内容は次行から＝空白化され classify その他＝無害、をテストで明示）／`extract_inline_angular`（テンプレ領域のみ angular 抽出・TS コードの `selector:"x"` 等を誤抽出しない・`*ngFor` 正規化・行数保存）／`effective_language`（typescript+テンプレ内→angular_inline、typescript+コード行→typescript、**非 ts→恒等**、**template 無し .ts→typescript・spans 空**）。
 - **classify**: テンプレ内 `(click)="x=1"`→代入・`{{}}`→その他、TS コード行→従来 typescript（不変）。
-- **chaser**: テンプレ内 `*ngFor="let row of TRACKED"`→row（angular_inline 経由）、TS コード束縛→typescript（不変）。
+- **chaser**: テンプレ内 `*ngFor="let row of TRACKED"`→row（angular_inline 経由）、TS コード束縛→typescript（不変）。**seed がテンプレ行にある場合**: `_seed.py` 経由で `extract_chase_symbols_tree("angular_inline", text, lineno)` が正しい ChaseSymbols を返すことを表明。
 - **snippet**: テンプレ内ヒット→1行（template_string 巨大スパン回避）。
-- **言語×ref_kind golden** `angular_inline_chain`: `.component.ts`（inline template に `*ngFor="let row of TRACKED"` と別行 `{{ row.code }}`＋TS コードで TRACKED 使用）。language 列=`typescript`、テンプレ内 `row` が indirect:var で chase、TS コード direct と混在を固定。
-- **Inv 二段ゲート**（§5）＋2回実行 byte 一致（既存機構）。
+- **言語×ref_kind golden** `angular_inline_chain`: `.component.ts`（inline template に `*ngFor="let row of TRACKED"` と別行 `{{ row.code }}`＋TS コードで TRACKED 使用）。**全行の language 列=`typescript` を assert**（テンプレ内も TS コード行も同値・§2.2）、テンプレ内 `row` が indirect:var で chase、TS コード direct と混在を固定。
+- **Inv 二段ゲート**（§5）＝既存 golden 全件ゼロdiff（特に既存 typescript golden ts_enum_readonly/tsx_chain が template 無し＝恒等）＋2回実行 byte 一致（既存機構）。
 
 ---
 
