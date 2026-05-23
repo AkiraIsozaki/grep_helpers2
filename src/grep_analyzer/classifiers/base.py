@@ -25,3 +25,15 @@ class Chaser(Protocol):
 
     mask: Callable[[str], str]
     """line → masked_line。同字数空白へ置換する。"""
+
+
+class ASTChaser(Protocol):
+    """AST 言語 chaser の抽出 IF（spec §6.6）。
+
+    parse は呼出側（chase.py / worker）。本 IF は parse 済 root から
+    束縛名のみ（name:/left: フィールド）を field-directed に抽出する。
+    `language` は ts/tsx の grammar 変種・束縛規則の選択に使う。
+    """
+
+    extract_tree: Callable[[str, object, int], ChaseSymbols]
+    """(language, root, lineno) → ChaseSymbols。root は parse 済 root_node。"""
