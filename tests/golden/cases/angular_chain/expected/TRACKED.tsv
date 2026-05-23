@@ -1,0 +1,4 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+TRACKED	angular	{SOURCE_ROOT}/app.component.html	2	direct	宣言		宣言 (angular)		TRACKED@app.component.html:2	  <li *ngFor="let row of TRACKED">	utf-8	high
+TRACKED	angular	{SOURCE_ROOT}/app.component.html	6	direct	その他		その他 (angular)		TRACKED@app.component.html:6	<p [title]="TRACKED.length">count</p>	utf-8	high
+TRACKED	angular	{SOURCE_ROOT}/app.component.html	3	indirect:var	その他		その他 (angular)	row	TRACKED@app.component.html:2 -> row@app.component.html:3	    {{ row.code }}	utf-8	high

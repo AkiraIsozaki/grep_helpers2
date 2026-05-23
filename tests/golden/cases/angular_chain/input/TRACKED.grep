@@ -1,0 +1,2 @@
+app.component.html:2:  <li *ngFor="let row of TRACKED">
+app.component.html:6:<p [title]="TRACKED.length">count</p>
