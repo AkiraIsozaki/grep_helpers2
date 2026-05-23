@@ -11,7 +11,7 @@ import tree_sitter_typescript
 from tree_sitter import Language, Parser
 
 from grep_analyzer.classifiers.base import ClassifyResult
-from grep_analyzer.proc_preprocess import mask_exec_sql
+from grep_analyzer.embed_preprocess import host_grammar, host_source
 
 # py-tree-sitter 0.23: Language(capsule) 1引数 / Parser(lang) コンストラクタ。
 # tree_sitter_<lang>.language() は PyCapsule を返す（0.21 の int から変更）。
@@ -74,9 +74,7 @@ _CATEGORY_BY_LANG = {
 
 
 def _parser(language: str) -> Parser:
-    # "proc" を含む非 Java 言語は tree-sitter-c で解析（spec §7 Pro*C 前処理）。
-    key = "c" if language in ("c", "proc") else language
-    return Parser(_LANGS[key])
+    return Parser(_LANGS[host_grammar(language)])
 
 
 def node_at_line(root, lineno: int):
@@ -126,7 +124,7 @@ def binding_at_line(root, lineno: int, binding_types):
 
 def classify_ts(language: str, source: str, lineno: int) -> ClassifyResult:
     """ファイル全体を AST 解析し、対象行を含む構文要素から分類する。"""
-    src = mask_exec_sql(source) if language == "proc" else source
+    src = host_source(language, source)
     tree = _parser(language).parse(src.encode("utf-8"))
     node = node_at_line(tree.root_node, lineno)
     while node is not None:
@@ -138,5 +136,5 @@ def classify_ts(language: str, source: str, lineno: int) -> ClassifyResult:
 
 
 def parse_tree(language: str, source: str):
-    """snippet 用: ソースを parse し root_node を返す（lang は "java"/"c"）。"""
-    return _parser(language).parse(source.encode("utf-8")).root_node
+    """ソースを host_source で逆マスク後 parse し root_node を返す（spec §5 適用点2）。"""
+    return _parser(language).parse(host_source(language, source).encode("utf-8")).root_node
