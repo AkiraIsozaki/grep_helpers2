@@ -11,6 +11,7 @@ from grep_analyzer.classifiers.regex_classifier import (
     classify_sql,
 )
 from grep_analyzer.classifiers.ts_classifier import classify_ts
+from grep_analyzer.embed_preprocess import effective_language
 
 
 def classify_hit(
@@ -22,8 +23,9 @@ def classify_hit(
     bourne shell フォールバック（pipeline 既存挙動と同一）。
     perl/groovy は正規表現分類(medium)。
     """
+    language = effective_language(language, file_text, lineno)
     if language in ("java", "c", "proc", "python", "javascript", "typescript",
-                    "tsx", "jsp", "angular"):
+                    "tsx", "jsp", "angular", "angular_inline"):
         return classify_ts(language, file_text, lineno)
     if language == "html":
         return ("その他", "high")

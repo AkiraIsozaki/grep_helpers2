@@ -157,3 +157,17 @@ def test_html_snippetは1行():
     src = "<p>line1</p>\n<p>TRACKED</p>\n<p>line3</p>\n"
     out = build_snippet("html", "", src, 2)
     assert "TRACKED" in out and "line1" not in out and "line3" not in out
+
+
+def test_build_snippet_inline_template行は1行():
+    # const 宣言で包むと未 routing 時 ts_span が宣言全体（巨大スパン）を返すため
+    # routing（angular_inline→1行）の効果を観測できる（@Component デコレータ形は
+    # ts_span が None を返し元から1行＝routing 効果が出ない・spec §7 巨大スパン回避）。
+    src = ('export const C = defineComponent({\n'   # 1
+           '  template: `\n'                         # 2
+           '    <p>{{ TRACKED }}</p>\n'             # 3 (hit)
+           '  `,\n'                                  # 4
+           '});\n')                                  # 5
+    out = build_snippet("typescript", "", src, 3)
+    assert "TRACKED" in out
+    assert "defineComponent" not in out             # 宣言全体の巨大スパンにならない＝routing 効果

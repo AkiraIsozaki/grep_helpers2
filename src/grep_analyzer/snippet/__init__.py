@@ -10,7 +10,7 @@ from grep_analyzer.snippet._clamp import clamp_lines
 from grep_analyzer.snippet._heuristic import heuristic_span
 from grep_analyzer.snippet._sanitize_line import _escape_sep, _physical_lines
 from grep_analyzer.snippet._ts import proc_exec_span, ts_span
-from grep_analyzer.embed_preprocess import jsp_region_span
+from grep_analyzer.embed_preprocess import effective_language, jsp_region_span
 from grep_analyzer.tsv import sanitize_field
 
 __all__ = [
@@ -40,6 +40,7 @@ def build_snippet(language: str, dialect: str, file_text: str,
     hit = lineno - 1
     if hit < 0 or hit >= len(lines):
         return ""
+    language = effective_language(language, file_text, lineno)
     span = None
     if language in ("java", "c", "python", "javascript", "typescript", "tsx"):
         span = ts_span(language, file_text, lineno)

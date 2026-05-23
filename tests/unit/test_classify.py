@@ -93,3 +93,21 @@ def test_angular_inline_classify_直接():
     assert classify_ts("angular_inline", src, 1)[0] == "その他"
     src2 = '@Component({ template: `<button (click)="x = 1">b</button>` })\n'
     assert classify_ts("angular_inline", src2, 1)[0] == "代入"
+
+
+_C = ('@Component({\n'
+      '  template: `<button (click)="x = 1">{{ user.code }}</button>`,\n'   # 2
+      '})\n'
+      'export class C {\n'                                                    # 4
+      '  items = TRACKED;\n'                                                  # 5
+      '}\n')
+
+
+def test_classify_hit_inline_template行はangular扱い():
+    assert classify_hit("typescript", "", _C, 2, "")[0] == "代入"            # (click)="x=1"
+
+
+def test_classify_hit_TSコード行はtypescript不変():
+    # L5 class field items = TRACKED → public_field_definition → 宣言（typescript 経路）。
+    # 誤って angular_inline に routing されると領域外で空白化され その他 になる＝判別子。
+    assert classify_hit("typescript", "", _C, 5, "")[0] == "宣言"
