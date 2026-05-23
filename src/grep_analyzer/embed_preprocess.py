@@ -59,6 +59,10 @@ def jsp_region_span(file_text: str, lineno: int):
     return None
 
 
+# Angular 固有束縛マーカ（{{ 単独は Vue/Handlebars と重複し過検出のため含めない・spec §5 #1）
+_ANGULAR_RE = re.compile(
+    r"""\*ng[\w-]+|\[\(?[\w.$-]+\)?\]\s*=|\([\w.$-]+\)\s*=|routerLink|formControl|ngModel""")
+
 _NG_INTERP = re.compile(r"\{\{(.*?)\}\}", re.DOTALL)
 # [prop]= / [(two-way)]= / (event)= / *dir=  の属性。値は " か ' で囲まれる。
 _NG_ATTR = re.compile(

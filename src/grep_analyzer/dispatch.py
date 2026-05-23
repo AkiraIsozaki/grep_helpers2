@@ -6,6 +6,8 @@ Related: spec §5.1
 import os
 import re
 
+from grep_analyzer.embed_preprocess import _ANGULAR_RE
+
 _EXT_MAP = {
     ".java": "java",
     ".sql": "sql",
@@ -91,7 +93,7 @@ def detect_language(path: str, content_sample: str, lang_map: dict[str, str]) ->
             return "proc"
         return lang or "c"
     if ext in (".html", ".htm"):
-        return "html"          # C1: パススルー（C2 で _ANGULAR_RE 判定に差し替え）
+        return "angular" if _ANGULAR_RE.search(content_sample) else "html"
     if lang is not None:  # java / sql / perl / groovy
         return lang
     # 拡張子が未知または無い: シェバン解決（手順3）→ EXEC SQL（手順4）→ c（手順5）

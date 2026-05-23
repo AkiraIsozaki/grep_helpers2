@@ -157,9 +157,15 @@ def test_jsp_拡張子():
         assert detect_language(f"a{ext}", "<% int x; %>", {}) == "jsp"
 
 
-def test_html_はC1ではhtmlパススルー():
-    assert detect_language("a.html", "<div>{{x}}</div>", {}) == "html"
-    assert detect_language("a.htm", "<p>static</p>", {}) == "html"
+def test_html_angular_マーカで_angular():
+    assert detect_language("a.html", '<li *ngFor="let x of xs"></li>', {}) == "angular"
+    assert detect_language("a.html", '<a [href]="u">x</a>', {}) == "angular"
+    assert detect_language("a.html", '<button (click)="f()">b</button>', {}) == "angular"
+
+
+def test_html_マーカ無しと補間のみは_html():
+    assert detect_language("a.html", "<p>static</p>", {}) == "html"
+    assert detect_language("a.html", "<p>{{x}}</p>", {}) == "html"  # {{ 単独は angular にしない
 
 
 def test_html_拡張子はextension_resolves():
