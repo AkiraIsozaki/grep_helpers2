@@ -110,3 +110,32 @@ def test_var抽出は既存extract_var_symbolsと一致する():
     line = 'CODE="X"'
     assert list(extract_chase_symbols("shell", "bourne", line).vars) == extract_var_symbols(
         "shell", "bourne", line)
+
+
+def test_Perlのmaskは文字列とコメントを潰しドル井戸は壊さない():
+    # $#array は最終添字 sigil でありコメントではない（設計 §5.1 C-D）
+    assert mask_literals("perl", "$last = $#array; # tail") == "$last = $#array;       "
+    # 長さ保存(18字): "x=1"→空白5, "; # c" は ; +空白1+ "# c"→空白3 ＝ ; 後は空白4
+    assert mask_literals("perl", 'my $s = "x=1"; # c') == "my $s =      ;    "
+
+
+def test_Perlのmyとour代入左辺をsigil除去で抽出する():
+    assert extract_chase_symbols("perl", "", "my $code = 1;").vars == ("code",)
+    assert extract_chase_symbols("perl", "", "our @list = ();").vars == ("list",)
+    assert extract_chase_symbols("perl", "", "$total = 0;").vars == ("total",)
+
+
+def test_Perlのuse_constantは定数として抽出する():
+    cs = extract_chase_symbols("perl", "", "use constant MAX => 10;")
+    assert cs.constants == ("MAX",) and cs.vars == ()
+
+
+def test_Perlのfat_commaと比較は代入抽出しない():
+    assert extract_chase_symbols("perl", "", "( $key => 1 )").vars == ()
+    assert extract_chase_symbols("perl", "", "$x == 1").vars == ()
+    assert extract_chase_symbols("perl", "", "$x =~ /re/").vars == ()
+
+
+def test_Perlにgetter_setterは無い():
+    cs = extract_chase_symbols("perl", "", "my $x = 1;")
+    assert cs.getters == () and cs.setters == ()

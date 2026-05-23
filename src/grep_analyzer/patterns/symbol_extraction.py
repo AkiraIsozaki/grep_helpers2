@@ -35,3 +35,7 @@ C_CONST_RE = re.compile(r"\bconst\b[\w\s*]*?\b([A-Za-z_]\w*)\s*=")
 C_VAR_RE = re.compile(r"(?<![=!<>+\-*/%&|^])\b([A-Za-z_]\w*)\s*=(?!=)")
 
 BOURNE_READONLY_RE = re.compile(r"^\s*readonly\s+([A-Za-z_]\w*)=")
+
+# Perl: sigil 付き代入左辺（== / =~ / => は除外）。sigil は剥がして bare 識別子を採る。
+PERL_ASSIGN_RE = re.compile(r"[$@%](\w+)\s*=(?![=~>])")
+PERL_USE_CONSTANT_RE = re.compile(r"\buse\s+constant\s+(\w+)")
