@@ -69,3 +69,20 @@ def test_sqlのOracleデータ型は追跡集合に入らない():
     pol = SymbolPolicy(min_specificity=2, user_stoplist=frozenset())
     r = admit(["NUMBER", "VARCHAR2", "BOOLEAN", "v_code"], "sql", pol)
     assert r.accepted == ["v_code"]
+
+
+def test_新言語の予約語がLANG_KEYWORDSに登録される():
+    from grep_analyzer.stoplist import LANG_KEYWORDS
+    for lang in ("python", "javascript", "typescript", "tsx"):
+        assert lang in LANG_KEYWORDS
+    assert "class" in LANG_KEYWORDS["python"]
+    assert "const" in LANG_KEYWORDS["javascript"]
+    assert "interface" in LANG_KEYWORDS["typescript"]
+
+
+def test_予約語はadmitで棄却される():
+    from grep_analyzer.stoplist import admit, SymbolPolicy
+    pol = SymbolPolicy(min_specificity=2, user_stoplist=frozenset())
+    res = admit(["const", "myVar"], "javascript", pol)
+    assert res.accepted == ["myVar"]
+    assert ("const", "keyword") in res.rejected

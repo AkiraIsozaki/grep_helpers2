@@ -39,9 +39,22 @@ _GROOVY_KW = frozenset(
     "def class interface enum trait if else while switch case for return break continue "
     "println print final static import package new this super true false null void in as "
     "instanceof try catch finally throw throws assert abstract extends implements".split())
+_PYTHON_KW = frozenset(
+    "False None True and as assert async await break class continue def del elif else "
+    "except finally for from global if import in is lambda nonlocal not or pass raise "
+    "return try while with yield match case self print".split())
+_JS_KW = frozenset(
+    "break case catch class const continue debugger default delete do else export extends "
+    "finally for function if import in instanceof new return super switch this throw try "
+    "typeof var void while with yield let static get set of async await null true false "
+    "undefined console".split())
+_TS_KW = _JS_KW | frozenset(
+    "interface type enum namespace declare abstract implements readonly public private "
+    "protected as is keyof infer any unknown never number string boolean object".split())
 LANG_KEYWORDS: dict[str, frozenset[str]] = {
     "java": _JAVA_KW, "c": _C_KW, "proc": _C_KW, "sql": _SQL_KW, "shell": _SHELL_KW,
-    "perl": _PERL_KW, "groovy": _GROOVY_KW}
+    "perl": _PERL_KW, "groovy": _GROOVY_KW,
+    "python": _PYTHON_KW, "javascript": _JS_KW, "typescript": _TS_KW, "tsx": _TS_KW}
 
 
 @dataclass(frozen=True)
