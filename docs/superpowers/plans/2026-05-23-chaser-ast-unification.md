@@ -172,7 +172,7 @@ def test_java_jsp_経由():
     assert extract_chase_symbols_tree("jsp", "${ TRACKED.code }\n", 1).vars == ()
 ```
 
-注: `parse_tree` は本ファイル冒頭で既に import 済（`from grep_analyzer.classifiers.ts_classifier import parse_tree`）。`test_java_jsp_経由` は registry 非依存（`extract_chase_symbols_tree` は parse_tree("jsp")→host_grammar=java で動く）が、`_AST_CHASERS["jsp"]` 未登録だと空を返すため**Task 5 完了後に green**になる。Task 2 では `test_java_jsp_経由` を `@pytest.mark.skip(reason="Task5 で registry 登録後 green")` で一旦 skip し、Task 5 で skip を外す。他の `_java(...)` 直接テストは Task 2 で green。
+注: `parse_tree` は本ファイル冒頭で既に import 済（`from grep_analyzer.classifiers.ts_classifier import parse_tree`）。`test_java_jsp_経由` は registry 非依存（`extract_chase_symbols_tree` は parse_tree("jsp")→host_grammar=java で動く）が、`_AST_CHASERS["jsp"]` 未登録だと空を返すため**Task 5 完了後に green**になる。Task 2 では `test_java_jsp_経由` を `@pytest.mark.skip(reason="Task5 で registry 登録後 green")` で一旦 skip し、Task 5 で skip を外す。**この skip のため test_ast_chaser.py 冒頭に `import pytest` を追加**（Task 5 で skip 解除後に未使用化するので Task 5 Step 4 で除去）。他の `_java(...)` 直接テストは Task 2 で green。
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -464,9 +464,9 @@ _AST_CHASERS: dict[str, ASTChaser] = {
 
 `java_chaser.py` から `mask`・`extract` 関数と `from grep_analyzer.patterns.literal_masking import MASK_PATTERNS` / `from grep_analyzer.patterns.symbol_extraction import (JAVA_CONST_RE, JAVA_GETSET_RE, JAVA_VAR_RE)` を削除（`extract_tree` 系のみ残す）。`c_chaser.py` から同様に `mask`・`extract` と `MASK_PATTERNS`/`C_*_RE` import を削除。モジュール docstring を AST 版へ更新。
 
-- [ ] **Step 3: test_chase.py の移行（行ベース java/c/jsp/proc 除去・mask/非AST 修正）**
+- [ ] **Step 3: test_chase.py の移行（6 関数を削除＋3 関数を編集）**
 
-`tests/unit/test_chase.py` から次を**削除**（AST 版は test_ast_chaser.py に Task2/3 で追加済）:
+`tests/unit/test_chase.py` から次の**6 関数を削除**（AST 版は test_ast_chaser.py に Task2/3 で追加済）:
 - `test_文字列内の代入様字句は追跡シンボルにしない`
 - `test_Java定数はstaticかつfinalのみでgenericと配列を許容する`
 - `test_Javaのgetterとsetterとvarをマスクのうえ分類抽出する`
@@ -492,9 +492,9 @@ def test_extract_chase_symbols_tree_非AST言語は空():
     assert cs.constants == () and cs.vars == ()
 ```
 
-- [ ] **Step 4: test_ast_chaser.py の skip 解除**
+- [ ] **Step 4: test_ast_chaser.py の skip 解除＋未使用 import 除去**
 
-Task 2 の `test_java_jsp_経由`、Task 3 の `test_proc_exec_sql内は非抽出_区間外は抽出` の `@pytest.mark.skip` を削除。
+Task 2 の `test_java_jsp_経由`、Task 3 の `test_proc_exec_sql内は非抽出_区間外は抽出` の `@pytest.mark.skip` を削除。skip が無くなり `import pytest` が未使用になるため**冒頭の `import pytest` を除去**（lint 衛生・F401 回避）。
 
 - [ ] **Step 5: 全テスト実行＋Inv チェックポイント**
 
@@ -616,16 +616,37 @@ void f(){ total += 1; }
 m.c:1:int total = SEED;
 ```
 
-- [ ] **Step 4: expected を生成**
+- [ ] **Step 4: expected を生成（`tests/golden/test_golden.py` と同一の正規化で生成）**
 
-Run（既存 golden 生成手順＝`tests/golden/conftest.py` のフィクスチャが参照する生成コマンド。リポジトリの既存 golden 再生成スクリプト／手順に従う。多くは下記の形）:
+expected は `pipeline.run`→manifest encoding 読戻し→`sr+"/"` を `{SOURCE_ROOT}/` へ各行先頭1回置換→utf-8-sig 書出し、で生成する（`tests/golden/test_golden.py` の照合ロジックと一致させる）。**重要（worktree レビュー I-1）**: editable install の `.pth` が古い src を指す事故を防ぐため、冒頭で当該作業ツリーの `src` を `sys.path` 先頭に挿入し、`bindings_at_line` の存在で AST 化済 src を使っていることを assert する。
+
+Run:
 ```bash
 cd /workspaces/grep_helpers2
-# 各ケースについてツールを実行し expected を生成（既存ケースと同じ CLI 引数・SOURCE_ROOT 正規化）
-# 例（実際のコマンドは tests/golden/conftest.py / 既存 Makefile/script に合わせる）:
-python -m pytest tests/golden -k "java_multiline_chase or proc_exec_sql_chase or c_compound_assign" -q
+python -c '
+import sys; sys.path.insert(0, "src")
+from grep_analyzer.classifiers import ts_classifier
+assert hasattr(ts_classifier, "bindings_at_line"), "AST 化済 src を使うこと（古い editable src で生成しない）"
+import json, tempfile
+from pathlib import Path
+from grep_analyzer.pipeline import _default_opts, run
+for case in ["java_multiline_chase", "proc_exec_sql_chase", "c_compound_assign"]:
+    base = Path("tests/golden/cases") / case
+    out = Path(tempfile.mkdtemp())
+    assert run(input_dir=base/"input", output_dir=out, source_root=base/"src", opts=_default_opts()) == 0
+    sr = str((base/"src").resolve())
+    (base/"expected").mkdir(exist_ok=True)
+    for tsv in sorted(out.glob("*.tsv")):
+        enc = "utf-8-sig"
+        m = out / (tsv.stem + ".manifest.json")
+        if m.is_file(): enc = json.loads(m.read_text("utf-8")).get("encoding", "utf-8-sig")
+        txt = tsv.read_text(enc)
+        txt = "".join((ln.replace(sr+"/", "{SOURCE_ROOT}/", 1) if (sr+"/") in ln else ln)
+                      for ln in txt.splitlines(keepends=True))
+        (base/"expected"/tsv.name).write_text(txt, encoding="utf-8-sig")
+        print("wrote", base/"expected"/tsv.name)
+'
 ```
-注: 生成手順がスクリプト化されていない場合は、既存ケース（例 jsp_chain）の expected 生成方法を `tests/golden/conftest.py` で確認し同手順で生成する。
 
 - [ ] **Step 5: expected の内容をレビューし主張を確認**
 
@@ -651,11 +672,11 @@ git commit -m "test(golden): AST 能力固定 — java多行宣言追跡/proc EX
 - [ ] **Step 1: テスト件数を確定**
 
 Run: `cd /workspaces/grep_helpers2 && python -m pytest -q 2>&1 | tail -3`
-Expected: 件数を控える（例 `NNN passed, 5 skipped`）。
+Expected: 件数を控える（worktree 実走での実測は **395 passed, 5 skipped**＝旧 381 から +14。本番でも同数の見込み。差があれば実測値を使う）。
 
-- [ ] **Step 2: §96 テストベースライン更新**
+- [ ] **Step 2: テストベースライン更新（`381 passed, 5 skipped` を実測値へ）**
 
-§96（L96 付近）の `requirements.lock` テストベースライン記述を Step1 の確定件数へ更新（旧 `381 passed, 5 skipped` → 新件数）。世代注記（track A 331・track C 366・§389 381・本変更 NNN）を1行追記。
+master spec 内の全suite ベースライン記述（文字列 `381 passed, 5 skipped`・§96 参照の本文／§389 完了反映の本文に現れる）を `rg -n "381 passed, 5 skipped" docs/superpowers/specs/2026-05-16-grep-analyzer-design.md` で特定し、Step1 の確定件数（395 想定）へ更新。世代注記（track A 331・track C 366・§389 381・本変更 395）を1行追記。注: §96 周辺の依存系 `244 passed`（pyahocorasick 互換）は別物＝触らない。
 
 - [ ] **Step 3: §390 を完了化し proc を明記**
 
