@@ -55,7 +55,8 @@ _JSP_KW = _JAVA_KW | frozenset(
     # JSTL 接頭辞・ディレクティブ属性のみ（java 予約語は _JAVA_KW に含む）
     "page include taglib c fn empty".split())
 _ANGULAR_KW = _TS_KW | frozenset(
-    "ngIf ngFor ngSwitch ngClass ngStyle ngModel let of trackBy async $event".split())
+    # _TS_KW に未収録の Angular テンプレ固有語のみ（let/of/async は _JS_KW に既収録）
+    "ngIf ngFor ngSwitch ngClass ngStyle ngModel trackBy $event".split())
 LANG_KEYWORDS: dict[str, frozenset[str]] = {
     "java": _JAVA_KW, "c": _C_KW, "proc": _C_KW, "sql": _SQL_KW, "shell": _SHELL_KW,
     "perl": _PERL_KW, "groovy": _GROOVY_KW,

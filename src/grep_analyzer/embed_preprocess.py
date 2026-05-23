@@ -87,6 +87,8 @@ def extract_angular_ts(source: str) -> str:
     masked = _HTML_COMMENT.sub(lambda m: _blank(m.group(0)), source)
 
     def _emit(raw_start: int, raw_expr: str):
+        # norm が raw_expr より短い場合（of→= 縮約・パイプ除去）、残余位置は
+        # out 初期化済みの空白のまま＝意図的（行数は不変・spec §4 不変量）。
         norm = _ng_normalize(raw_expr)
         for j, ch in enumerate(norm):
             if raw_start + j < len(out):

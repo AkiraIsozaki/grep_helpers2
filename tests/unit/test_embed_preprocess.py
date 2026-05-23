@@ -63,6 +63,7 @@ def test_host_grammar_既存言語は恒等():
 def test_host_grammar_埋め込みはホストへ写像():
     assert host_grammar("proc") == "c"
     assert host_grammar("jsp") == "java"
+    assert host_grammar("angular") == "typescript"
 
 
 def test_host_source_既存言語は恒等():
@@ -80,6 +81,11 @@ def test_host_source_proc_は_EXEC_SQL_を空白化():
 def test_host_source_jsp_は_extract_jsp_java():
     s = "<p><%= title %></p>\n"
     assert host_source("jsp", s) == extract_jsp_java(s)
+
+
+def test_host_source_angular_は_extract_angular_ts():
+    s = '<p>{{ user.code }}</p>\n'
+    assert host_source("angular", s) == extract_angular_ts(s)
 
 
 def test_angular_補間とバインディングの式を残す():
