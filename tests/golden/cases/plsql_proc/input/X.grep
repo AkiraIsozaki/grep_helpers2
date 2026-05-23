@@ -1,0 +1,2 @@
+p.pkb:2:  v_x NUMBER := 'X';
+p.pkb:4:  DBMS_OUTPUT.PUT_LINE('X');

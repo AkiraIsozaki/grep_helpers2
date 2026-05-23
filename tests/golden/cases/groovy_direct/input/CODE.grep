@@ -1,0 +1,2 @@
+g.groovy:1:def CODE = "X"
+g.groovy:2:println CODE

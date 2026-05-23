@@ -1,0 +1,3 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+X	sql	{SOURCE_ROOT}/p.pkb	2	direct	代入		代入 (sql)		X@p.pkb:2	PROCEDURE do_it IS \n   v_x NUMBER := 'X'; \n BEGIN \n   DBMS_OUTPUT.PUT_LINE('X');	utf-8	medium
+X	sql	{SOURCE_ROOT}/p.pkb	4	direct	出力		出力 (sql)		X@p.pkb:4	  v_x NUMBER := 'X'; \n BEGIN \n   DBMS_OUTPUT.PUT_LINE('X'); \n END;	utf-8	medium

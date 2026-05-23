@@ -1,0 +1,2 @@
+p.pl:1:my $CODE = "X";
+p.pl:2:print "value=$CODE\n";

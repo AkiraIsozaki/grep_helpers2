@@ -1,0 +1,5 @@
+PROCEDURE do_it IS
+  v_x NUMBER := 'X';
+BEGIN
+  DBMS_OUTPUT.PUT_LINE('X');
+END;

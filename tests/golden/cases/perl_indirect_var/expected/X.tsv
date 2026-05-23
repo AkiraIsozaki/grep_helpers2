@@ -1,0 +1,3 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+X	perl	{SOURCE_ROOT}/q.pl	1	direct	代入		代入 (perl)		X@q.pl:1	my $CODE = "X"; \n print "$CODE";	utf-8	medium
+X	perl	{SOURCE_ROOT}/q.pl	2	indirect:var	出力		出力 (perl)	CODE	X@q.pl:1 -> CODE@q.pl:2	my $CODE = "X"; \n print "$CODE";	utf-8	medium
