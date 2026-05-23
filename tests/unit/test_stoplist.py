@@ -61,6 +61,7 @@ def test_groovy予約語は追跡集合に入らない():
     pol = SymbolPolicy(min_specificity=2, user_stoplist=frozenset())
     r = admit(["def", "class", "while", "return", "println", "orderId"], "groovy", pol)
     assert r.accepted == ["orderId"]
+    assert {s for s, _ in r.rejected} == {"def", "class", "while", "return", "println"}
 
 
 def test_sqlのOracleデータ型は追跡集合に入らない():
