@@ -28,7 +28,7 @@ def build_snippet(language: str, dialect: str, file_text: str,
     java/c: ts_span→無ければ ヒット 1 行（spec §9 フォールバック: java/c に
       sql/shell ヒューリスティックは適用しない）。
     proc: EXEC 区間=proc_exec_span／区間外=ts_span("proc",..)（内部で
-      mask_exec_sql 後 C 解析）→ いずれも None なら ヒット 1 行（spec §7/§9）。
+      parse_tree→host_source 経由 C 解析）→ いずれも None なら ヒット 1 行（spec §7/§9）。
     sql/shell/perl/groovy: heuristic_span（AST 非使用）。
     `dialect` は将来 cshell 境界用の予約引数（v1 未使用・呼出互換のため受領）。
     連結前に各行へ sanitize_field→_escape_sep を適用し clamp_lines。

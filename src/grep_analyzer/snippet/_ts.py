@@ -1,7 +1,7 @@
 """tree-sitter による java/c span（段1→段2）+ Pro*C EXEC span。
 
 node_at_line で最小内包葉を取り、.parent 上昇で粒度表へ昇格する。
-block 等到達は直近 statement。proc は mask_exec_sql 後を解析（行番号保存）。
+block 等到達は直近 statement。proc は parse_tree 内 host_source 経由で解析（行番号保存）。
 ERROR/MISSING は**確定した選択ノードの部分木のみ**で判定。
 
 Related: spec §9
