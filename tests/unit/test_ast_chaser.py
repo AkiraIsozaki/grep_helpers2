@@ -41,3 +41,35 @@ def test_python_staticmethod_は無視():
     src = "class C:\n    @staticmethod\n    def m():\n        return 1\n"
     cs = _py(src, 3)
     assert cs.getters == () and cs.setters == ()
+
+
+def _js(text, lineno):
+    from grep_analyzer.classifiers.javascript_chaser import extract_tree
+    return extract_tree("javascript", parse_tree("javascript", text), lineno)
+
+
+def test_js_const_let_var():
+    assert _js("const X = 1;\n", 1).constants == ("X",)
+    assert _js("let y = 1;\n", 1).vars == ("y",)
+    assert _js("var z = 1;\n", 1).vars == ("z",)
+    assert _js("a = b;\n", 1).vars == ("a",)
+
+
+def test_js_destructure():
+    assert _js("const {p, q} = o;\n", 1).constants == ("p", "q")
+    assert _js("const {a: x} = o;\n", 1).constants == ("x",)   # key a は除外
+    assert _js("const {b = 5} = o;\n", 1).constants == ("b",)  # default 値除外
+    assert _js("const [m, ...rest] = o;\n", 1).constants == ("m", "rest")
+
+
+def test_js_field_getter_setter():
+    src = ("class C {\n  field = 1;\n  get val() { return 1; }\n"
+           "  set val(v) {}\n  method() {}\n}\n")
+    assert _js(src, 2).vars == ("field",)
+    assert _js(src, 3).getters == ("val",)
+    assert _js(src, 4).setters == ("val",)
+    assert _js(src, 5).vars == () and _js(src, 5).getters == ()  # 通常メソッドは無視
+
+
+def test_js_multiline_const():
+    assert _js("const MULTI =\n  1 + 2;\n", 2).constants == ("MULTI",)
