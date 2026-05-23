@@ -55,3 +55,20 @@ def jsp_region_span(file_text: str, lineno: int):
         if start <= hit <= end:
             return (start, end)
     return None
+
+
+_HOST_GRAMMAR = {"proc": "c", "jsp": "java"}
+
+
+def host_grammar(language: str) -> str:
+    """埋め込み言語→ホスト grammar 名。既存言語は恒等（spec §5）。"""
+    return _HOST_GRAMMAR.get(language, language)
+
+
+def host_source(language: str, source: str) -> str:
+    """埋め込み言語→ホストが読める逆マスク済ソース。既存言語は恒等（spec §5）。"""
+    if language == "proc":
+        return mask_exec_sql(source)
+    if language == "jsp":
+        return extract_jsp_java(source)
+    return source

@@ -1,4 +1,4 @@
-from grep_analyzer.embed_preprocess import extract_jsp_java, jsp_region_span
+from grep_analyzer.embed_preprocess import extract_jsp_java, host_grammar, host_source, jsp_region_span
 
 
 def test_jsp_scriptletのjavaを残し他を空白化():
@@ -52,3 +52,30 @@ def test_jsp_region_span_多行scriptletの行スパン():
 def test_jsp_region_span_区間外はNone():
     src = "<html>\n<% int x = 1; %>\n<p>t</p>\n"
     assert jsp_region_span(src, 3) is None
+
+
+def test_host_grammar_既存言語は恒等():
+    for lang in ("java", "c", "python", "javascript", "typescript", "tsx"):
+        assert host_grammar(lang) == lang
+
+
+def test_host_grammar_埋め込みはホストへ写像():
+    assert host_grammar("proc") == "c"
+    assert host_grammar("jsp") == "java"
+
+
+def test_host_source_既存言語は恒等():
+    s = "int x = 1;\nfoo();\n"
+    for lang in ("java", "c", "python", "javascript", "typescript", "tsx", "html"):
+        assert host_source(lang, s) == s
+
+
+def test_host_source_proc_は_EXEC_SQL_を空白化():
+    s = "EXEC SQL SELECT 1 INTO :x FROM dual;\n"
+    out = host_source("proc", s)
+    assert "SELECT" not in out and out.count("\n") == s.count("\n")
+
+
+def test_host_source_jsp_は_extract_jsp_java():
+    s = "<p><%= title %></p>\n"
+    assert host_source("jsp", s) == extract_jsp_java(s)
