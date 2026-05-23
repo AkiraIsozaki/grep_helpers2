@@ -155,3 +155,24 @@ def test_Groovyのfinalは定数として抽出する():
 def test_Groovyにgetter_setterは無くconstはvarに重複しない():
     cs = extract_chase_symbols("groovy", "", "final MAX = 1")
     assert cs.getters == () and cs.setters == () and cs.vars == ()
+
+
+def test_PLSQL型付き宣言は型名でなく先頭識別子をvar抽出する():
+    assert extract_chase_symbols("sql", "", "v_x NUMBER := 1;").vars == ("v_x",)
+    assert extract_chase_symbols(
+        "sql", "", "v_name VARCHAR2(100) := 'a';").vars == ("v_name",)
+
+
+def test_PLSQL_CONSTANTは定数としvarに型名や自身を出さない():
+    cs = extract_chase_symbols("sql", "", "c_max CONSTANT NUMBER := 100;")
+    assert cs.constants == ("c_max",) and cs.vars == ()
+
+
+def test_PLSQL小文字constantもリークしない():
+    cs = extract_chase_symbols("sql", "", "c_max constant number := 100;")
+    assert cs.constants == ("c_max",) and "constant" not in cs.vars and cs.vars == ()
+
+
+def test_PLSQL複数代入は宣言是正後も全左辺を温存する():
+    # R2-C1 回帰: golden 非対象のサイレント退行を unit で守る
+    assert extract_var_symbols("sql", "", "a := 1; b := 2;") == ["a", "b"]

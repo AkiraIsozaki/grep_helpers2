@@ -1,15 +1,19 @@
 """SQL (Oracle PL/SQL) 用 Chaser — 言語別シンボル抽出とリテラルマスク。
 
-PL/SQL の `var := 式` の左辺を var として抽出する。
-バインド変数 `:v` / 置換変数 `&v` は ORACLE_ASSIGN_RE の lookbehind で除外。
-constant / getter / setter は SQL では発生しないため常に空タプル。
+PL/SQL 宣言 `name [CONSTANT] TYPE := …` では型名でなく先頭 id を採る（C-C）。
+通常代入 `x := y`・複数代入 `a:=1;b:=2` は全左辺を温存（R2-C1）。CONSTANT を
+constant、それ以外を var とする。getter/setter は SQL では発生しないため空。
+バインド `:v`／置換 `&v` は lookbehind で除外。
 
 chase.py の dispatcher が `_CHASERS["sql"]` 経由で呼び出す。
 """
 
 from grep_analyzer.model import ChaseSymbols
 from grep_analyzer.patterns.literal_masking import MASK_PATTERNS
-from grep_analyzer.patterns.symbol_extraction import ORACLE_ASSIGN_RE
+from grep_analyzer.patterns.symbol_extraction import (
+    ORACLE_CONSTANT_RE,
+    ORACLE_DECL_ASSIGN_RE,
+)
 
 
 def mask(line: str) -> str:
@@ -19,18 +23,19 @@ def mask(line: str) -> str:
 
 
 def _extract_var_symbols(dialect: str, line: str) -> list[str]:
-    """与えられた行から PL/SQL `:=` の左辺を抽出する（dispatcher 向け公開ヘルパ）。
+    """与えられた行から PL/SQL `:=` の左辺（宣言形は先頭 id）を抽出する。
 
-    呼出元はマスク前の生行 (chase.extract_var_symbols 経由) または
-    マスク済み行 (本モジュール extract 経由) のいずれかを渡す。
-    コメント内 `:=` を除外するにはマスク済み行を渡すこと
-    （extract 経路では既にマスク済み）。バインド `:v` / 置換 `&v` は
-    ORACLE_ASSIGN_RE の lookbehind で除外される。
+    型付き宣言 `name TYPE := …` では型名でなく先頭 id を採る（C-C）。
+    通常代入 `x := y`・複数代入 `a:=1;b:=2` は全左辺を温存（R2-C1）。
+    バインド `:v`／置換 `&v` は lookbehind で除外。
     """
-    return [m.group(1) for m in ORACLE_ASSIGN_RE.finditer(line)]
+    return [m.group(1) for m in ORACLE_DECL_ASSIGN_RE.finditer(line)]
 
 
 def extract(dialect: str, line: str) -> ChaseSymbols:
-    """1 行をマスク後に SQL の規則で分類抽出する（dialect は無視）。"""
+    """1 行をマスク後に SQL(Oracle/PL-SQL) の規則で分類抽出する（dialect 無視）。"""
     masked = mask(line)
-    return ChaseSymbols((), tuple(_extract_var_symbols(dialect, masked)), (), ())
+    consts = tuple(m.group(1) for m in ORACLE_CONSTANT_RE.finditer(masked))
+    const_set = set(consts)
+    vars_ = tuple(v for v in _extract_var_symbols(dialect, masked) if v not in const_set)
+    return ChaseSymbols(consts, vars_, (), ())
