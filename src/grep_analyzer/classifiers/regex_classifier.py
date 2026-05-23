@@ -6,6 +6,7 @@ Related: spec §7
 import re
 
 from grep_analyzer.classifiers.base import ClassifyResult
+from grep_analyzer.patterns.literal_masking import MASK_PATTERNS
 
 # spec §7（Oracle 方言）。_apply は先頭一致優先。:= を最優先にし、
 # 既存 golden 等価のため WHERE比較→分岐(DECODE/CASE/||)→INSERT/UPDATE代入 の順。
@@ -47,3 +48,41 @@ def classify_shell(line: str, dialect: str = "bourne") -> ClassifyResult:
     """
     rules = _SHELL_RULES_CSHELL if dialect == "cshell" else _SHELL_RULES_BOURNE
     return _apply(rules, line)
+
+
+def _mask(language: str, line: str) -> str:
+    pat = MASK_PATTERNS.get(language)
+    return line if pat is None else pat.sub(lambda m: " " * len(m.group(0)), line)
+
+
+# spec §4.2 Perl（先頭一致優先）。比較の裸 < > は -> / => / <= >= を除外。
+_PERL_RULES = [
+    (re.compile(r"^\s*sub\s+\w+|\bpackage\s+\w+|\buse\s+constant\b"), "宣言"),
+    (re.compile(r"^\s*(?:my|our|local|state)\s+[$@%]|[$@%]\w+\s*=(?![=~>])"), "代入"),
+    (re.compile(r"\b(?:if|unless|elsif)\b|==|!=|<=|>=|\beq\b|\bne\b|\blt\b|\bgt\b|\ble\b|"
+                r"\bge\b|=~|!~|(?<![-=])<(?!=)|(?<![-=])>(?!=)"), "比較"),
+    (re.compile(r"\b(?:for|foreach|while|until)\b"), "分岐"),
+    (re.compile(r"\b(?:print|printf|say|warn|die)\b"), "出力"),
+]
+# spec §4.3 Groovy（先頭一致優先）。規則1の def はメソッド宣言形 `def name(` 限定。
+_GROOVY_RULES = [
+    (re.compile(r"^\s*(?:class|interface|enum|trait)\s+|"
+                r"^\s*(?:[\w.<>,\s]+\s+)?def\s+\w+\s*\("), "宣言"),
+    (re.compile(r"^\s*(?:def|final|[A-Za-z_]\w*(?:<[^>]*>)?)\s+\w+\s*=(?!=)|"
+                r"\b\w+\s*=(?!=)"), "代入"),
+    (re.compile(r"\b(?:if|while)\b|==~|<=>|==|!=|<=|>=|=~|"
+                r"(?<![-=])<(?!=)|(?<![-=])>(?!=)"), "比較"),
+    (re.compile(r"\b(?:switch|for|case)\b"), "分岐"),
+    (re.compile(r"\breturn\b"), "return"),
+    (re.compile(r"\b(?:println|print|printf)\b|\blog\.\w+"), "出力"),
+]
+
+
+def classify_perl(line: str) -> ClassifyResult:
+    """Perl行を分類する（spec §4.2・confidence=medium・内部 mask）。"""
+    return _apply(_PERL_RULES, _mask("perl", line))
+
+
+def classify_groovy(line: str) -> ClassifyResult:
+    """Groovy行を分類する（spec §4.3・confidence=medium・内部 mask）。"""
+    return _apply(_GROOVY_RULES, _mask("groovy", line))
