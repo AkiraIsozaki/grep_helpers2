@@ -222,7 +222,7 @@ class ASTChaser(Protocol):
 
 §9 の二段選択（`node_at_line`→粒度ノードへ climb）を流用し、`_GRAN_JAVA`/`_GRAN_C` に倣う per-language 粒度集合と `_BLOCK` を追加。`build_snippet`（`snippet/__init__.py`）の **tree-sitter 分岐へ新4 language 値を追加**し、**direct（`pipeline.py`）と indirect（`fixedpoint/_finalize.py`）の両呼出点**で AST スパンが使われること（レビュー C2(b)・両経路で同一構文の snippet が一致）。
 - 初期粒度集合（plan 時に代表例で最終検証）:
-  - Python `_GRAN`: `if_statement`/`while_statement`/`for_statement`/`match_statement`/`return_statement`/`expression_statement`/`import_statement`/`import_from_statement`。`_BLOCK` に **`module`** と `block` を含める（climb 終端）。def/class/decorated ヘッダ行ヒットは束縛/粒度に当たらず 1 行フォールバック＝許容。
+  - Python `_GRAN`: `return_statement`/`expression_statement`/`import_statement`/`import_from_statement`（複合文 if/while/for/match は **意図的に除外**＝Python は条件が括弧で囲まれず paren スパンが取れないため、複合文ヘッダ行ヒットは 1 行フォールバックにする）。`_BLOCK` に **`module`** と `block` を含める（climb 終端）。def/class/decorated ヘッダ行ヒットも束縛/粒度に当たらず 1 行フォールバック＝許容。
   - JS/TS `_GRAN`: `lexical_declaration`/`variable_declaration`/`if_statement`/`while_statement`/`for_statement`/`switch_statement`/`return_statement`/`expression_statement`/`field_definition`/`public_field_definition`/`method_definition`。`_BLOCK` に `program`/`statement_block`/`class_body`/`function_declaration`/`method_definition`/`arrow_function`。
 - 既存の行・文字数セーフティ上限はそのまま適用。AST 言語は heuristic_span 分岐へ**入れない**（`_heuristic.stop()` の shell フォールスルー誤適用回避・B §6 の教訓）。
 
