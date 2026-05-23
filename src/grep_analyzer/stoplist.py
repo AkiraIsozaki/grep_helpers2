@@ -52,7 +52,8 @@ _TS_KW = _JS_KW | frozenset(
     "interface type enum namespace declare abstract implements readonly public private "
     "protected as is keyof infer any unknown never number string boolean object".split())
 _JSP_KW = _JAVA_KW | frozenset(
-    "page import include taglib c fn empty true false null instanceof".split())
+    # JSTL 接頭辞・ディレクティブ属性のみ（java 予約語は _JAVA_KW に含む）
+    "page include taglib c fn empty".split())
 LANG_KEYWORDS: dict[str, frozenset[str]] = {
     "java": _JAVA_KW, "c": _C_KW, "proc": _C_KW, "sql": _SQL_KW, "shell": _SHELL_KW,
     "perl": _PERL_KW, "groovy": _GROOVY_KW,
