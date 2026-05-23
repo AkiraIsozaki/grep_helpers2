@@ -40,7 +40,7 @@ def build_snippet(language: str, dialect: str, file_text: str,
     if hit < 0 or hit >= len(lines):
         return ""
     span = None
-    if language in ("java", "c"):
+    if language in ("java", "c", "python", "javascript", "typescript", "tsx"):
         span = ts_span(language, file_text, lineno)
     elif language == "proc":
         span = proc_exec_span(file_text, lineno)

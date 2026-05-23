@@ -28,6 +28,30 @@ _BLOCK = {"block", "compound_statement", "program", "translation_unit",
           "method_declaration", "function_definition",
           "constructor_declaration"}
 
+# 新言語の粒度集合（spec §7）。複合文(if/while/for/match)は粒度に含めず、
+# ヒット時は 1 行フォールバック（python は paren 条件が無いため）。
+_GRAN_PY = {"return_statement", "expression_statement",
+            "import_statement", "import_from_statement"}
+_STMT_PY = _GRAN_PY
+_BLOCK_PY = {"block", "module"}
+_GRAN_JS = {"lexical_declaration", "variable_declaration",
+            "if_statement", "while_statement", "for_statement", "switch_statement",
+            "return_statement", "expression_statement",
+            "field_definition", "method_definition", "public_field_definition"}
+_STMT_JS = {"lexical_declaration", "variable_declaration",
+            "return_statement", "expression_statement",
+            "field_definition", "method_definition", "public_field_definition"}
+_BLOCK_JS = {"statement_block", "class_body", "program",
+             "function_declaration", "method_definition", "arrow_function"}
+_PAREN_JS = {"if_statement", "while_statement", "switch_statement", "for_statement"}
+
+_SETS_BY_LANG = {
+    "python": (_GRAN_PY, _STMT_PY, _BLOCK_PY, frozenset()),
+    "javascript": (_GRAN_JS, _STMT_JS, _BLOCK_JS, _PAREN_JS),
+    "typescript": (_GRAN_JS, _STMT_JS, _BLOCK_JS, _PAREN_JS),
+    "tsx": (_GRAN_JS, _STMT_JS, _BLOCK_JS, _PAREN_JS),
+}
+
 
 def _paren_span(node) -> tuple[int, int]:
     """( 〜対応 ) の物理行スパン（spec §9 表）。AST 子で取得（文字列内括弧に頑健）。"""
@@ -51,35 +75,37 @@ def _has_error(node) -> bool:
 
 
 def ts_span(language: str, file_text: str, lineno: int):
-    """java/c 選択範囲 [s,e]（0始まり物理行）。取れなければ None（→fallback）。
-
-    段1（node_at_line=最小内包葉・列非依存）→段2（.parent 上昇で粒度表へ
-    昇格／block 等到達は直近 statement／無ければ None）。proc は生 EXEC が
-    C パースを壊すため mask_exec_sql 後を解析（行番号保存）。
-    """
-    lang = "c" if language in ("c", "proc") else "java"
-    src = mask_exec_sql(file_text) if language == "proc" else file_text
+    """選択範囲 [s,e]（0始まり物理行）。取れなければ None（→fallback）。spec §9。"""
+    if language in ("java", "c", "proc"):
+        lang = "c" if language in ("c", "proc") else "java"
+        src = mask_exec_sql(file_text) if language == "proc" else file_text
+        gran = _GRAN_JAVA if lang == "java" else _GRAN_C
+        stmt, block, paren, parse_lang = _STMT, _BLOCK, _PAREN_ONLY, lang
+    elif language in _SETS_BY_LANG:
+        gran, stmt, block, paren = _SETS_BY_LANG[language]
+        src, parse_lang = file_text, language
+    else:
+        return None
     try:
-        root = parse_tree(lang, src)
+        root = parse_tree(parse_lang, src)
     except Exception:
         return None
     node = node_at_line(root, lineno)
     if node is None:
         return None
-    gran = _GRAN_JAVA if lang == "java" else _GRAN_C
     last_stmt = None
     cur = node
     while cur is not None:
-        node_type = cur.type
-        if node_type in _STMT:
+        nt = cur.type
+        if nt in stmt:
             last_stmt = cur
-        if node_type in gran:
+        if nt in gran:
             if _has_error(cur):
                 return None
-            if node_type in _PAREN_ONLY:
+            if nt in paren:
                 return _paren_span(cur)
             return (cur.start_point[0], cur.end_point[0])
-        if node_type in _BLOCK:
+        if nt in block:
             if last_stmt is None or _has_error(last_stmt):
                 return None
             return (last_stmt.start_point[0], last_stmt.end_point[0])

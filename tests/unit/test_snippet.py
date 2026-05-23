@@ -124,3 +124,24 @@ def test_区切り衝突はバックスラッシュ二重化_サニタイズ後(
     # ソース行に ' \n ' 4文字並びが出現 → \ を \\ へ。タブは空白化(規約①)
     src = "a \\n b\tc\n"
     assert build_snippet("shell", "bourne", src, 1) == "a \\\\n b c"
+
+
+def test_python_複数行代入スパン():
+    from grep_analyzer.snippet import ts_span
+    assert ts_span("python", "X = (\n  1 + 2\n)\n", 1) == (0, 2)
+
+
+def test_python_単純文1行():
+    from grep_analyzer.snippet import ts_span
+    assert ts_span("python", "a = 1\nb = 2\n", 1) == (0, 0)
+
+
+def test_js_複数行宣言スパン():
+    from grep_analyzer.snippet import ts_span
+    assert ts_span("javascript", "const X =\n  1 + 2;\n", 1) == (0, 1)
+
+
+def test_build_snippet_python():
+    from grep_analyzer.snippet import build_snippet
+    s = build_snippet("python", "bourne", "X = (\n  1 + 2\n)\n", 1)
+    assert "X = (" in s
