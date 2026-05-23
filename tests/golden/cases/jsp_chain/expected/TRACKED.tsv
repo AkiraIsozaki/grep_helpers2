@@ -1,0 +1,6 @@
+keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+TRACKED	jsp	{SOURCE_ROOT}/page.jsp	2	direct	宣言		宣言 (jsp)		TRACKED@page.jsp:2	<% \n   String TRACKED = init(); \n   String alias = TRACKED; \n   if (alias != null) { out.println(alias); } \n %>	utf-8	high
+TRACKED	jsp	{SOURCE_ROOT}/page.jsp	3	indirect:var	宣言		宣言 (jsp)	TRACKED	TRACKED@page.jsp:2 -> TRACKED@page.jsp:3	<% \n   String TRACKED = init(); \n   String alias = TRACKED; \n   if (alias != null) { out.println(alias); } \n %>	utf-8	high
+TRACKED	jsp	{SOURCE_ROOT}/page.jsp	3	indirect:var	宣言		宣言 (jsp)	alias	TRACKED@page.jsp:2 -> TRACKED@page.jsp:3 -> alias@page.jsp:3	<% \n   String TRACKED = init(); \n   String alias = TRACKED; \n   if (alias != null) { out.println(alias); } \n %>	utf-8	high
+TRACKED	jsp	{SOURCE_ROOT}/page.jsp	4	indirect:var	比較		比較 (jsp)	alias	TRACKED@page.jsp:2 -> TRACKED@page.jsp:3 -> alias@page.jsp:4	<% \n   String TRACKED = init(); \n   String alias = TRACKED; \n   if (alias != null) { out.println(alias); } \n %>	utf-8	high
+TRACKED	jsp	{SOURCE_ROOT}/page.jsp	6	indirect:var	その他		その他 (jsp)	alias	TRACKED@page.jsp:2 -> TRACKED@page.jsp:3 -> alias@page.jsp:6	<p><%= alias %></p>	utf-8	high
