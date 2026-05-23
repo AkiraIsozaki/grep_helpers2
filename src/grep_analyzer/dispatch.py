@@ -21,6 +21,7 @@ _EXT_MAP = {
     ".tsx": "tsx",
     ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript", ".jsx": "javascript",
     ".py": "python",
+    ".jsp": "jsp", ".jspf": "jsp", ".jspx": "jsp", ".tag": "jsp", ".tagx": "jsp",
 }
 _EXEC_SQL_RE = re.compile(r"\bEXEC\s+SQL\b", re.IGNORECASE)
 
@@ -89,6 +90,8 @@ def detect_language(path: str, content_sample: str, lang_map: dict[str, str]) ->
         if _EXEC_SQL_RE.search(content_sample):
             return "proc"
         return lang or "c"
+    if ext in (".html", ".htm"):
+        return "html"          # C1: パススルー（C2 で _ANGULAR_RE 判定に差し替え）
     if lang is not None:  # java / sql / perl / groovy
         return lang
     # 拡張子が未知または無い: シェバン解決（手順3）→ EXEC SQL（手順4）→ c（手順5）
@@ -106,7 +109,7 @@ def extension_resolves_language(path: str, lang_map: dict[str, str]) -> bool:
     False のときのみ手順3（シェバン検出）に到達する。
     """
     ext = os.path.splitext(path)[1].lower()
-    return ext in lang_map or ext in _EXT_MAP
+    return ext in lang_map or ext in _EXT_MAP or ext in (".html", ".htm")
 
 
 def detect_shell_dialect(path: str, content_sample: str) -> str:

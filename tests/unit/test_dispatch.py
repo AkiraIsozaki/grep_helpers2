@@ -150,3 +150,18 @@ def test_shebang_node_python_を解決する():
     assert detect_language("noext2", "#!/usr/bin/python3\n", {}) == "python"
     assert shebang_language("#!/usr/bin/env node\n") == "javascript"
     assert shebang_language("#!/usr/bin/python3\n") == "python"
+
+
+def test_jsp_拡張子():
+    for ext in (".jsp", ".jspf", ".jspx", ".tag", ".tagx"):
+        assert detect_language(f"a{ext}", "<% int x; %>", {}) == "jsp"
+
+
+def test_html_はC1ではhtmlパススルー():
+    assert detect_language("a.html", "<div>{{x}}</div>", {}) == "html"
+    assert detect_language("a.htm", "<p>static</p>", {}) == "html"
+
+
+def test_html_拡張子はextension_resolves():
+    assert extension_resolves_language("a.html", {}) is True
+    assert extension_resolves_language("a.jsp", {}) is True
