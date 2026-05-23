@@ -58,3 +58,23 @@ def test_PLSQL誤爆回避():
     assert classify_sql("DBMS_OUTPUT.PUT_LINE('FUNCTION x');") == ("出力", "medium")
     # OPEN c FOR ... は FOR が行頭でないため新ループ規則は不発＝既存規則にも該当せず その他。
     assert classify_sql("OPEN c FOR SELECT 1 FROM dual;") == ("その他", "medium")
+
+
+def test_jsp_classify_各category():
+    src_if = "<% if (a > b) { } %>\n"
+    assert classify_hit("jsp", "", src_if, 1, src_if)[0] == "比較"
+    src_decl = "<%! private int n; %>\n"
+    assert classify_hit("jsp", "", src_decl, 1, src_decl)[0] == "宣言"
+    src_ret = "<% return v; %>\n"
+    assert classify_hit("jsp", "", src_ret, 1, src_ret)[0] == "return"
+
+
+def test_jsp_式とELはその他():
+    src_expr = "<%= title %>\n"
+    assert classify_hit("jsp", "", src_expr, 1, src_expr)[0] == "その他"
+    src_el = "${ user.code }\n"
+    assert classify_hit("jsp", "", src_el, 1, src_el)[0] == "その他"
+
+
+def test_html_は常にその他_high():
+    assert classify_hit("html", "", "<p>x</p>\n", 1, "<p>x</p>") == ("その他", "high")
