@@ -15,6 +15,7 @@ from grep_analyzer.dispatch import (
     detect_shell_dialect,
     extension_resolves_language,
     shebang_dialect,
+    shebang_language,
 )
 from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
 from grep_analyzer.fixedpoint import EngineOptions, run_fixedpoint
@@ -83,8 +84,8 @@ def run(
             dialect = detect_shell_dialect(relpath, sample) if language == "shell" else "bourne"
             if (
                 not extension_resolves_language(relpath, lang_map)
-                and language != "shell"
-                and shebang_dialect(sample) == "other"
+                and shebang_dialect(sample) is not None      # シェバン行が存在
+                and shebang_language(sample) is None         # 対応言語に解決しない
             ):
                 diag.add("unsupported_shebang", str(relpath))
             category, confidence = classify_hit(language, dialect, file_text, lineno, content)
