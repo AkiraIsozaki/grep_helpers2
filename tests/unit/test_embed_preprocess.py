@@ -1,4 +1,4 @@
-from grep_analyzer.embed_preprocess import extract_jsp_java, host_grammar, host_source, jsp_region_span
+from grep_analyzer.embed_preprocess import extract_angular_ts, extract_jsp_java, host_grammar, host_source, jsp_region_span
 
 
 def test_jsp_scriptletのjavaを残し他を空白化():
@@ -80,3 +80,30 @@ def test_host_source_proc_は_EXEC_SQL_を空白化():
 def test_host_source_jsp_は_extract_jsp_java():
     s = "<p><%= title %></p>\n"
     assert host_source("jsp", s) == extract_jsp_java(s)
+
+
+def test_angular_補間とバインディングの式を残す():
+    src = '<p>{{ user.code }}</p>\n<a [href]="url">x</a>\n'
+    out = extract_angular_ts(src)
+    assert out.count("\n") == src.count("\n")
+    assert "user.code" in out and "url" in out
+    assert "<p>" not in out and "href" not in out
+
+
+def test_angular_ngFor_を_let_X_eq_Y_に正規化():
+    src = '<li *ngFor="let item of items; trackBy: t">x</li>\n'
+    out = extract_angular_ts(src)
+    assert "let item" in out and "items" in out
+    assert " of " not in out and "trackBy" not in out
+
+
+def test_angular_パイプ右辺を除去():
+    src = "<p>{{ value | currency }}</p>\n"
+    out = extract_angular_ts(src)
+    assert "value" in out and "currency" not in out
+
+
+def test_angular_HTMLコメント内の式は空白化():
+    src = "<!-- {{ secret }} -->\n"
+    out = extract_angular_ts(src)
+    assert "secret" not in out

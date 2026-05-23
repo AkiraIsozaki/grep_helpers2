@@ -59,7 +59,44 @@ def jsp_region_span(file_text: str, lineno: int):
     return None
 
 
-_HOST_GRAMMAR = {"proc": "c", "jsp": "java"}
+_NG_INTERP = re.compile(r"\{\{(.*?)\}\}", re.DOTALL)
+# [prop]= / [(two-way)]= / (event)= / *dir=  の属性。値は " か ' で囲まれる。
+_NG_ATTR = re.compile(
+    r"""(?:\[\(?[\w.$-]+\)?\]|\([\w.$-]+\)|\*[\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')""",
+    re.DOTALL)
+_NG_PIPE = re.compile(r"(?<!\|)\|(?!\|)")               # 単一 | （|| は除外）
+
+
+def _ng_normalize(expr: str) -> str:
+    """式断片の best-effort 正規化（spec §3.4）。長さは概ね保つが ngFor の of→= は1縮む。"""
+    head = expr.split(";", 1)[0]
+    head = re.sub(r"\bof\b", "=", head)
+    m = _NG_PIPE.search(head)
+    if m is not None:
+        head = head[:m.start()]
+    return head
+
+
+def extract_angular_ts(source: str) -> str:
+    """Angular テンプレから typescript host が読める式だけ残す（行数保存・spec §4.2）。"""
+    out = list(_blank(source))
+    masked = _HTML_COMMENT.sub(lambda m: _blank(m.group(0)), source)
+
+    def _emit(raw_start: int, raw_expr: str):
+        norm = _ng_normalize(raw_expr)
+        for j, ch in enumerate(norm):
+            if raw_start + j < len(out):
+                out[raw_start + j] = ch
+
+    for m in _NG_INTERP.finditer(masked):
+        _emit(m.start(1), source[m.start(1):m.end(1)])
+    for m in _NG_ATTR.finditer(masked):
+        gi = 1 if m.group(1) is not None else 2
+        _emit(m.start(gi), source[m.start(gi):m.end(gi)])
+    return "".join(out)
+
+
+_HOST_GRAMMAR = {"proc": "c", "jsp": "java", "angular": "typescript"}
 
 
 def host_grammar(language: str) -> str:
@@ -73,4 +110,6 @@ def host_source(language: str, source: str) -> str:
         return mask_exec_sql(source)
     if language == "jsp":
         return extract_jsp_java(source)
+    if language == "angular":
+        return extract_angular_ts(source)
     return source
