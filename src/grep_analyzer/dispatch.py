@@ -13,21 +13,26 @@ _EXT_MAP = {
     ".csh": "shell", ".tcsh": "shell",
     ".pc": "proc",
     ".c": "c", ".h": "c",
+    ".pkb": "sql", ".pks": "sql", ".prc": "sql", ".fnc": "sql",
+    ".trg": "sql", ".pls": "sql", ".plb": "sql",
+    ".pl": "perl", ".pm": "perl", ".t": "perl",
+    ".groovy": "groovy", ".gvy": "groovy", ".gradle": "groovy",
 }
 _EXEC_SQL_RE = re.compile(r"\bEXEC\s+SQL\b", re.IGNORECASE)
 
 # シェバンは第1物理行の1列目（任意の先頭BOM=U+FEFF 可）に #! が必須（spec §5.1 手順3）。
-_SHEBANG_RE = re.compile(r"^\ufeff?#!\s*(\S+)(?:\s+(\S+))?")
+_SHEBANG_RE = re.compile(r"^﻿?#!\s*(\S+)(?:\s+(\S+))?")
 _BOURNE_INTERP = {"sh", "bash", "ksh", "dash"}
 _CSHELL_INTERP = {"csh", "tcsh"}
+_SHEBANG_LANG = {
+    "sh": "shell", "bash": "shell", "ksh": "shell", "dash": "shell",
+    "csh": "shell", "tcsh": "shell", "perl": "perl", "groovy": "groovy",
+}
+_VERSION_SUFFIX_RE = re.compile(r"\d[\d.]*$")
 
 
-def shebang_dialect(content_sample: str) -> str | None:
-    """第1物理行のシェバンからシェル方言を判定する（spec §5.1）。
-
-    戻り値: "bourne" / "cshell" / "other"（シェバンだが非シェル）/ None（シェバン無し）。
-    `#!/usr/bin/env X` は X を interpreter とみなす。判定は第1行のみに依存し決定的。
-    """
+def _shebang_interp(content_sample: str) -> str | None:
+    """第1物理行のシェバンから interpreter basename（版番号剥がし）を返す。"""
     first_line = content_sample.split("\n", 1)[0]
     m = _SHEBANG_RE.match(first_line)
     if m is None:
@@ -35,6 +40,24 @@ def shebang_dialect(content_sample: str) -> str | None:
     interp = m.group(1).rsplit("/", 1)[-1]
     if interp == "env" and m.group(2):
         interp = m.group(2).rsplit("/", 1)[-1]
+    return _VERSION_SUFFIX_RE.sub("", interp) or interp
+
+
+def shebang_language(content_sample: str) -> str | None:
+    """第1物理行のシェバンを対応言語（shell/perl/groovy）か None に解決する。"""
+    interp = _shebang_interp(content_sample)
+    return None if interp is None else _SHEBANG_LANG.get(interp)
+
+
+def shebang_dialect(content_sample: str) -> str | None:
+    """第1物理行のシェバンからシェル方言を判定する（spec §5.1）。
+
+    戻り値: "bourne" / "cshell" / "other"（シェバンだが非シェル）/ None（シェバン無し）。
+    `shebang_language` と同一の第1行解釈・版剥がし規則を共有する（設計 §3.2）。
+    """
+    interp = _shebang_interp(content_sample)
+    if interp is None:
+        return None
     if interp in _BOURNE_INTERP:
         return "bourne"
     if interp in _CSHELL_INTERP:
@@ -58,11 +81,12 @@ def detect_language(path: str, content_sample: str, lang_map: dict[str, str]) ->
         if _EXEC_SQL_RE.search(content_sample):
             return "proc"
         return lang or "c"
-    if lang is not None:  # java / sql
+    if lang is not None:  # java / sql / perl / groovy
         return lang
-    # 拡張子が未知または無い: シェバン検出（手順3）→ EXEC SQL（手順4）→ c（手順5）
-    if shebang_dialect(content_sample) in ("bourne", "cshell"):
-        return "shell"
+    # 拡張子が未知または無い: シェバン解決（手順3）→ EXEC SQL（手順4）→ c（手順5）
+    sl = shebang_language(content_sample)
+    if sl is not None:
+        return sl
     if _EXEC_SQL_RE.search(content_sample):
         return "proc"
     return "c"

@@ -29,6 +29,15 @@ def test_判定不能はcにフォールバックする():
 
 
 from grep_analyzer.dispatch import shebang_dialect
+from grep_analyzer.dispatch import shebang_language
+
+
+def test_shebang_languageは対応言語かNoneを返す():
+    assert shebang_language("#!/bin/sh\n") == "shell"
+    assert shebang_language("#!/usr/bin/perl\n") == "perl"
+    assert shebang_language("#!/usr/bin/env groovy\n") == "groovy"
+    assert shebang_language("#!/usr/bin/python3\n") is None   # 未対応
+    assert shebang_language("X=1\n") is None                  # シェバン無し
 
 
 def test_bourne系シェバンはbourneを返す():
@@ -65,9 +74,25 @@ def test_拡張子なしでもシェル系シェバンならshellと判定する
     assert detect_language("bin/backup", "#!/bin/sh\nX=1\n", {}) == "shell"
 
 
-def test_拡張子なし非シェルシェバンはshellにしない():
-    # perl は §14 将来言語。Shell に分類せず既存フォールバック（EXEC SQL 無→c）。
-    assert detect_language("bin/tool", "#!/usr/bin/perl\nmy $x=1;\n", {}) == "c"
+def test_拡張子なしperlシェバンはperlと判定する():
+    # v2(track B): perl は新 language。版番号付き basename も剥がして解決(I-6)。
+    assert detect_language("bin/tool", "#!/usr/bin/perl\nmy $x=1;\n", {}) == "perl"
+    assert detect_language("bin/t2", "#!/usr/bin/perl5.36\n", {}) == "perl"
+    assert detect_language("bin/t3", "#!/usr/bin/env groovy\n", {}) == "groovy"
+
+
+def test_拡張子なしpythonシェバンは未対応でcフォールバック():
+    # python は track A 未着手＝Shell/perl/groovy に昇格しない(設計 §3.2)
+    assert detect_language("bin/p", "#!/usr/bin/python3\nx=1\n", {}) == "c"
+
+
+def test_新拡張子の言語判定():
+    assert detect_language("a/pkg.pkb", "", {}) == "sql"
+    assert detect_language("a/spec.pks", "", {}) == "sql"
+    assert detect_language("a/s.pl", "", {}) == "perl"
+    assert detect_language("a/M.pm", "", {}) == "perl"
+    assert detect_language("a/b.groovy", "", {}) == "groovy"
+    assert detect_language("a/build.gradle", "", {}) == "groovy"
 
 
 def test_拡張子なしEXEC_SQLはProCにフォールバックする():
