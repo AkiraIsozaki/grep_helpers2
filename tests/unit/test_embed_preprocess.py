@@ -1,4 +1,13 @@
-from grep_analyzer.embed_preprocess import extract_angular_ts, extract_jsp_java, host_grammar, host_source, jsp_region_span
+from grep_analyzer.embed_preprocess import (
+    effective_language,
+    extract_angular_ts,
+    extract_inline_angular,
+    extract_jsp_java,
+    host_grammar,
+    host_source,
+    inline_template_spans,
+    jsp_region_span,
+)
 
 
 def test_jsp_scriptletのjavaを残し他を空白化():
@@ -131,3 +140,66 @@ def test_angular_HTMLコメント内の式は空白化():
     src = "<!-- {{ secret }} -->\n"
     out = extract_angular_ts(src)
     assert "secret" not in out
+
+
+# ── angular_inline 新規テスト ──────────────────────────────────────────────────
+
+_COMPONENT = (
+    'import { Component } from "@angular/core";\n'      # 1
+    "@Component({\n"                                     # 2
+    '  selector: "app-x",\n'                             # 3
+    "  template: `\n"                                    # 4
+    "    <ul>\n"                                         # 5
+    '      <li *ngFor="let row of TRACKED">\n'           # 6
+    "        {{ row.code }}\n"                           # 7
+    "      </li>\n"                                      # 8
+    "    </ul>\n"                                         # 9
+    "  `,\n"                                             # 10
+    "})\n"                                               # 11
+    "export class XComponent {\n"                        # 12
+    "  items = TRACKED;\n"                               # 13
+    "}\n")                                               # 14
+
+
+def test_inline_template_spans_検出():
+    spans = inline_template_spans(_COMPONENT)
+    assert len(spans) == 1
+    s, e = spans[0]
+    assert s <= 5 and e >= 8
+
+
+def test_inline_template_spans_templateUrlは非検出():
+    src = '@Component({ templateUrl: "./x.html" })\n'
+    assert inline_template_spans(src) == []
+
+
+def test_inline_template_spans_stylesは非検出():
+    src = "@Component({ styles: [`a{}`, `b{}`] })\n"
+    assert inline_template_spans(src) == []
+
+
+def test_extract_inline_angular_テンプレのみangular抽出_TSコード誤抽出なし():
+    out = extract_inline_angular(_COMPONENT)
+    assert out.count("\n") == _COMPONENT.count("\n")
+    assert "let row = TRACKED" in out
+    assert "row.code" in out
+    assert "selector" not in out and "app-x" not in out
+    assert "items" not in out
+
+
+def test_effective_language_テンプレ行はangular_inline():
+    assert effective_language("typescript", _COMPONENT, 4) == "angular_inline"   # template: ` 開き行（spec §7）
+    assert effective_language("typescript", _COMPONENT, 6) == "angular_inline"
+    assert effective_language("typescript", _COMPONENT, 7) == "angular_inline"
+
+
+def test_effective_language_コード行はtypescript():
+    assert effective_language("typescript", _COMPONENT, 13) == "typescript"
+
+
+def test_effective_language_非tsと非テンプレは恒等():
+    assert effective_language("java", "x", 1) == "java"
+    assert effective_language("jsp", "x", 1) == "jsp"
+    plain = "export const x = 1;\n"
+    assert effective_language("typescript", plain, 1) == "typescript"
+    assert inline_template_spans(plain) == []

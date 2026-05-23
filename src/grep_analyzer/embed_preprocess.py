@@ -102,7 +102,41 @@ def extract_angular_ts(source: str) -> str:
     return "".join(out)
 
 
-_HOST_GRAMMAR = {"proc": "c", "jsp": "java", "angular": "typescript"}
+# .component.ts の inline angular template（template: `...`）検出。
+# templateUrl: は `template` の後に Url が続き `\s*:` に非マッチ。
+# styles: [`...`] も `\btemplate\s*:` に非マッチ。best-effort（spec §6）。
+_INLINE_TEMPLATE = re.compile(r"\btemplate\s*:\s*`(.*?)`", re.DOTALL)
+
+
+def inline_template_spans(ts_source: str) -> list[tuple[int, int]]:
+    """inline template 内容（group1）の行スパン [(s,e)]（0始まり・spec §3.2）。"""
+    return [(ts_source.count("\n", 0, m.start(1)), ts_source.count("\n", 0, m.end(1)))
+            for m in _INLINE_TEMPLATE.finditer(ts_source)]
+
+
+def extract_inline_angular(ts_source: str) -> str:
+    """inline template 領域のみ angular 式を残し他を空白化（行数保存・spec §3.3）。"""
+    kept = list(_blank(ts_source))
+    for m in _INLINE_TEMPLATE.finditer(ts_source):
+        for i in range(m.start(1), m.end(1)):
+            kept[i] = ts_source[i]
+    return extract_angular_ts("".join(kept))
+
+
+def effective_language(file_language: str, file_text: str, lineno: int) -> str:
+    """ヒット行の実効言語（spec §2/§3.4）。typescript の inline template 行のみ
+    angular_inline、他は file_language 恒等（高速短絡）。"""
+    if file_language != "typescript":
+        return file_language
+    hit = lineno - 1
+    for s, e in inline_template_spans(file_text):
+        if s <= hit <= e:
+            return "angular_inline"
+    return "typescript"
+
+
+_HOST_GRAMMAR = {"proc": "c", "jsp": "java", "angular": "typescript",
+                 "angular_inline": "typescript"}
 
 
 def host_grammar(language: str) -> str:
@@ -118,4 +152,6 @@ def host_source(language: str, source: str) -> str:
         return extract_jsp_java(source)
     if language == "angular":
         return extract_angular_ts(source)
+    if language == "angular_inline":
+        return extract_inline_angular(source)
     return source
