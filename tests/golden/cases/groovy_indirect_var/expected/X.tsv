@@ -1,0 +1,3 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+X	groovy	{SOURCE_ROOT}/v.groovy	1	direct	代入		代入 (groovy)		X@v.groovy:1	def CODE = "X" \n println CODE	utf-8	medium
+X	groovy	{SOURCE_ROOT}/v.groovy	2	indirect:var	出力		出力 (groovy)	CODE	X@v.groovy:1 -> CODE@v.groovy:2	def CODE = "X" \n println CODE	utf-8	medium
