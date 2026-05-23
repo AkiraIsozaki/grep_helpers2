@@ -40,3 +40,18 @@ def extract_jsp_java(source: str) -> str:
             for i in range(m.start(1) + pm.start(), m.start(1) + pm.end()):
                 out[i] = " "
     return "".join(out)
+
+
+def jsp_region_span(file_text: str, lineno: int):
+    """ヒット行を含む <%…%> 系ブロックの原ソース行スパン [s,e]（0始まり）。
+
+    区間外は None（呼出側で1行フォールバック・spec §4.3）。区間検出は
+    extract_jsp_java と同一の _JSP_CODE 正規表現を共有（非貪欲・§4.4 既知限界）。
+    """
+    hit = lineno - 1
+    for m in _JSP_CODE.finditer(file_text):
+        start = file_text.count("\n", 0, m.start())
+        end = file_text.count("\n", 0, m.end())
+        if start <= hit <= end:
+            return (start, end)
+    return None
