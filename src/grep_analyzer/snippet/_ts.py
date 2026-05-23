@@ -8,7 +8,8 @@ Related: spec §9
 """
 
 from grep_analyzer.classifiers.ts_classifier import node_at_line, parse_tree
-from grep_analyzer.proc_preprocess import exec_spans, mask_exec_sql
+from grep_analyzer.embed_preprocess import host_grammar
+from grep_analyzer.proc_preprocess import exec_spans
 
 # tree-sitter 0.21 系のノード型集合（spec §9 表「ts_span 粒度」と対応）。
 # tree-sitter ライブラリ版更新時はこれらの集合を再点検する。
@@ -77,10 +78,9 @@ def _has_error(node) -> bool:
 def ts_span(language: str, file_text: str, lineno: int):
     """選択範囲 [s,e]（0始まり物理行）。取れなければ None（→fallback）。spec §9。"""
     if language in ("java", "c", "proc"):
-        lang = "c" if language in ("c", "proc") else "java"
-        src = mask_exec_sql(file_text) if language == "proc" else file_text
-        gran = _GRAN_JAVA if lang == "java" else _GRAN_C
-        stmt, block, paren, parse_lang = _STMT, _BLOCK, _PAREN_ONLY, lang
+        gran = _GRAN_JAVA if host_grammar(language) == "java" else _GRAN_C
+        stmt, block, paren, parse_lang = _STMT, _BLOCK, _PAREN_ONLY, language
+        src = file_text                       # マスクは parse_tree 内 host_source の1回のみ
     elif language in _SETS_BY_LANG:
         gran, stmt, block, paren = _SETS_BY_LANG[language]
         src, parse_lang = file_text, language
