@@ -1,0 +1,2 @@
+x.component.ts:5:    <li *ngFor="let row of TRACKED">
+x.component.ts:11:  data = TRACKED;

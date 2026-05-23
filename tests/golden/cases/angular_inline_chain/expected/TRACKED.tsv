@@ -1,0 +1,4 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+TRACKED	typescript	{SOURCE_ROOT}/x.component.ts	5	direct	宣言		宣言 (typescript)		TRACKED@x.component.ts:5	    <li *ngFor="let row of TRACKED">	utf-8	high
+TRACKED	typescript	{SOURCE_ROOT}/x.component.ts	11	direct	宣言		宣言 (typescript)		TRACKED@x.component.ts:11	  data = TRACKED;	utf-8	high
+TRACKED	typescript	{SOURCE_ROOT}/x.component.ts	6	indirect:var	その他		その他 (typescript)	row	TRACKED@x.component.ts:5 -> row@x.component.ts:6	      {{ row.code }}	utf-8	high
