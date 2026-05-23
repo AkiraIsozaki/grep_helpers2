@@ -1,4 +1,4 @@
-"""tree-sitter による Java/C/Pro*C 分類。py-tree-sitter 0.21 API に依存。
+"""tree-sitter による Java/C/Pro*C 分類。py-tree-sitter 0.23 API に依存。
 
 Related: spec §7
 """
@@ -10,10 +10,12 @@ from tree_sitter import Language, Parser
 from grep_analyzer.classifiers.base import ClassifyResult
 from grep_analyzer.proc_preprocess import mask_exec_sql
 
-# py-tree-sitter 0.21.3 の Language.__init__ は (ptr, name) の2引数必須。
-# tree_sitter_<lang>.language() は int ポインタを返す（spec §4.1 ロード規約）。
-_JAVA = Language(tree_sitter_java.language(), "java")
-_C = Language(tree_sitter_c.language(), "c")
+# py-tree-sitter 0.23: Language(capsule) 1引数 / Parser(lang) コンストラクタ。
+# tree_sitter_<lang>.language() は PyCapsule を返す（0.21 の int から変更）。
+_LANGS = {
+    "java": Language(tree_sitter_java.language()),
+    "c": Language(tree_sitter_c.language()),
+}
 
 # ノード型 → 共通上位カテゴリ（spec §7 の判定軸の最小集合）。
 # 決定的基盤が目的（分類精度は handcrafted の領分・spec §11）。
@@ -33,10 +35,9 @@ _CATEGORY_BY_NODE = {
 
 
 def _parser(language: str) -> Parser:
-    # "proc" を含む非 Java 言語は tree-sitter-c で解析する（spec §7 Pro*C 前処理方式）。
-    p = Parser()
-    p.set_language(_JAVA if language == "java" else _C)
-    return p
+    # "proc" を含む非 Java 言語は tree-sitter-c で解析（spec §7 Pro*C 前処理）。
+    key = "c" if language in ("c", "proc") else language
+    return Parser(_LANGS[key])
 
 
 def node_at_line(root, lineno: int):
