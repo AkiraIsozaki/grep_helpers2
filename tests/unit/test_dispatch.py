@@ -36,7 +36,8 @@ def test_shebang_languageは対応言語かNoneを返す():
     assert shebang_language("#!/bin/sh\n") == "shell"
     assert shebang_language("#!/usr/bin/perl\n") == "perl"
     assert shebang_language("#!/usr/bin/env groovy\n") == "groovy"
-    assert shebang_language("#!/usr/bin/python3\n") is None   # 未対応
+    assert shebang_language("#!/usr/bin/python3\n") == "python"   # track A で追加
+    assert shebang_language("#!/usr/bin/env node\n") == "javascript"   # track A で追加
     assert shebang_language("X=1\n") is None                  # シェバン無し
 
 
@@ -81,9 +82,9 @@ def test_拡張子なしperlシェバンはperlと判定する():
     assert detect_language("bin/t3", "#!/usr/bin/env groovy\n", {}) == "groovy"
 
 
-def test_拡張子なしpythonシェバンは未対応でcフォールバック():
-    # python は track A 未着手＝Shell/perl/groovy に昇格しない(設計 §3.2)
-    assert detect_language("bin/p", "#!/usr/bin/python3\nx=1\n", {}) == "c"
+def test_拡張子なしpythonシェバンはpythonと判定する():
+    # python は track A で追加済み（dispatch Task 4）
+    assert detect_language("bin/p", "#!/usr/bin/python3\nx=1\n", {}) == "python"
 
 
 def test_新拡張子の言語判定():
@@ -131,3 +132,21 @@ def test_シェバンは拡張子より優先される():
 
 def test_拡張子なしシェバンなしはbourne既定():
     assert detect_shell_dialect("bin/deploy", "X=1\n") == "bourne"
+
+
+def test_ts_tsx_js_py拡張子を解決する():
+    from grep_analyzer.dispatch import detect_language
+    assert detect_language("a.ts", "", {}) == "typescript"
+    assert detect_language("a.tsx", "", {}) == "tsx"
+    assert detect_language("a.js", "", {}) == "javascript"
+    assert detect_language("a.mjs", "", {}) == "javascript"
+    assert detect_language("a.jsx", "", {}) == "javascript"
+    assert detect_language("a.py", "", {}) == "python"
+
+
+def test_shebang_node_python_を解決する():
+    from grep_analyzer.dispatch import detect_language, shebang_language
+    assert detect_language("noext", "#!/usr/bin/env node\n", {}) == "javascript"
+    assert detect_language("noext2", "#!/usr/bin/python3\n", {}) == "python"
+    assert shebang_language("#!/usr/bin/env node\n") == "javascript"
+    assert shebang_language("#!/usr/bin/python3\n") == "python"

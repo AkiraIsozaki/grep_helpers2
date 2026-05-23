@@ -17,6 +17,10 @@ _EXT_MAP = {
     ".trg": "sql", ".pls": "sql", ".plb": "sql",
     ".pl": "perl", ".pm": "perl", ".t": "perl",
     ".groovy": "groovy", ".gvy": "groovy", ".gradle": "groovy",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript", ".jsx": "javascript",
+    ".py": "python",
 }
 _EXEC_SQL_RE = re.compile(r"\bEXEC\s+SQL\b", re.IGNORECASE)
 
@@ -27,6 +31,7 @@ _CSHELL_INTERP = {"csh", "tcsh"}
 _SHEBANG_LANG = {
     "sh": "shell", "bash": "shell", "ksh": "shell", "dash": "shell",
     "csh": "shell", "tcsh": "shell", "perl": "perl", "groovy": "groovy",
+    "node": "javascript", "python": "python",
 }
 _VERSION_SUFFIX_RE = re.compile(r"\d[\d.]*$")
 
@@ -44,9 +49,9 @@ def _shebang_interp(content_sample: str) -> str | None:
 
 
 def shebang_language(content_sample: str) -> str | None:
-    """第1物理行のシェバンを対応言語（shell/perl/groovy）か None に解決する。
+    """第1物理行のシェバンを対応言語（shell/perl/groovy/javascript/python）か None に解決する。
 
-    None はシェバン無し、または対応外 interpreter（python/awk 等）のとき。
+    None はシェバン無し、または対応外 interpreter（awk 等）のとき。
     """
     interp = _shebang_interp(content_sample)
     return None if interp is None else _SHEBANG_LANG.get(interp)
