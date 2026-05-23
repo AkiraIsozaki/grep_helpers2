@@ -6,6 +6,7 @@ chase.py の dispatcher が `_CHASERS[language]` で対応モジュールを取�
 
 from grep_analyzer.classifiers import (
     c_chaser,
+    groovy_chaser,
     java_chaser,
     perl_chaser,
     shell_chaser,
@@ -20,6 +21,7 @@ _CHASERS: dict[str, Chaser] = {
     "shell": shell_chaser,
     "sql": sql_chaser,
     "perl": perl_chaser,
+    "groovy": groovy_chaser,
 }
 
 __all__ = ["Chaser"]

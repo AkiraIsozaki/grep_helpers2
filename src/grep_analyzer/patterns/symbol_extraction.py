@@ -39,3 +39,9 @@ BOURNE_READONLY_RE = re.compile(r"^\s*readonly\s+([A-Za-z_]\w*)=")
 # Perl: sigil 付き代入左辺（== / =~ / => は除外）。sigil は剥がして bare 識別子を採る。
 PERL_ASSIGN_RE = re.compile(r"[$@%](\w+)\s*=(?![=~>])")
 PERL_USE_CONSTANT_RE = re.compile(r"\buse\s+constant\s+(\w+)")
+
+# Groovy: final 定数（static 任意・型任意）と一般代入左辺（限定子は剥がす＝§8.4）。
+GROOVY_CONST_RE = re.compile(
+    r"\b((?:public|protected|private|static|final)(?:\s+(?:public|protected|private|static|final))*)"
+    r"\s+(?:[\w.$<>,\[\]\s]+?\s+)?([A-Za-z_]\w*)\s*=")
+GROOVY_VAR_RE = re.compile(r"(?<![=!<>+\-*/%&|^])\b([A-Za-z_]\w*)\s*=(?!=)")

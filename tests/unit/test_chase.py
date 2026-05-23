@@ -139,3 +139,19 @@ def test_Perlのfat_commaと比較は代入抽出しない():
 def test_Perlにgetter_setterは無い():
     cs = extract_chase_symbols("perl", "", "my $x = 1;")
     assert cs.getters == () and cs.setters == ()
+
+
+def test_Groovyのdefと型付き変数代入を抽出する():
+    assert extract_chase_symbols("groovy", "", "def code = 1").vars == ("code",)
+    assert extract_chase_symbols("groovy", "", "int total = 5").vars == ("total",)
+
+
+def test_Groovyのfinalは定数として抽出する():
+    assert extract_chase_symbols("groovy", "", "final MAX = 100").constants == ("MAX",)
+    cs = extract_chase_symbols("groovy", "", "static final int LIMIT = 9")
+    assert cs.constants == ("LIMIT",) and "LIMIT" not in cs.vars
+
+
+def test_Groovyにgetter_setterは無くconstはvarに重複しない():
+    cs = extract_chase_symbols("groovy", "", "final MAX = 1")
+    assert cs.getters == () and cs.setters == () and cs.vars == ()
