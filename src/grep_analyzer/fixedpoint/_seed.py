@@ -11,6 +11,7 @@ from grep_analyzer.budget import MemoryBudget
 from grep_analyzer.chase import extract_chase_symbols, extract_chase_symbols_tree
 from grep_analyzer.classifiers import _AST_CHASERS
 from grep_analyzer.diagnostics import Diagnostics
+from grep_analyzer.embed_preprocess import effective_language
 from grep_analyzer.fixedpoint._ingest import ingest_one
 from grep_analyzer.fixedpoint._options import EngineOptions
 from grep_analyzer.fixedpoint._scan import file_meta, kinds_of
@@ -48,6 +49,7 @@ def initialize_state(seed_hits: list[Hit], source_root: Path,
             text, _, _, lang, dialect = file_meta(
                 s.file, sp.read_bytes(), opts.lang_map,
                 fallback_chain=list(opts.encoding_fallback))
+            lang = effective_language(lang, text, s.lineno)
             if lang in _AST_CHASERS:
                 cs = extract_chase_symbols_tree(lang, text, s.lineno)
             else:

@@ -17,6 +17,7 @@ from grep_analyzer.chase import extract_chase_symbols_from_root
 from grep_analyzer.classifiers import _AST_CHASERS
 from grep_analyzer.classifiers.ts_classifier import parse_tree
 from grep_analyzer.dispatch import detect_language, detect_shell_dialect
+from grep_analyzer.embed_preprocess import inline_template_spans
 from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
 from grep_analyzer.model import ChaseSymbols
 
@@ -41,17 +42,32 @@ def _scan_file(args):
     automaton_obj = automaton.build(symbol_list)
     found = []
     if automaton_obj is not None:
-        root = None
+        ts_root = None
+        ang_root = None
+        spans = []
         if language in _AST_CHASERS:
             try:
-                root = parse_tree(language, text)   # parse 失敗は AST 抽出を諦め row 動作（堅牢化）
+                ts_root = parse_tree(language, text)
             except Exception:
-                root = None
+                ts_root = None
+            if language == "typescript":
+                spans = inline_template_spans(text)
         for i, line in enumerate(text.split("\n"), start=1):
             symbols = list(automaton.scan_line(automaton_obj, line))
             if not symbols:
                 continue
-            cs = extract_chase_symbols_from_root(language, root, i) if root is not None else None
+            cs = None
+            if ts_root is not None:
+                if spans and any(s <= i - 1 <= e for s, e in spans):
+                    if ang_root is None:
+                        try:
+                            ang_root = parse_tree("angular_inline", text)
+                        except Exception:
+                            ang_root = None
+                    cs = (extract_chase_symbols_from_root("angular_inline", ang_root, i)
+                          if ang_root is not None else None)
+                else:
+                    cs = extract_chase_symbols_from_root(language, ts_root, i)
             for symbol in symbols:
                 found.append((symbol, i, line, cs))
     return relpath, enc, replaced, language, dialect, found
