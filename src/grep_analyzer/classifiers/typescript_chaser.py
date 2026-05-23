@@ -5,27 +5,10 @@ JS 規則は javascript_chaser から再利用。tsx は language 引数で gram
 """
 from grep_analyzer.classifiers.javascript_chaser import _BINDING as _JS_BINDING
 from grep_analyzer.classifiers.javascript_chaser import handle_binding as _handle_js
+from grep_analyzer.classifiers.ts_classifier import binding_at_line
 from grep_analyzer.model import ChaseSymbols
 
 _BINDING = _JS_BINDING | {"public_field_definition", "enum_declaration"}
-
-
-def _binding_at_line(root, lineno):
-    """TS 拡張 _BINDING を用いた最小スパン束縛ノード探索（単一行クラス本体対応）。"""
-    target = lineno - 1
-    best = None
-    best_key = None
-    cursor = [root]
-    while cursor:
-        node = cursor.pop()
-        if node.start_point[0] <= target <= node.end_point[0]:
-            if node.type in _BINDING:
-                key = (node.end_point[0] - node.start_point[0],
-                       node.start_byte, node.end_byte, node.type)
-                if best_key is None or key < best_key:
-                    best, best_key = node, key
-            cursor.extend(node.children)
-    return best
 
 
 def _handle_ts(node, consts, vars_, getters, setters):
@@ -51,7 +34,7 @@ def _handle_ts(node, consts, vars_, getters, setters):
 
 
 def extract_tree(language, root, lineno):
-    node = _binding_at_line(root, lineno)
+    node = binding_at_line(root, lineno, _BINDING)
     if node is None:
         return ChaseSymbols()
     consts, vars_, getters, setters = [], [], [], []

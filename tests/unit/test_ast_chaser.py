@@ -112,3 +112,11 @@ def test_js_object_destructure_default():
 
 def test_ts_object_destructure_default():
     assert _ts("const {a: x = 5} = o;\n", 1).constants == ("x",)
+
+
+def test_python_single_line_class_body():
+    assert _py("class C: ATTR = 1\n", 1).constants == ("ATTR",)
+
+
+def test_python_single_line_if_body():
+    assert _py("if True: yy = COMPUTED\n", 1).vars == ("yy",)

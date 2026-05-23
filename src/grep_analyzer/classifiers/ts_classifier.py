@@ -100,6 +100,30 @@ def node_at_line(root, lineno: int):
     return best
 
 
+def binding_at_line(root, lineno: int, binding_types):
+    """対象行を内包し、かつ binding_types に属する最小スパンノードを決定的に返す。
+
+    node_at_line と同じ全順序キー (行スパン, start_byte, end_byte, 型) で一意選択。
+    単一行クラス本体など「行内の最左最小葉から climb」では到達できない束縛
+    （例 `class C { get x() {} }` / `class C: ATTR = 1`）を直接拾うため、
+    AST chaser が node_at_line+climb の代わりに使う。該当なしは None。
+    """
+    target = lineno - 1
+    best = None
+    best_key = None
+    cursor = [root]
+    while cursor:
+        node = cursor.pop()
+        if node.start_point[0] <= target <= node.end_point[0]:
+            if node.type in binding_types:
+                key = (node.end_point[0] - node.start_point[0], node.start_byte,
+                       node.end_byte, node.type)
+                if best_key is None or key < best_key:
+                    best, best_key = node, key
+            cursor.extend(node.children)
+    return best
+
+
 def classify_ts(language: str, source: str, lineno: int) -> ClassifyResult:
     """ファイル全体を AST 解析し、対象行を含む構文要素から分類する。"""
     src = mask_exec_sql(source) if language == "proc" else source

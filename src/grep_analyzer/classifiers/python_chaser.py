@@ -5,7 +5,7 @@ ASTChaser: extract_tree(language, root, lineno) → ChaseSymbols。parse は呼�
 """
 import re
 
-from grep_analyzer.classifiers.ts_classifier import node_at_line
+from grep_analyzer.classifiers.ts_classifier import binding_at_line
 from grep_analyzer.model import ChaseSymbols
 
 _BINDING = {"assignment", "augmented_assignment", "decorated_definition"}
@@ -65,9 +65,7 @@ def _from_decorated(node, getters, setters):
 
 
 def extract_tree(language, root, lineno):
-    node = node_at_line(root, lineno)
-    while node is not None and node.type not in _BINDING:
-        node = node.parent
+    node = binding_at_line(root, lineno, _BINDING)
     if node is None:
         return ChaseSymbols()
     consts, vars_, getters, setters = [], [], [], []
