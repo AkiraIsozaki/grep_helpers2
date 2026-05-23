@@ -85,3 +85,11 @@ def test_angular_classify():
     assert classify_hit("angular", "", src, 1, src)[0] == "その他"
     src2 = '<button (click)="x = 1">b</button>\n'
     assert classify_hit("angular", "", src2, 1, src2)[0] == "代入"
+
+
+def test_angular_inline_classify_直接():
+    from grep_analyzer.classifiers.ts_classifier import classify_ts
+    src = '@Component({ template: `<p>{{ user.code }}</p>` })\n'
+    assert classify_ts("angular_inline", src, 1)[0] == "その他"
+    src2 = '@Component({ template: `<button (click)="x = 1">b</button>` })\n'
+    assert classify_ts("angular_inline", src2, 1)[0] == "代入"

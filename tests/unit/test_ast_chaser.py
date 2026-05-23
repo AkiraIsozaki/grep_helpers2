@@ -129,3 +129,9 @@ def test_angular_ngFor_束縛をAST抽出():
     src = '<li *ngFor="let item of TRACKED">{{item}}</li>\n'
     cs = extract_chase_symbols_tree("angular", src, 1)
     assert "item" in cs.vars
+
+
+def test_angular_inline_chaser_ngFor():
+    src = '@Component({ template: `<li *ngFor="let row of TRACKED">{{row.code}}</li>` })\n'
+    cs = extract_chase_symbols_tree("angular_inline", src, 1)
+    assert "row" in cs.vars

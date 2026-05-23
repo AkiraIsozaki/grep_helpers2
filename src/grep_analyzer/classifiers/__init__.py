@@ -30,6 +30,7 @@ _AST_CHASERS: dict[str, ASTChaser] = {
     "typescript": typescript_chaser,
     "tsx": typescript_chaser,
     "angular": typescript_chaser,
+    "angular_inline": typescript_chaser,
 }
 
 __all__ = ["Chaser", "ASTChaser"]

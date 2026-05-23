@@ -68,7 +68,7 @@ _CATEGORY_TS = {
 }
 _CATEGORY_BY_LANG = {
     "java": _CATEGORY_JAVAC, "c": _CATEGORY_JAVAC, "proc": _CATEGORY_JAVAC,
-    "jsp": _CATEGORY_JAVAC, "angular": _CATEGORY_TS,
+    "jsp": _CATEGORY_JAVAC, "angular": _CATEGORY_TS, "angular_inline": _CATEGORY_TS,
     "python": _CATEGORY_PY, "javascript": _CATEGORY_JS,
     "typescript": _CATEGORY_TS, "tsx": _CATEGORY_TS,
 }

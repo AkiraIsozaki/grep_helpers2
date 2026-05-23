@@ -61,7 +61,8 @@ LANG_KEYWORDS: dict[str, frozenset[str]] = {
     "java": _JAVA_KW, "c": _C_KW, "proc": _C_KW, "sql": _SQL_KW, "shell": _SHELL_KW,
     "perl": _PERL_KW, "groovy": _GROOVY_KW,
     "python": _PYTHON_KW, "javascript": _JS_KW, "typescript": _TS_KW, "tsx": _TS_KW,
-    "jsp": _JSP_KW, "html": frozenset(), "angular": _ANGULAR_KW}
+    "jsp": _JSP_KW, "html": frozenset(), "angular": _ANGULAR_KW,
+    "angular_inline": _ANGULAR_KW}
 
 
 @dataclass(frozen=True)
