@@ -1,6 +1,6 @@
-"""SQL/Shell の正規表現分類。
+"""SQL/Shell/Perl/Groovy の正規表現分類。
 
-Related: spec §7
+Related: spec §7, §4
 """
 
 import re

@@ -20,6 +20,7 @@ def classify_hit(
 
     java/c/proc は tree-sitter(high)、sql/shell は正規表現(medium)、未知は
     bourne shell フォールバック（pipeline 既存挙動と同一）。
+    perl/groovy は正規表現分類(medium)。
     """
     if language in ("java", "c", "proc"):
         return classify_ts(language, file_text, lineno)
