@@ -23,13 +23,25 @@ _C_KW = frozenset(
 _SQL_KW = frozenset(
     "select insert update delete from where and or not null is in like between exists into values "
     "set begin end declare if then else elsif loop for while case when decode dual table view "
-    "procedure function trigger as order by group having distinct union all".split())
+    "procedure function trigger as order by group having distinct union all "
+    # Oracle データ型（型名 var 抽出のすり抜け対策・二次防御。admit は case-sensitive＝大文字形で登録）
+    "NUMBER VARCHAR2 VARCHAR CHAR NCHAR CLOB BLOB DATE TIMESTAMP BOOLEAN PLS_INTEGER "
+    "BINARY_INTEGER INTEGER FLOAT DECIMAL LONG RAW ROWID".split())
 _SHELL_KW = frozenset(
     "if then else elif fi for while until do done case esac in function select time set setenv "
     "unset export readonly local return break continue switch breaksw end foreach endif endsw "
     "echo test true false".split())
+_PERL_KW = frozenset(
+    "my our local state sub package use require if unless elsif else while until for foreach do "
+    "return last next redo eq ne lt gt le ge cmp and or not xor print printf say warn die "
+    "qw q qq tr defined undef ref scalar wantarray bless".split())
+_GROOVY_KW = frozenset(
+    "def class interface enum trait if else while switch case for return break continue "
+    "println print final static import package new this super true false null void in as "
+    "instanceof try catch finally throw throws assert abstract extends implements".split())
 LANG_KEYWORDS: dict[str, frozenset[str]] = {
-    "java": _JAVA_KW, "c": _C_KW, "proc": _C_KW, "sql": _SQL_KW, "shell": _SHELL_KW}
+    "java": _JAVA_KW, "c": _C_KW, "proc": _C_KW, "sql": _SQL_KW, "shell": _SHELL_KW,
+    "perl": _PERL_KW, "groovy": _GROOVY_KW}
 
 
 @dataclass(frozen=True)

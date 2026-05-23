@@ -48,3 +48,23 @@ def test_terminalにもキーワード最小長は効く():
     cs = ChaseSymbols(getters=("getX",), setters=("set",))
     p = partition(cs, "java", _pol(min_spec=4))
     assert p.terminal == ["getX"] and ("set", "too_short") in p.rejected
+
+
+def test_perl予約語は追跡集合に入らない():
+    pol = SymbolPolicy(min_specificity=2, user_stoplist=frozenset())
+    r = admit(["print", "my", "sub", "if", "while", "userCode"], "perl", pol)
+    assert r.accepted == ["userCode"]
+    assert {s for s, _ in r.rejected} == {"print", "my", "sub", "if", "while"}
+
+
+def test_groovy予約語は追跡集合に入らない():
+    pol = SymbolPolicy(min_specificity=2, user_stoplist=frozenset())
+    r = admit(["def", "class", "while", "return", "println", "orderId"], "groovy", pol)
+    assert r.accepted == ["orderId"]
+
+
+def test_sqlのOracleデータ型は追跡集合に入らない():
+    # PL/SQL 慣例の大文字形で登録するため大文字で棄却を要求する（admit は case-sensitive）
+    pol = SymbolPolicy(min_specificity=2, user_stoplist=frozenset())
+    r = admit(["NUMBER", "VARCHAR2", "BOOLEAN", "v_code"], "sql", pol)
+    assert r.accepted == ["v_code"]
