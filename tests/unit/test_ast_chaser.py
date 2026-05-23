@@ -73,3 +73,33 @@ def test_js_field_getter_setter():
 
 def test_js_multiline_const():
     assert _js("const MULTI =\n  1 + 2;\n", 2).constants == ("MULTI",)
+
+
+def _ts(text, lineno, language="typescript"):
+    from grep_analyzer.classifiers.typescript_chaser import extract_tree
+    return extract_tree(language, parse_tree(language, text), lineno)
+
+
+def test_ts_readonly_const_field():
+    src = "class C {\n  readonly r = 1;\n  private p = 2;\n}\n"
+    assert _ts(src, 2).constants == ("r",)
+    assert _ts(src, 3).vars == ("p",)
+
+
+def test_ts_enum_members_constant():
+    assert _ts("enum E { A, B }\n", 1).constants == ("A", "B")
+    assert _ts("enum E { A = 1, B = 2 }\n", 1).constants == ("A", "B")
+
+
+def test_ts_generics_型識別子を抽出しない():
+    cs = _ts("const m: Map<string, number> = x;\n", 1)
+    assert cs.constants == ("m",)            # Map/string/number/x は出ない
+
+
+def test_ts_interface_type_は抽出しない():
+    assert _ts("interface I { x: number; }\n", 1) == ChaseSymbols()
+    assert _ts("type T = number;\n", 1) == ChaseSymbols()
+
+
+def test_tsx_は同規則():
+    assert _ts("const App = () => null;\n", 1, language="tsx").constants == ("App",)
