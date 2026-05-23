@@ -62,7 +62,7 @@ Phase C2  angular（C1 の逆マスク基盤上に積む）
 ### 3.2 対象 language 値・拡張子・ホスト写像
 | language 値（TSV） | 拡張子 | ホスト grammar | chaser 方式 | 抽出（逆マスク） | snippet |
 |---|---|---|---|---|---|
-| `jsp` | `.jsp` `.jspf` `.jspx` `.tag` `.tagx` | tree-sitter-**java** | **行ベース** java_chaser（既存 `_CHASERS`） | scriptlet `<% %>`／式 `<%= %>`／宣言 `<%! %>` の Java＋EL `${}`/`#{}`（best-effort） | `jsp_region_span`（原ソース `<%…%>` 行スパン・多行可）→ 無ければ1行 |
+| `jsp` | `.jsp` `.jspf` `.jspx` `.tag` `.tagx` | tree-sitter-**java** | **行ベース** java_chaser（`jsp` キーで新規登録＝`_CHASERS["jsp"]=java_chaser`） | scriptlet `<% %>`／式 `<%= %>`／宣言 `<%! %>` の Java＋EL `${}`/`#{}`（best-effort） | `jsp_region_span`（原ソース `<%…%>` 行スパン・多行可）→ 無ければ1行 |
 | `angular` | `.html` `.htm`（Angular マーカ検出時） | tree-sitter-**typescript** | **AST** typescript_chaser（既存 `_AST_CHASERS`） | `{{ }}`／`[x]=`／`(ev)=`／`[(x)]=`／`*ng…` の TS 式 | ヒット1行（束縛は単行・多行は将来） |
 | `html` | `.html` `.htm`（Angular マーカ無し） | なし（パススルー） | なし | 抽出なし | ヒット1行 |
 
@@ -90,7 +90,10 @@ Phase C2  angular（C1 の逆マスク基盤上に積む）
 
 ## 4. Phase 詳細: 逆マスク（track C の中核）
 
-**原則**: proc の `_blank_literals`（char長・行数保存の空白置換）と同型。各ファイルから host grammar が解釈できる埋め込みコード**だけ**を原位置に残し他を空白化したバッファを返す。**バッファは classify/AST chaser(angular) 専用**（lineno 写像のため行数・char 桁を保存）。**byte 長は非保存**（多バイト文字を1 byte 空白へ置換するため）だが `node_at_line` のキーは**行スパンが主**で byte は同一バッファ内のタイブレークのみ＝行写像が厳密なら決定的（レビュー M-1 検証済）。snippet は原ソース行 index slice（byte 非依存）、chaser は行ベース（jsp）／AST バッファ（angular）が別途処理（§5）。
+**原則**: proc の `_blank_literals`（空白置換）と同型。各ファイルから host grammar が解釈できる埋め込みコード**だけ**を原位置に残し他を空白化したバッファを返す。**バッファは classify/AST chaser(angular) 専用**。
+- **保証する不変量＝行数（改行位置）保存のみ**（lineno 写像に必須）。char 桁は概ね保存（空白置換）するが **`*ngFor` の `of`→`=` 正規化は行内 char 長を1縮める**（§4.2）。これは無害: (a) 行をまたがない、(b) snippet は原ソース行 index slice を使いバッファ桁に非依存、(c) classify/AST は `node_at_line`/`binding_at_line` の**行スパンが主キー**で byte/桁は同一バッファ内タイブレークのみ（行写像が厳密なら決定的・レビュー M-1/I-A 検証済）。
+- **byte 長も非保存**（多バイト文字を1 byte 空白へ置換するため）＝同上理由で無害。
+- snippet は原ソース行 index slice（byte 非依存）、chaser は行ベース（jsp）／AST バッファ（angular）が別途処理（§5）。
 
 ### 4.1 `extract_jsp_java(source) -> str`（長さ・行数保存）
 残す区間（中身保持・`<%`等マーカは空白化）:
@@ -136,7 +139,7 @@ host_source(language,s) : jsp→extract_jsp_java(s), angular→extract_angular_t
 - **適用点は2か所に限定**（レビュー C-1・I-1・C-min-2 反映）:
   1. `classify_ts(language, source, lineno)`: 冒頭で `src = host_source(language, source)`、grammar は `_LANGS[host_grammar(language)]`。現 proc の `key="c"…`/`mask_exec_sql` インライン（`ts_classifier.py:78,129`）を本ヘルパへ一般化。
   2. **`parse_tree(language, source)` 自体を改修**: `_parser(host_grammar(language)).parse(host_source(language, source).encode())`。これで worker（`_scan.py`）・`chase.py`・`ts_span` が `parse_tree(language, raw_text)` を**生 text のまま**呼んでも内部で host 変換される（現状 `parse_tree` は素通しで `_parser("angular")`→KeyError＝C-1 の欠陥を解消）。`_LANGS`/`_parser` に angular キーは**足さない**（`host_grammar` が typescript へ畳む）。
-  3. **二重マスク回避**: `ts_span`（`_ts.py:79-82`）の proc 用インライン `mask_exec_sql`/`lang="c"` 分岐は**除去**し `parse_tree` 一本へ寄せる（proc が二重マスクされ Inv-C 違反になるのを防ぐ）。`ts_span` は `host_grammar` で粒度集合（`_GRAN_JAVA`/`_GRAN_C`）を選ぶ。
+  3. **二重マスク回避＋proc 呼出契約**: `ts_span`（`_ts.py:79-82`）の proc 用インライン `mask_exec_sql`/`lang="c"` 分岐は**除去**し、`ts_span("proc", file_text, …)` は **raw `file_text` を `parse_tree("proc", …)` へ渡す**（マスクは `parse_tree` 内 `host_source` の**1回のみ**＝二重マスク＝R1 を防ぐ）。粒度集合の選択は **java/c/proc 経路のみ** `host_grammar`（`_GRAN_JAVA`/`_GRAN_C`）へ統合し、**`_SETS_BY_LANG`（python/js/ts/tsx）の第2分岐（`_ts.py:84`）は track A のまま不変**（恒等写像のため挙動保存・Inv-C ゼロdiff の根拠・レビュー I-1 反映）。jsp/angular/html は `ts_span` を**通らない**（§5 #5）ため、この粒度改修の実効は proc 経路のみ。
 - **行ベース経路（jsp の chaser・stoplist）には host_grammar を効かせない**（レビュー C-imp-1 反映）: `chase.py` の `extract_chase_symbols(language,…)` は `_CHASERS.get(language)` を**language 直引き**、`partition`→`admit` は `LANG_KEYWORDS.get(language)` を直引きするため、jsp は別キー登録（`_CHASERS["jsp"]`・`LANG_KEYWORDS["jsp"]`）が必須。host_grammar は classify/parse_tree(AST)/snippet 経路のみに作用。
 
 | # | ファイル | 差分 |
@@ -199,7 +202,7 @@ host_source(language,s) : jsp→extract_jsp_java(s), angular→extract_angular_t
 ---
 
 ## 8. テスト
-- **dispatch（単体・両方向を golden 固定）**: `.jsp/.jspf/.jspx/.tag/.tagx`→jsp、`.html`(Angular 固有マーカ)→angular、`.html`(マーカ無 or `{{` 単独のみ)→html、`.htm` 同様、`extension_resolves_language` の `.html/.htm` True。**`.html` 誤判定の両方向**（マーカ無 Angular→html／`{{` 単独→html・過検出しないこと）を明示（レビュー C-imp-3）。
+- **dispatch（単体・両方向を golden 固定）**: `.jsp/.jspf/.jspx/.tag/.tagx`→jsp、`.html`(Angular 固有マーカ)→angular、`.html`(マーカ無 or `{{` 単独のみ)→html、`.htm` 同様、`extension_resolves_language` の `.html/.htm` True。**`.html` 誤判定の両方向**（マーカ無 Angular→html／`{{` 単独→html・過検出しないこと）を明示（レビュー C-imp-3）。**補間のみテンプレ（`<p>{{user.code}}</p>`）→html だが automaton 生行走査で `user`/`code` の直接ヒットは生存**（取りこぼすのは indirect chase と category 精度のみ）を1ケース固定。
 - **抽出（単体）**: `extract_jsp_java`/`extract_angular_ts` の行数・char長保存、マーカ/ディレクティブ/JSPコメント/**HTMLコメント**/`<jsp:useBean>` 空白化、EL接頭辞/パイプ/**`*ngFor` の `of`→`=` 正規化**を**位置含めて**表明。`jsp_region_span` の多行ブロック・区間外 None。
 - **classify（単体）**: JSP（if→比較・**フィールド宣言→宣言・メソッド宣言→その他**・代入→代入・return→return・`<%=`→その他・EL→その他）、Angular（`{{}}`/`[x]=`→その他・`(click)="x=1"`→代入）、html→その他。
 - **chaser（単体）**: jsp `<% int x = TRACKED; %>`→x（行ベース java・**生 jsp 行の `JAVA_VAR_RE` probe を含む**＝レビュー I-2）、angular `*ngFor="let item of TRACKED"`→**item**（AST ts・`of`→`=` 正規化後・実 AST で確認）、EL `${TRACKED.code}`→束縛なし（正）、**html→chase 非発火**（`extract_chase_symbols("html",…)`/`…_from_root("html",…)` が空 `ChaseSymbols`）。
