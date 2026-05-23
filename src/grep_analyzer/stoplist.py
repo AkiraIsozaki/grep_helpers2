@@ -51,10 +51,13 @@ _JS_KW = frozenset(
 _TS_KW = _JS_KW | frozenset(
     "interface type enum namespace declare abstract implements readonly public private "
     "protected as is keyof infer any unknown never number string boolean object".split())
+_JSP_KW = _JAVA_KW | frozenset(
+    "page import include taglib c fn empty true false null instanceof".split())
 LANG_KEYWORDS: dict[str, frozenset[str]] = {
     "java": _JAVA_KW, "c": _C_KW, "proc": _C_KW, "sql": _SQL_KW, "shell": _SHELL_KW,
     "perl": _PERL_KW, "groovy": _GROOVY_KW,
-    "python": _PYTHON_KW, "javascript": _JS_KW, "typescript": _TS_KW, "tsx": _TS_KW}
+    "python": _PYTHON_KW, "javascript": _JS_KW, "typescript": _TS_KW, "tsx": _TS_KW,
+    "jsp": _JSP_KW, "html": frozenset()}
 
 
 @dataclass(frozen=True)

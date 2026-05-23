@@ -195,3 +195,19 @@ def test_extract_chase_symbols_from_root_js():
     from grep_analyzer.classifiers.ts_classifier import parse_tree
     cs = extract_chase_symbols_from_root("javascript", parse_tree("javascript", "const A = 1;\n"), 1)
     assert cs.constants == ("A",)
+
+
+def test_jsp_行ベースchaserが代入左辺を抽出():
+    cs = extract_chase_symbols("jsp", "", "<% int x = TRACKED; %>")
+    assert "x" in cs.vars
+
+
+def test_jsp_ELは束縛なし():
+    cs = extract_chase_symbols("jsp", "", "${ TRACKED.code }")
+    assert cs.vars == () and cs.constants == ()
+
+
+def test_html_はchase非発火():
+    from grep_analyzer.chase import extract_chase_symbols_tree
+    assert extract_chase_symbols("html", "", "x = TRACKED").vars == ()
+    assert extract_chase_symbols_tree("html", "x = TRACKED\n", 1).vars == ()

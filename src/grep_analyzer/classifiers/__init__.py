@@ -21,6 +21,7 @@ from grep_analyzer.classifiers.base import ASTChaser, Chaser
 _CHASERS: dict[str, Chaser] = {
     "java": java_chaser, "c": c_chaser, "proc": c_chaser, "shell": shell_chaser,
     "sql": sql_chaser, "perl": perl_chaser, "groovy": groovy_chaser,
+    "jsp": java_chaser,
 }
 # AST ベース chaser（新規・行版 _CHASERS には載せない）
 _AST_CHASERS: dict[str, ASTChaser] = {

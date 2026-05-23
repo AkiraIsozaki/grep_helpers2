@@ -1,7 +1,7 @@
 """静的シンボル採否ポリシーの仕様（spec §8.3・cap は大域で fixedpoint 側）。"""
 
 from grep_analyzer.model import ChaseSymbols
-from grep_analyzer.stoplist import SymbolPolicy, admit, load_stoplist, partition
+from grep_analyzer.stoplist import LANG_KEYWORDS, SymbolPolicy, admit, load_stoplist, partition
 
 
 def _pol(min_spec=2, stop=frozenset()):
@@ -86,3 +86,8 @@ def test_予約語はadmitで棄却される():
     res = admit(["const", "myVar"], "javascript", pol)
     assert res.accepted == ["myVar"]
     assert ("const", "keyword") in res.rejected
+
+
+def test_jsp_html_keyword_登録():
+    assert "page" in LANG_KEYWORDS["jsp"] and "class" in LANG_KEYWORDS["jsp"]
+    assert LANG_KEYWORDS["html"] == frozenset()
