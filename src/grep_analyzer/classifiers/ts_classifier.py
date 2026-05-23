@@ -5,6 +5,9 @@ Related: spec §7
 
 import tree_sitter_c
 import tree_sitter_java
+import tree_sitter_javascript
+import tree_sitter_python
+import tree_sitter_typescript
 from tree_sitter import Language, Parser
 
 from grep_analyzer.classifiers.base import ClassifyResult
@@ -15,13 +18,17 @@ from grep_analyzer.proc_preprocess import mask_exec_sql
 _LANGS = {
     "java": Language(tree_sitter_java.language()),
     "c": Language(tree_sitter_c.language()),
+    "python": Language(tree_sitter_python.language()),
+    "javascript": Language(tree_sitter_javascript.language()),
+    "typescript": Language(tree_sitter_typescript.language_typescript()),
+    "tsx": Language(tree_sitter_typescript.language_tsx()),
 }
 
 # ノード型 → 共通上位カテゴリ（spec §7 の判定軸の最小集合）。
 # 決定的基盤が目的（分類精度は handcrafted の領分・spec §11）。
 # 内側から外へ climb して最初に一致した「文レベル」ノードのカテゴリを採る。
 # argument_list / init_declarator は包含関係で if/宣言 と衝突するため意図的に含めない。
-_CATEGORY_BY_NODE = {
+_CATEGORY_JAVAC = {
     "if_statement": "比較",
     "switch_statement": "分岐",
     "switch_expression": "分岐",
@@ -31,6 +38,38 @@ _CATEGORY_BY_NODE = {
     "preproc_def": "宣言",
     "assignment_expression": "代入",
     "return_statement": "return",
+}
+_CATEGORY_PY = {
+    "if_statement": "比較",
+    "match_statement": "分岐",
+    "assignment": "代入",
+    "augmented_assignment": "代入",
+    "return_statement": "return",
+    "import_statement": "宣言",
+    "import_from_statement": "宣言",
+}
+_CATEGORY_JS = {
+    "if_statement": "比較",
+    "switch_statement": "分岐",
+    "lexical_declaration": "宣言",
+    "variable_declaration": "宣言",
+    "field_definition": "宣言",
+    "import_statement": "宣言",
+    "assignment_expression": "代入",
+    "augmented_assignment_expression": "代入",
+    "return_statement": "return",
+}
+_CATEGORY_TS = {
+    **_CATEGORY_JS,
+    "enum_declaration": "宣言",
+    "interface_declaration": "宣言",
+    "type_alias_declaration": "宣言",
+    "public_field_definition": "宣言",
+}
+_CATEGORY_BY_LANG = {
+    "java": _CATEGORY_JAVAC, "c": _CATEGORY_JAVAC, "proc": _CATEGORY_JAVAC,
+    "python": _CATEGORY_PY, "javascript": _CATEGORY_JS,
+    "typescript": _CATEGORY_TS, "tsx": _CATEGORY_TS,
 }
 
 
@@ -67,7 +106,7 @@ def classify_ts(language: str, source: str, lineno: int) -> ClassifyResult:
     tree = _parser(language).parse(src.encode("utf-8"))
     node = node_at_line(tree.root_node, lineno)
     while node is not None:
-        cat = _CATEGORY_BY_NODE.get(node.type)
+        cat = _CATEGORY_BY_LANG[language].get(node.type)
         if cat is not None:
             return (cat, "high")
         node = node.parent

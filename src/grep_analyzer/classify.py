@@ -22,7 +22,7 @@ def classify_hit(
     bourne shell フォールバック（pipeline 既存挙動と同一）。
     perl/groovy は正規表現分類(medium)。
     """
-    if language in ("java", "c", "proc"):
+    if language in ("java", "c", "proc", "python", "javascript", "typescript", "tsx"):
         return classify_ts(language, file_text, lineno)
     if language == "sql":
         return classify_sql(content)
