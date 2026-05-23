@@ -176,3 +176,22 @@ def test_PLSQL小文字constantもリークしない():
 def test_PLSQL複数代入は宣言是正後も全左辺を温存する():
     # R2-C1 回帰: golden 非対象のサイレント退行を unit で守る
     assert extract_var_symbols("sql", "", "a := 1; b := 2;") == ["a", "b"]
+
+
+def test_extract_chase_symbols_tree_python():
+    from grep_analyzer.chase import extract_chase_symbols_tree
+    cs = extract_chase_symbols_tree("python", "XX = 1\n", 1)
+    assert cs.constants == ("XX",)
+
+
+def test_extract_chase_symbols_tree_非AST言語は空():
+    from grep_analyzer.chase import extract_chase_symbols_tree
+    cs = extract_chase_symbols_tree("java", "int x = 1;\n", 1)
+    assert cs.constants == () and cs.vars == ()
+
+
+def test_extract_chase_symbols_from_root_js():
+    from grep_analyzer.chase import extract_chase_symbols_from_root
+    from grep_analyzer.classifiers.ts_classifier import parse_tree
+    cs = extract_chase_symbols_from_root("javascript", parse_tree("javascript", "const A = 1;\n"), 1)
+    assert cs.constants == ("A",)

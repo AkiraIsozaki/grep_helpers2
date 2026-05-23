@@ -6,9 +6,10 @@
 内部実装を Chaser に委譲する薄い dispatcher のみ。
 """
 
-from grep_analyzer.classifiers import _CHASERS
+from grep_analyzer.classifiers import _AST_CHASERS, _CHASERS
 from grep_analyzer.classifiers.shell_chaser import _extract_var_symbols as _shell_extract
 from grep_analyzer.classifiers.sql_chaser import _extract_var_symbols as _sql_extract
+from grep_analyzer.classifiers.ts_classifier import parse_tree
 from grep_analyzer.model import ChaseSymbols
 
 
@@ -44,3 +45,16 @@ def extract_chase_symbols(language: str, dialect: str, line: str) -> ChaseSymbol
     if chaser is None:
         return ChaseSymbols()
     return chaser.extract(dialect, line)
+
+
+def extract_chase_symbols_from_root(language: str, root, lineno: int) -> ChaseSymbols:
+    """parse 済 root から AST chaser で抽出（worker 用・file 単位1パース共有）。"""
+    chaser = _AST_CHASERS.get(language)
+    return ChaseSymbols() if chaser is None else chaser.extract_tree(language, root, lineno)
+
+
+def extract_chase_symbols_tree(language: str, text: str, lineno: int) -> ChaseSymbols:
+    """text を parse して AST chaser で抽出（seed/absorb 用）。非 AST 言語は空。"""
+    if language not in _AST_CHASERS:
+        return ChaseSymbols()
+    return extract_chase_symbols_from_root(language, parse_tree(language, text), lineno)
