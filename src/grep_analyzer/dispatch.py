@@ -21,7 +21,7 @@ _EXT_MAP = {
 _EXEC_SQL_RE = re.compile(r"\bEXEC\s+SQL\b", re.IGNORECASE)
 
 # シェバンは第1物理行の1列目（任意の先頭BOM=U+FEFF 可）に #! が必須（spec §5.1 手順3）。
-_SHEBANG_RE = re.compile(r"^﻿?#!\s*(\S+)(?:\s+(\S+))?")
+_SHEBANG_RE = re.compile(r"^\ufeff?#!\s*(\S+)(?:\s+(\S+))?")
 _BOURNE_INTERP = {"sh", "bash", "ksh", "dash"}
 _CSHELL_INTERP = {"csh", "tcsh"}
 _SHEBANG_LANG = {
@@ -44,7 +44,10 @@ def _shebang_interp(content_sample: str) -> str | None:
 
 
 def shebang_language(content_sample: str) -> str | None:
-    """第1物理行のシェバンを対応言語（shell/perl/groovy）か None に解決する。"""
+    """第1物理行のシェバンを対応言語（shell/perl/groovy）か None に解決する。
+
+    None はシェバン無し、または対応外 interpreter（python/awk 等）のとき。
+    """
     interp = _shebang_interp(content_sample)
     return None if interp is None else _SHEBANG_LANG.get(interp)
 
@@ -68,7 +71,7 @@ def shebang_dialect(content_sample: str) -> str | None:
 def detect_language(path: str, content_sample: str, lang_map: dict[str, str]) -> str:
     """spec §5.1 の決定的優先順位で言語を返す。
 
-    1) --lang-map 上書き 2) 拡張子マップ 3) 拡張子未知/無ならシェバン検出
+    1) --lang-map 上書き 2) 拡張子マップ 3) 拡張子未知/無ならシェバンを shell/perl/groovy へ解決
     4) EXEC SQL ヒューリスティック 5) C にフォールバック。
     """
     ext = os.path.splitext(path)[1].lower()
