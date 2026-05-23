@@ -164,8 +164,7 @@ _COMPONENT = (
 def test_inline_template_spans_検出():
     spans = inline_template_spans(_COMPONENT)
     assert len(spans) == 1
-    s, e = spans[0]
-    assert s <= 5 and e >= 8
+    assert spans[0] == (3, 9)        # template: ` 開き行(3)〜閉じ ` 行(9)・0始まり
 
 
 def test_inline_template_spans_templateUrlは非検出():
