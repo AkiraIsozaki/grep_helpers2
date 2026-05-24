@@ -150,6 +150,10 @@ def classify_ts(language: str, source: str, lineno: int) -> ClassifyResult:
     src = host_source(language, source)
     tree = _parser(language).parse(src.encode("utf-8"))
     node = node_at_line(tree.root_node, lineno)
+    # コメント専用行（最小ノードが comment）は climb 前に短絡（spec §7・コメントカテゴリ）。
+    # java=line_comment/block_comment、他=comment を endswith で一律カバー。
+    if node is not None and node.type.endswith("comment"):
+        return ("コメント", "low")
     while node is not None:
         cat = _CATEGORY_BY_LANG[language].get(node.type)
         if cat is not None:

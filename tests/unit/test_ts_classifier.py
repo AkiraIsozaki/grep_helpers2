@@ -60,3 +60,22 @@ def test_bindings_at_line_該当なしは空list():
     from grep_analyzer.classifiers.ts_classifier import bindings_at_line, parse_tree
     root = parse_tree("java", "class S {}\n")
     assert bindings_at_line(root, 1, {"method_invocation"}) == []
+
+
+def test_コメント行はコメントlowと判定する_各AST言語():
+    assert classify_ts("java", "class A {\n // 777\n}\n", 2) == ("コメント", "low")
+    assert classify_ts("java", "class A {\n /* 777 */\n}\n", 2) == ("コメント", "low")
+    assert classify_ts("c", "int x;\n// 777\n", 2) == ("コメント", "low")
+    assert classify_ts("c", "int x;\n/* 777 */\n", 2) == ("コメント", "low")
+    assert classify_ts("python", "# 777\nx = 1\n", 1) == ("コメント", "low")
+    assert classify_ts("javascript", "// 777\nconst x = 1;\n", 1) == ("コメント", "low")
+    assert classify_ts("typescript", "// 777\nconst x = 1;\n", 1) == ("コメント", "low")
+
+
+def test_文ブロック内ネストコメントもコメントになる():
+    src = "class A {\n void m(int x){\n  if (x == 1) {\n   // 777\n  }\n }\n}\n"
+    assert classify_ts("java", src, 4) == ("コメント", "low")
+
+
+def test_コード同居行はコメントにせずコード分類():
+    assert classify_ts("java", 'class A {\n int x = 1; // 777\n}\n', 2) == ("宣言", "high")
