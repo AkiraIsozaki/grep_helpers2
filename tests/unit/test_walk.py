@@ -78,3 +78,26 @@ def test_collect_filesの診断は一回だけ(tmp_path):
     collect_files(tmp_path, include=[], exclude=list(DEFAULT_EXCLUDE),
                   follow_symlinks=False, max_file_bytes=1_000_000, diag=d)
     assert d.render().count("walk_excluded\tbuild/G.c") == 1
+
+
+import os
+
+from grep_analyzer.walk import walk_files
+from grep_analyzer.diagnostics import Diagnostics
+
+
+def test_dirシンボリックリンクのループを枝刈りして再走査しない(tmp_path):
+    root = tmp_path / "root"; root.mkdir()
+    (root / "a.c").write_text("int x=1;\n", "utf-8")
+    sub = root / "sub"; sub.mkdir()
+    (sub / "b.c").write_text("int y=1;\n", "utf-8")
+    os.symlink(root, sub / "loop")               # sub/loop -> root（ディレクトリ循環）
+    diag = Diagnostics()
+    rels = [r for r, _ in walk_files(
+        root, include=[], exclude=[], follow_symlinks=True,
+        max_file_bytes=5_000_000, diag=diag)]
+    # 実ファイルは relpath 辞書順で決定的に1回ずつ
+    assert rels == ["a.c", "sub/b.c"]
+    # 枝刈りの観測可能効果: ループ配下を再走査しない＝symlink_dedup が発火しない。
+    # （fix 前は Linux の ELOOP で約40段まで降り loop 配下を再走査→symlink_dedup 多数）
+    assert diag._counts.get("symlink_dedup", 0) == 0

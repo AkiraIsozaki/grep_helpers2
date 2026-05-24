@@ -67,7 +67,15 @@ def walk_files(
     root = Path(root)
     seen_real: dict[str, str] = {}
     candidates: list[tuple[str, Path]] = []
+    visited_dirs: set[str] = set()
     for dirpath, dirnames, filenames in os.walk(root, followlinks=follow_symlinks):
+        if follow_symlinks:
+            # ディレクトリ symlink 循環の無限再帰を枝刈り（os.walk は検出しない）。
+            real_dir = os.path.realpath(dirpath)
+            if real_dir in visited_dirs:
+                dirnames[:] = []
+                continue
+            visited_dirs.add(real_dir)
         dirnames.sort()
         for name in sorted(filenames):
             abspath = Path(dirpath) / name
