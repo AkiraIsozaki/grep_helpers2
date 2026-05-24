@@ -7,6 +7,7 @@ import re
 
 from grep_analyzer.classifiers.base import ClassifyResult
 from grep_analyzer.patterns.literal_masking import MASK_PATTERNS
+from grep_analyzer.patterns.symbol_extraction import GROOVY_LINE_CAP
 
 # spec §7（Oracle 方言）。_apply は先頭一致優先。:= を最優先にし、
 # 既存 golden 等価のため WHERE比較→分岐(DECODE/CASE/||)→INSERT/UPDATE代入 の順。
@@ -106,6 +107,7 @@ def classify_perl(line: str) -> ClassifyResult:
 
 def classify_groovy(line: str) -> ClassifyResult:
     """Groovy行を分類する（spec §4.3・confidence=medium／コメントは low・内部 mask）。"""
+    line = line[:GROOVY_LINE_CAP]
     if _GROOVY_COMMENT.match(line):
         return ("コメント", "low")
     return _apply(_GROOVY_RULES, _mask("groovy", line))

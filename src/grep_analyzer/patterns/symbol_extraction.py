@@ -31,6 +31,11 @@ BOURNE_READONLY_RE = re.compile(r"^\s*readonly\s+([A-Za-z_]\w*)=")
 PERL_ASSIGN_RE = re.compile(r"[$@%](\w+)\s*=(?![=~>])")
 PERL_USE_CONSTANT_RE = re.compile(r"\buse\s+constant\s+(\w+)")
 
+# GROOVY 正規表現（CONST/VAR）はカタストロフィックバックトラッキングを起こすため、
+# 入力行をこの文字数で頭打ちにして最悪時間を有界化する（A-4 follow-up）。実 groovy
+# 宣言の `name =` までの長さは十分下回る＝出力不変。実測: 200字で最悪 ~57ms。
+GROOVY_LINE_CAP = 200
+
 # Groovy: final 定数（static 任意・型任意）と一般代入左辺（限定子は剥がす＝§8.4）。
 GROOVY_CONST_RE = re.compile(
     r"\b((?:public|protected|private|static|final)(?:\s+(?:public|protected|private|static|final))*)"

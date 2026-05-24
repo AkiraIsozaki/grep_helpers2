@@ -78,3 +78,29 @@ def test_Shellのコメント行はコメントlow():
     assert classify_shell("# comment 777") == ("コメント", "low")
     assert classify_shell("  # indented") == ("コメント", "low")
     assert classify_shell("# cshell comment", "cshell") == ("コメント", "low")
+
+
+import time
+
+from grep_analyzer.classifiers.regex_classifier import classify_groovy
+from grep_analyzer.chase import extract_chase_symbols
+
+
+def test_groovy_classifyは長行でもReDoSしない():
+    for adv in (" " * 100000 + "x = 1", "public " + "static " * 20000 + "x"):
+        t0 = time.perf_counter()
+        classify_groovy(adv)
+        assert time.perf_counter() - t0 < 0.3
+
+
+def test_groovy_chaseは長行でもReDoSしない():
+    for adv in ("final " + " " * 100000, "public " + "static " * 20000 + "x"):
+        t0 = time.perf_counter()
+        extract_chase_symbols("groovy", "bourne", adv)
+        assert time.perf_counter() - t0 < 0.3
+
+
+def test_groovy_クランプ閾値内の分類_抽出は不変():
+    assert classify_groovy("public static final int MAX = 1") == ("代入", "medium")
+    cs = extract_chase_symbols("groovy", "bourne", "public static final int MAX = 1")
+    assert "MAX" in cs.constants

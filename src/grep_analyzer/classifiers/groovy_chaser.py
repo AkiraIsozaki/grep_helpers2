@@ -12,6 +12,7 @@ from grep_analyzer.patterns.literal_masking import MASK_PATTERNS
 from grep_analyzer.patterns.symbol_extraction import (
     GROOVY_CONST_RE,
     GROOVY_VAR_RE,
+    GROOVY_LINE_CAP,
 )
 
 
@@ -23,6 +24,7 @@ def mask(line: str) -> str:
 
 def extract(dialect: str, line: str) -> ChaseSymbols:
     """1 行をマスク後に Groovy の規則で分類抽出する（dialect は無視）。"""
+    line = line[:GROOVY_LINE_CAP]
     masked = mask(line)
     consts = tuple(
         g.group(2) for g in GROOVY_CONST_RE.finditer(masked)
