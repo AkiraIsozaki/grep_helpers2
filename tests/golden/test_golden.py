@@ -69,3 +69,20 @@ def test_合成ケースのTSVが期待値と完全一致する(golden_case, tmp
             cfg.read_text("utf-8")).get("assert_resume_complete"):
         for expected in sorted((golden_case / "expected").glob("*.tsv")):  # §11(d)
             assert resume.is_complete(out, expected.stem, opts)
+
+
+def test_golden各ケースはjobs2でもjobs1とバイト同値(golden_case, tmp_path):
+    """並列完了順非依存の決定性を全 golden ケースで恒久照合する（C-3）。"""
+    opts1 = _opts_for(golden_case)
+    out1 = tmp_path / "j1"
+    assert run(input_dir=golden_case / "input", output_dir=out1,
+               source_root=golden_case / "src", opts=opts1) == 0
+
+    opts2 = dataclasses.replace(_opts_for(golden_case), jobs=2)
+    out2 = tmp_path / "j2"
+    assert run(input_dir=golden_case / "input", output_dir=out2,
+               source_root=golden_case / "src", opts=opts2) == 0
+
+    for expected in sorted((golden_case / "expected").glob("*.tsv")):
+        name = expected.name
+        assert (out2 / name).read_bytes() == (out1 / name).read_bytes(), name
