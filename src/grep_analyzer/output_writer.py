@@ -43,7 +43,9 @@ def _rows_from_part_text(text: str) -> list[str]:
 
     書込時 `"\\n".join([header]+data_lines)+"\\n"`（_part_bytes の整形）の厳密逆＝先頭 BOM 除去 → rstrip("\\n")
     → split("\\n") → 先頭ヘッダ 1 行除去。splitlines() は使わない
-    （sanitize_field 非対象の U+2028/U+0085 等で水増しするため＝spec §3 手順1）。
+    （書込形式の厳密逆として LF 単独 split を維持する＝spec §3 手順1。なお 2026-05-24 の
+    §9 サニタイズ拡張で U+2028/U+0085 等の行分割クラスは全て空白化済となり、splitlines()
+    でも水増しは起きなくなったが、書込が LF 連結である以上その厳密逆は LF split が正）。
     decode 済 utf-8-sig は BOM 自動除去だが、防御的に先頭 U+FEFF も剥がす。
     """
     if text and text[0] == "\ufeff":   # 防御的 BOM 除去（明示）
