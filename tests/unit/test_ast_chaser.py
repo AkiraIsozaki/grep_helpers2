@@ -247,3 +247,21 @@ def test_proc_exec_sql内は非抽出_区間外は抽出():
            "}\n")
     assert extract_chase_symbols_tree("proc", src, 2).vars == ()       # EXEC SQL 行
     assert extract_chase_symbols_tree("proc", src, 3).vars == ("after",)  # 区間外
+
+
+from grep_analyzer.chase import extract_chase_symbols_tree
+
+
+def test_python_1行複数代入を全て抽出():
+    cs = extract_chase_symbols_tree("python", "a = 1; b = 2; c = 3\n", 1)
+    assert set(cs.vars) == {"a", "b", "c"}
+
+
+def test_javascript_1行複数宣言を全て抽出():
+    cs = extract_chase_symbols_tree("javascript", "let a = 1; let b = 2; c = 3;\n", 1)
+    assert {"a", "b", "c"} <= set(cs.vars)
+
+
+def test_python_連鎖代入は重複なく抽出():
+    cs = extract_chase_symbols_tree("python", "a = b = 1\n", 1)
+    assert sorted(cs.vars) == ["a", "b"]          # 重複しない

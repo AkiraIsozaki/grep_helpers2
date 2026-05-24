@@ -5,7 +5,8 @@ JS 規則は javascript_chaser から再利用。tsx は language 引数で gram
 """
 from grep_analyzer.classifiers.javascript_chaser import _BINDING as _JS_BINDING
 from grep_analyzer.classifiers.javascript_chaser import handle_binding as _handle_js
-from grep_analyzer.classifiers.ts_classifier import binding_at_line
+from grep_analyzer.classifiers.javascript_chaser import _dedup_symbols
+from grep_analyzer.classifiers.ts_classifier import bindings_at_line
 from grep_analyzer.model import ChaseSymbols
 
 _BINDING = _JS_BINDING | {"public_field_definition", "enum_declaration"}
@@ -34,9 +35,7 @@ def _handle_ts(node, consts, vars_, getters, setters):
 
 
 def extract_tree(language, root, lineno):
-    node = binding_at_line(root, lineno, _BINDING)
-    if node is None:
-        return ChaseSymbols()
     consts, vars_, getters, setters = [], [], [], []
-    _handle_ts(node, consts, vars_, getters, setters)
-    return ChaseSymbols(tuple(consts), tuple(vars_), tuple(getters), tuple(setters))
+    for node in bindings_at_line(root, lineno, _BINDING):
+        _handle_ts(node, consts, vars_, getters, setters)
+    return _dedup_symbols(consts, vars_, getters, setters)

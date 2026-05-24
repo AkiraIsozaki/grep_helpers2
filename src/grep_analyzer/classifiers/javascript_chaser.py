@@ -2,7 +2,7 @@
 
 `handle_binding` / `_BINDING` は typescript_chaser から再利用される（DRY）。
 """
-from grep_analyzer.classifiers.ts_classifier import binding_at_line
+from grep_analyzer.classifiers.ts_classifier import bindings_at_line
 from grep_analyzer.model import ChaseSymbols
 
 _BINDING = {"lexical_declaration", "variable_declaration",
@@ -88,9 +88,17 @@ def handle_binding(node, consts, vars_, getters, setters):
 
 
 def extract_tree(language, root, lineno):
-    node = binding_at_line(root, lineno, _BINDING)
-    if node is None:
-        return ChaseSymbols()
     consts, vars_, getters, setters = [], [], [], []
-    handle_binding(node, consts, vars_, getters, setters)
-    return ChaseSymbols(tuple(consts), tuple(vars_), tuple(getters), tuple(setters))
+    for node in bindings_at_line(root, lineno, _BINDING):
+        handle_binding(node, consts, vars_, getters, setters)
+    return _dedup_symbols(consts, vars_, getters, setters)
+
+
+def _dedup_symbols(consts, vars_, getters, setters):
+    """出現順を保ちつつ重複除去（1行複数束縛対策・DRY で typescript からも再利用）。"""
+    def uniq(xs):
+        seen = set()
+        return tuple(x for x in xs if not (x in seen or seen.add(x)))
+    cset = set(consts)
+    return ChaseSymbols(uniq(consts), uniq(v for v in vars_ if v not in cset),
+                        uniq(getters), uniq(setters))

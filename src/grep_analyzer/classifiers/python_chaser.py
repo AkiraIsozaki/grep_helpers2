@@ -5,7 +5,7 @@ ASTChaser: extract_tree(language, root, lineno) → ChaseSymbols。parse は呼�
 """
 import re
 
-from grep_analyzer.classifiers.ts_classifier import binding_at_line
+from grep_analyzer.classifiers.ts_classifier import bindings_at_line
 from grep_analyzer.model import ChaseSymbols
 
 _BINDING = {"assignment", "augmented_assignment", "decorated_definition"}
@@ -65,12 +65,20 @@ def _from_decorated(node, getters, setters):
 
 
 def extract_tree(language, root, lineno):
-    node = binding_at_line(root, lineno, _BINDING)
-    if node is None:
-        return ChaseSymbols()
     consts, vars_, getters, setters = [], [], [], []
-    if node.type == "decorated_definition":
-        _from_decorated(node, getters, setters)
-    else:
-        _from_assignment(node, consts, vars_)
-    return ChaseSymbols(tuple(consts), tuple(vars_), tuple(getters), tuple(setters))
+    for node in bindings_at_line(root, lineno, _BINDING):
+        if node.type == "decorated_definition":
+            _from_decorated(node, getters, setters)
+        else:
+            _from_assignment(node, consts, vars_)
+    return _dedup_symbols(consts, vars_, getters, setters)
+
+
+def _dedup_symbols(consts, vars_, getters, setters):
+    """出現順を保ちつつ重複を除く（1行複数束縛・連鎖代入の二重取り対策）。"""
+    def uniq(xs):
+        seen = set()
+        return tuple(x for x in xs if not (x in seen or seen.add(x)))
+    cset = set(consts)
+    return ChaseSymbols(uniq(consts), uniq(v for v in vars_ if v not in cset),
+                        uniq(getters), uniq(setters))
