@@ -42,20 +42,23 @@ def _scan_one(relpath, abspath, automaton_obj, lang_map, fallback):
     text, enc, replaced, language, dialect = file_meta(relpath, raw, lang_map, fallback_chain=fallback)
     found = []
     if automaton_obj is not None:
+        is_ast = language in _AST_CHASERS
         ts_root = None
         ang_root = None
         spans = []
-        if language in _AST_CHASERS:
-            try:
-                ts_root = parse_tree(language, text)
-            except Exception:
-                ts_root = None
-            if ts_root is not None and language == "typescript":
-                spans = inline_template_spans(text)
+        parsed = False                      # 最初の symbol ヒットまで parse を遅延
         for i, line in enumerate(text.split("\n"), start=1):
             symbols = list(automaton.scan_line(automaton_obj, line))
             if not symbols:
                 continue
+            if is_ast and not parsed:
+                parsed = True
+                try:
+                    ts_root = parse_tree(language, text)
+                except Exception:
+                    ts_root = None
+                if ts_root is not None and language == "typescript":
+                    spans = inline_template_spans(text)
             cs = None
             if ts_root is not None:
                 if spans and any(s <= i - 1 <= e for s, e in spans):
