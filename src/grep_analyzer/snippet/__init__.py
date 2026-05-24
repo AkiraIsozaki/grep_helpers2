@@ -23,7 +23,7 @@ __all__ = [
 
 
 def build_snippet(language: str, dialect: str, file_text: str,
-                  lineno: int) -> str:
+                  lineno: int, cache: dict | None = None) -> str:
     """spec §9 snippet 切り出しのエントリ。確定済み 1 セル文字列を返す。
 
     java/c: ts_span→無ければ ヒット 1 行（spec §9 フォールバック: java/c に
@@ -43,11 +43,11 @@ def build_snippet(language: str, dialect: str, file_text: str,
     language = effective_language(language, file_text, lineno)
     span = None
     if language in ("java", "c", "python", "javascript", "typescript", "tsx"):
-        span = ts_span(language, file_text, lineno)
+        span = ts_span(language, file_text, lineno, cache=cache)
     elif language == "proc":
         span = proc_exec_span(file_text, lineno)
         if span is None:
-            span = ts_span("proc", file_text, lineno)
+            span = ts_span("proc", file_text, lineno, cache=cache)
     elif language == "jsp":
         span = jsp_region_span(file_text, lineno)
     elif language in ("sql", "shell", "perl", "groovy"):

@@ -75,8 +75,12 @@ def _has_error(node) -> bool:
     return node.is_missing or node.type == "ERROR" or node.has_error
 
 
-def ts_span(language: str, file_text: str, lineno: int):
-    """選択範囲 [s,e]（0始まり物理行）。取れなければ None（→fallback）。spec §9。"""
+def ts_span(language: str, file_text: str, lineno: int, cache: dict | None = None):
+    """選択範囲 [s,e]（0始まり物理行）。取れなければ None（→fallback）。spec §9。
+
+    `cache` は parse_tree と共有するファイル単位のパース木辞書（同一ファイルの
+    classify/snippet/別行で再 parse を防ぐ）。
+    """
     if language in ("java", "c", "proc"):
         gran = _GRAN_JAVA if host_grammar(language) == "java" else _GRAN_C
         stmt, block, paren, parse_lang = _STMT, _BLOCK, _PAREN_ONLY, language
@@ -87,7 +91,7 @@ def ts_span(language: str, file_text: str, lineno: int):
     else:
         return None
     try:
-        root = parse_tree(parse_lang, src)
+        root = parse_tree(parse_lang, src, cache=cache)
     except Exception:
         return None
     node = node_at_line(root, lineno)

@@ -31,15 +31,15 @@ def file_meta(relpath: str, raw: bytes, lang_map: dict[str, str], fallback_chain
     return text, enc, replaced, language, dialect
 
 
-def _scan_file(args):
-    """1 ファイルをワーカ内で読み走査しヒット素片を返す純関数。
+def _scan_one(relpath, abspath, automaton_obj, lang_map, fallback):
+    """1 ファイルを **構築済 automaton** で読み走査しヒット素片を返す純関数。
 
-    ストリーミング化＝親に bytes 非常駐・abspath から読む。automaton 走査は raw 行。
+    ストリーミング化＝親に bytes 非常駐・abspath から読む。automaton 走査はデコード済
+    テキストの各行。automaton はチャンク単位で 1 度だけ構築し全ファイルで使い回す
+    （scan_line は iter のみで非破壊＝再利用安全）。
     """
-    relpath, abspath, symbol_list, lang_map, fallback = args
     raw = Path(abspath).read_bytes()
     text, enc, replaced, language, dialect = file_meta(relpath, raw, lang_map, fallback_chain=fallback)
-    automaton_obj = automaton.build(symbol_list)
     found = []
     if automaton_obj is not None:
         ts_root = None
@@ -73,6 +73,40 @@ def _scan_file(args):
     return relpath, enc, replaced, language, dialect, found
 
 
+def _scan_file(args):
+    """後方互換の 1 ファイル走査エントリ（symbol_list から automaton を構築して委譲）。
+
+    引数タプルは従来どおり `(relpath, abspath, symbol_list, lang_map, fallback)`。
+    本番のホット経路（scan_hop）は automaton をチャンク単位で 1 度だけ構築するため
+    この関数を使わない。単体テスト等の 1 ファイル走査の互換のため温存する。
+    """
+    relpath, abspath, symbol_list, lang_map, fallback = args
+    return _scan_one(relpath, abspath, automaton.build(symbol_list), lang_map, fallback)
+
+
+# multiprocessing ワーカ：automaton / lang_map / fallback はワーカ毎に initializer で
+# 1 度だけ構築・保持する（pickle 制約下でチャンク内の全ファイルが共有＝再構築回避）。
+# automaton を initializer で各ワーカが明示構築するため start method 非依存
+# （fork でも spawn でも正しく初期化される。グローバルは fork 継承に依存しない）。
+_WORKER_AUTOMATON = None
+_WORKER_LANG_MAP: dict[str, str] | None = None
+_WORKER_FALLBACK: list[str] | None = None
+
+
+def _worker_init(symbol_list, lang_map, fallback) -> None:
+    """Pool worker 初期化：チャンク symbol から automaton を 1 度だけ構築。"""
+    global _WORKER_AUTOMATON, _WORKER_LANG_MAP, _WORKER_FALLBACK
+    _WORKER_AUTOMATON = automaton.build(symbol_list)
+    _WORKER_LANG_MAP = lang_map
+    _WORKER_FALLBACK = fallback
+
+
+def _scan_file_worker(args):
+    """Pool worker 本体：initializer 構築済の automaton を使って 1 ファイル走査。"""
+    relpath, abspath = args
+    return _scan_one(relpath, abspath, _WORKER_AUTOMATON, _WORKER_LANG_MAP, _WORKER_FALLBACK)
+
+
 def kinds_of(chase_symbols: ChaseSymbols) -> dict[str, str]:
     """ChaseSymbols の各シンボル→種別。同名は constant 優先（最後に書く）。"""
     out: dict[str, str] = {}
@@ -102,14 +136,21 @@ def scan_hop(scan_symbols, scan_files, opts, nchunks):
                   for i in range(0, len(scan_symbols), size)] or [[]]
     hits_by_relpath: dict[str, list] = {}
     file_meta_by_relpath: dict[str, tuple] = {}
+    fallback = list(opts.encoding_fallback)
     for chunk in chunks:
-        args = [(relpath, str(abspath), chunk, opts.lang_map, list(opts.encoding_fallback))
-                for relpath, abspath in scan_files]
+        # automaton はチャンク単位で 1 度だけ構築する（旧実装はファイル毎に再構築していた）。
+        # Pool はチャンク毎に automaton が変わるためチャンク毎生成（degrade で nchunks が
+        # 大きいと fork×jobs×nchunks のプロセス起動コストが残る＝将来の最適化余地）。
         if opts.jobs > 1:
-            with multiprocessing.Pool(opts.jobs) as pool:
-                res = pool.map(_scan_file, args)
+            with multiprocessing.Pool(
+                    opts.jobs, initializer=_worker_init,
+                    initargs=(chunk, opts.lang_map, fallback)) as pool:
+                res = pool.map(_scan_file_worker,
+                               [(relpath, str(abspath)) for relpath, abspath in scan_files])
         else:
-            res = [_scan_file(a) for a in args]
+            automaton_obj = automaton.build(chunk)
+            res = [_scan_one(relpath, str(abspath), automaton_obj, opts.lang_map, fallback)
+                   for relpath, abspath in scan_files]
         for relpath, enc, replaced, language, dialect, found in res:
             file_meta_by_relpath.setdefault(relpath, (enc, replaced, language, dialect))
             hits_by_relpath.setdefault(relpath, []).extend(found)

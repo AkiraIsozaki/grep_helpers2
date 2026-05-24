@@ -62,6 +62,13 @@ def run(
         lines = grep_bytes.split(b"\n")
         if lines and lines[-1] == b"":
             lines.pop()                       # 末尾改行による空要素（splitlines 相当）
+        # grep 出力はファイル単位でヒットがまとまる（grep -rn / rg）。直前 1 ファイル分の
+        # 読込・復号・言語判定・パース木をキャッシュし、同一ファイルの連続ヒットで
+        # ディスク再読込と tree-sitter 再パースを抑止する（追加メモリは O(1)＝1 ファイル分）。
+        # 診断（decode_replaced/unsupported_shebang/missing_source）は §10.3 の件数・順序を
+        # 保つため従来どおりヒット行ごとに発火する。
+        cur_relpath = None
+        cur_ctx: tuple | None = None
         for raw_line in lines:
             parsed = parse_grep_line(raw_line)
             if parsed is None:
@@ -76,25 +83,32 @@ def run(
             if not target.is_file():
                 diag.add("missing_source", relpath)
                 continue
-            file_text, enc, replaced = decode_bytes(target.read_bytes(), fb)
+            if relpath != cur_relpath:
+                file_text, enc, replaced = decode_bytes(target.read_bytes(), fb)
+                sample = file_text[:4096]
+                language = detect_language(relpath, sample, lang_map)
+                dialect = (detect_shell_dialect(relpath, sample)
+                           if language == "shell" else "bourne")
+                unsupported = (
+                    not extension_resolves_language(relpath, lang_map)
+                    and shebang_dialect(sample) is not None  # シェバン行が存在
+                    and shebang_language(sample) is None      # 対応言語に解決しない
+                )
+                cur_ctx = (file_text, enc, replaced, language, dialect, unsupported, {})
+                cur_relpath = relpath
+            file_text, enc, replaced, language, dialect, unsupported, tree_cache = cur_ctx
             if replaced:
                 diag.add("decode_replaced", str(relpath))
-            sample = file_text[:4096]
-            language = detect_language(relpath, sample, lang_map)
-            dialect = detect_shell_dialect(relpath, sample) if language == "shell" else "bourne"
-            if (
-                not extension_resolves_language(relpath, lang_map)
-                and shebang_dialect(sample) is not None      # シェバン行が存在
-                and shebang_language(sample) is None         # 対応言語に解決しない
-            ):
+            if unsupported:
                 diag.add("unsupported_shebang", str(relpath))
-            category, confidence = classify_hit(language, dialect, file_text, lineno, content)
+            category, confidence = classify_hit(
+                language, dialect, file_text, lineno, content, cache=tree_cache)
             hits.append(Hit(
                 keyword=keyword, language=language, file=relpath, lineno=lineno,
                 ref_kind="direct", category=category, category_sub="",
                 usage_summary=f"{category} ({language})", via_symbol="",
                 chain=f"{keyword}@{relpath}:{lineno}",
-                snippet=build_snippet(language, dialect, file_text, lineno),
+                snippet=build_snippet(language, dialect, file_text, lineno, cache=tree_cache),
                 encoding=enc + (" 要確認" if replaced else ""), confidence=confidence,
             ))
 

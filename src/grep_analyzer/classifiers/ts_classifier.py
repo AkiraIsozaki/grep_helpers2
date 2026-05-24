@@ -74,8 +74,20 @@ _CATEGORY_BY_LANG = {
 }
 
 
+# Parser は言語（grammar）毎に 1 度だけ生成し再利用する（parse は呼出毎に新 Tree を
+# 返し過去状態を持たない＝再利用安全。jobs>1 は別プロセスゆえ各自が独立 dict を持つ）。
+# 注: マルチスレッドでは Parser 共有に外部ロックが要る。本コードの並列はプロセスのみ
+# （multiprocessing）でスレッド共有は無いため該当しない。
+_PARSERS: dict[str, Parser] = {}
+
+
 def _parser(language: str) -> Parser:
-    return Parser(_LANGS[host_grammar(language)])
+    grammar = host_grammar(language)
+    parser = _PARSERS.get(grammar)
+    if parser is None:
+        parser = Parser(_LANGS[grammar])
+        _PARSERS[grammar] = parser
+    return parser
 
 
 def node_at_line(root, lineno: int):
@@ -145,11 +157,15 @@ def bindings_at_line(root, lineno: int, binding_types):
     return out
 
 
-def classify_ts(language: str, source: str, lineno: int) -> ClassifyResult:
-    """ファイル全体を AST 解析し、対象行を含む構文要素から分類する。"""
-    src = host_source(language, source)
-    tree = _parser(language).parse(src.encode("utf-8"))
-    node = node_at_line(tree.root_node, lineno)
+def classify_ts(language: str, source: str, lineno: int,
+                cache: dict | None = None) -> ClassifyResult:
+    """ファイル全体を AST 解析し、対象行を含む構文要素から分類する。
+
+    `cache` は同一 (file, language) のパース木を再利用するための辞書（parse_tree と
+    共有）。同一ヒットの snippet 切出や同一ファイルの別行と木を共有し再 parse を防ぐ。
+    """
+    root = parse_tree(language, source, cache=cache)
+    node = node_at_line(root, lineno)
     # コメント専用行（最小ノードが comment）は climb 前に短絡（spec §7・コメントカテゴリ）。
     # java=line_comment/block_comment、他=comment を endswith で一律カバー。
     if node is not None and node.type.endswith("comment"):
@@ -162,6 +178,16 @@ def classify_ts(language: str, source: str, lineno: int) -> ClassifyResult:
     return ("その他", "high")
 
 
-def parse_tree(language: str, source: str):
-    """ソースを host_source で逆マスク後 parse し root_node を返す（spec §5 適用点2）。"""
-    return _parser(language).parse(host_source(language, source).encode("utf-8")).root_node
+def parse_tree(language: str, source: str, cache: dict | None = None):
+    """ソースを host_source で逆マスク後 parse し root_node を返す（spec §5 適用点2）。
+
+    `cache` 辞書を渡すと `language` をキーに root_node をメモ化する。同一ソース文字列
+    （= 1 ファイル分）に対する複数回の parse_tree 呼出を 1 回に集約するための機構で、
+    呼出側はファイル単位で空 dict を用意して使い回す。`cache=None` は従来どおり毎回 parse。
+    """
+    if cache is not None and language in cache:
+        return cache[language]
+    root = _parser(language).parse(host_source(language, source).encode("utf-8")).root_node
+    if cache is not None:
+        cache[language] = root
+    return root

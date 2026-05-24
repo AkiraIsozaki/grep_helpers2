@@ -44,13 +44,22 @@ def build_indirect_hits(state: ChaseState) -> list[Hit]:
             file_meta_by_relpath[c.relpath] = (text, lang, dialect)
             state.encoding_of.setdefault(c.relpath, (enc, replaced))
         text, language, dialect = file_meta_by_relpath[c.relpath]
+        # occurrence 単位の使い捨てパース木キャッシュ：同一 occurrence の classify_hit と
+        # build_snippet（および全 chain）が 1 度のパースを共有する。occurrence をまたいで
+        # 木を常駐させない＝メモリは 1 木分（spec の定常メモリ設計を尊重。occurrence は
+        # sorted_unique の (symbol,relpath,lineno) 順で relpath ごとにまとまらないため、
+        # relpath 単位常駐にしても局所性は乏しく、使い捨てで十分かつ安全）。
+        tree_cache: dict = {}
         lines = line_cache[c.relpath]
         line = lines[c.lineno - 1] if 0 <= c.lineno - 1 < len(lines) else ""
         kind = state.symbol_kind.get(c.symbol, "var")
-        cat, conf = classify_hit(language, dialect, text, c.lineno, line)
+        cat, conf = classify_hit(language, dialect, text, c.lineno, line, cache=tree_cache)
         if kind in ("getter", "setter"):
             conf = "low"
         enc, replaced = state.encoding_of.get(c.relpath, ("utf-8", False))
+        # snippet は (language, text, lineno) のみに依存し chain 非依存＝occurrence 単位で
+        # 1 回だけ切り出して全 chain の Hit で共有する（chain 数ぶんの再パース/再切出を排除）。
+        snippet = build_snippet(language, dialect, text, c.lineno, cache=tree_cache)
         for chain in state.graph.chains_to(c, max_depth=opts.max_depth,
                                            max_paths=opts.max_paths, diag=diag):
             indirect.append(Hit(
@@ -58,7 +67,7 @@ def build_indirect_hits(state: ChaseState) -> list[Hit]:
                 lineno=c.lineno, ref_kind=_REF_KIND[kind], category=cat,
                 category_sub="", usage_summary=f"{cat} ({language})",
                 via_symbol=c.symbol, chain=chain,
-                snippet=build_snippet(language, dialect, text, c.lineno),
+                snippet=snippet,
                 encoding=enc + (" 要確認" if replaced else ""),
                 confidence=conf))
     return indirect
