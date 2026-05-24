@@ -45,3 +45,23 @@ def test_typescript_category():
 
 def test_tsx_category():
     assert classify_ts("tsx", "const App = () => <div>{x}</div>;\n", 1) == ("宣言", "high")
+
+
+def test_bindings_at_line_行交差全件を決定的順で返す():
+    import tree_sitter_java
+    from tree_sitter import Language, Parser
+    from grep_analyzer.classifiers.ts_classifier import bindings_at_line
+    src = "class S { int vv = a.getName(); }\n"
+    root = Parser(Language(tree_sitter_java.language())).parse(src.encode()).root_node
+    types = {"field_declaration", "method_invocation"}
+    got = [n.type for n in bindings_at_line(root, 1, types)]
+    # field_declaration（外側・start_byte 小）→ method_invocation（内側）の順
+    assert got == ["field_declaration", "method_invocation"]
+
+
+def test_bindings_at_line_該当なしは空list():
+    import tree_sitter_java
+    from tree_sitter import Language, Parser
+    from grep_analyzer.classifiers.ts_classifier import bindings_at_line
+    root = Parser(Language(tree_sitter_java.language())).parse(b"class S {}\n").root_node
+    assert bindings_at_line(root, 1, {"method_invocation"}) == []

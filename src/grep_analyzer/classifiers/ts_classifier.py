@@ -123,6 +123,28 @@ def binding_at_line(root, lineno: int, binding_types):
     return best
 
 
+def bindings_at_line(root, lineno: int, binding_types):
+    """対象行に交差し binding_types に属する全ノードを決定的順で返す（list）。
+
+    binding_at_line（最小スパン単一ノード）と異なり、行内に複数の束縛・呼出が
+    同居する場合（例 `int count = svc.getName(); obj.setValue(count);`）を
+    regex の「行内全マッチ」と等価に拾うため複数件を返す。順序は
+    (start_byte, end_byte, type) 昇順で安定（出力 tuple の決定性・spec §3.2）。
+    name 行ゲート（method 系のみ name 行でヒット行に絞る）は各 chaser ハンドラの責務。
+    """
+    target = lineno - 1
+    out = []
+    cursor = [root]
+    while cursor:
+        node = cursor.pop()
+        if node.start_point[0] <= target <= node.end_point[0]:
+            if node.type in binding_types:
+                out.append(node)
+            cursor.extend(node.children)
+    out.sort(key=lambda n: (n.start_byte, n.end_byte, n.type))
+    return out
+
+
 def classify_ts(language: str, source: str, lineno: int) -> ClassifyResult:
     """ファイル全体を AST 解析し、対象行を含む構文要素から分類する。"""
     src = host_source(language, source)
