@@ -93,7 +93,7 @@ Python 3.12 はターゲットに既存（§2.1）。配備は wheelhouse 持ち
 
 > **v10 G1 再ベースライン（2026-05-19・配備先 x86_64→aarch64/DGX Spark 確定）**: 上記 G1 を aarch64 で再実証。手順2 は `pip download --no-index --find-links wheelhouse --only-binary=:all: --platform manylinux_2_17_aarch64 --python-version 3.12 --implementation cp --require-hashes -r requirements.lock` で **全12 package（必須4＋推移＋テスト＋ビルドバックエンド）が cp312/aarch64 wheelhouse からハッシュ検証付きでオフライン解決**することを確認（うちアーキ依存はネイティブ4点でこれが aarch64 wheel に解決、純Python8点は共通 wheel）。手順3 の分岐は `pyahocorasick` のみ (b)＝版選択 `2.1.0→2.3.1` で解消（sdist ビルド同梱は不要＝単一トラック前提 §3 を維持）。x86_64（開発/CI）側は実 venv で `--require-hashes` インストール＋本体 `-e .`＋全テスト 244 passed を実走確認。詳細正本は `phase0-gate-result.md` の「aarch64 再ベースライン記録」節。
 
-> **track A G1 再ベースライン（2026-05-23・tree-sitter 0.21→0.23.x・4言語 grammar 追加）**: track A（TS/TSX/JS/Python）実装に伴い tree-sitter を `0.23.2`、grammar を java `0.23.5` / c `0.23.4` / python `0.23.6` / javascript `0.23.1` / typescript `0.23.2` へ更新。x86_64/aarch64 両アーキ wheel を wheelhouse 同梱済み（計12 grammar wheel＋既存）。詳細は差分設計書 §2 と `phase0-gate-result.md`（aarch64 再ベースライン記録節が正本）。`requirements.lock` のテスト件数ベースラインは **395 passed, 5 skipped**（§390 java/c/proc/jsp chaser AST 化統一完了時点。世代: track A 完了 331 passed → track C 完了 366 passed → track C 変更 §389 Angular inline template 完了 381 passed → §390 java/c/jsp/proc chaser AST 化統一完了 395 passed。スキップ件数 5 は全世代共通）。
+> **track A G1 再ベースライン（2026-05-23・tree-sitter 0.21→0.23.x・4言語 grammar 追加）**: track A（TS/TSX/JS/Python）実装に伴い tree-sitter を `0.23.2`、grammar を java `0.23.5` / c `0.23.4` / python `0.23.6` / javascript `0.23.1` / typescript `0.23.2` へ更新。x86_64/aarch64 両アーキ wheel を wheelhouse 同梱済み（計12 grammar wheel＋既存）。詳細は差分設計書 §2 と `phase0-gate-result.md`（aarch64 再ベースライン記録節が正本）。`requirements.lock` のテスト件数ベースラインは **395 passed, 5 skipped**（§390 java/c/proc/jsp chaser AST 化統一完了時点。世代: track A 完了 331 passed → track C 完了 366 passed → track C 変更 §389 Angular inline template 完了 381 passed → §390 java/c/jsp/proc chaser AST 化統一完了 395 passed。スキップ件数 5 は全世代共通）。（注: 実装の追加に伴い件数は増加する。**ゲートは「全件 passed・golden バイト不変」であって固定件数ではない**。最新の実数は `python -m pytest -q` を正本とする。）
 
 ---
 
@@ -195,6 +195,15 @@ Ingest → Seed化 → 言語ディスパッチ → 分類器(tree-sitter主軸)
 ### 8.4 既知の取りこぼし・抑止の正本（diagnostics に必ず明示）
 
 本節を**唯一の正本**とし、§1/§8.3/§10.3 はここを参照する（重複記述を排除）:
+
+> **明示の粒度（2026-05-24 是正）**: 本節カテゴリのうち縮約免除は `symbol_rejected`/
+> `getter_setter_no_expand`/`prov_*` のみ（§10.3）。その他の取りこぼし（生成コード
+> 除外・decode 置換・symlink dedup・unsupported_shebang 等）は **summary 件数は常に
+> 全件**だが、個別明細は `--diagnostics-detail-limit`（既定 1000）で縮約される。全件
+> 明細が要る監査では `--diagnostics-detail-limit 0` を指定する。さらにメモリ安全のため
+> 1カテゴリの明細保持は内部上限 `_MAX_RETAINED`（既定 20万件）で頭打ちする（カウントは
+> 全件・A-2）。**Inv-6（`--diagnostics-detail-limit 0` がバイト同値）は1カテゴリが
+> 20万件を超える病的ケースを除き不変**。
 
 - **型解決を要する getter/setter**: `obj.getX()` の `obj` 型同定不可。同名メソッド全件 `confidence=low`、意味的同一性は人間判断。
 - **コメント分類の限界（2026-05-24）**: (1) 正規表現系（sql/perl/groovy/shell）の複数行ブロックコメント `/* … */` 中間行は行単位判定ゆえ非検出（`その他` 据置。AST 系は内包ノードが comment ゆえ全行 `コメント`）。(2) jsp/angular/angular_inline は逆マスク後ホスト言語（Java/TS）スタイルコメントのみ検出。HTML/JSP スタイル（`<!-- -->`・`<%-- --%>`）は host 空白化で非検出。HTML 言語はコメント分類スコープ外（`その他` 固定）。(3) perl `^\s*#` は POD（`=pod`〜`=cut`）・heredoc 本文中の `#` 始まり行を `コメント` と誤判定し得る。(4) Oracle ヒント `--+ …`・`/*+ … */`（単独行）は `(?!\+)` で `コメント` から除外（通常分類）。
