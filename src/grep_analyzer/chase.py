@@ -13,6 +13,14 @@ from grep_analyzer.classifiers.sql_chaser import _extract_var_symbols as _sql_ex
 from grep_analyzer.classifiers.ts_classifier import parse_tree
 from grep_analyzer.model import ChaseSymbols
 
+# 追跡シンボル抽出（行ベース正規表現 chaser）への入力行の最大長。これを超える行は
+# 先頭のみを見る。正規表現のバックトラッキング爆発（ReDoS）を構造的に無害化する
+# 安全弁。snippet の文字数クランプ（_clamp.CHAR_MAX=800）と同値に揃える＝通常の
+# ソース行長を上回るため出力は実質不変（A-4）。8192 等の大きい値では GROOVY 正規
+# 表現が依然 ReDoS する（実測: 8192字は 60s 超）ため必ず 800 とする。automaton 走査
+# （ヒット検出）には適用しないためヒットの取りこぼしは生じない。
+_MAX_CHASE_LINE = 800
+
 
 def extract_var_symbols(language: str, dialect: str, line: str) -> list[str]:
     """1 行から indirect:var 追跡シンボル（代入の左辺識別子）を抽出する。
@@ -21,6 +29,7 @@ def extract_var_symbols(language: str, dialect: str, line: str) -> list[str]:
     Chaser を経由せず直接対応する `*_chaser._extract_var_symbols` を呼ぶ。
     対象外言語・該当なしは空リスト。
     """
+    line = line[:_MAX_CHASE_LINE]
     if language == "sql":
         return _sql_extract(dialect, line)
     if language == "shell":
@@ -42,6 +51,7 @@ def extract_chase_symbols(language: str, dialect: str, line: str) -> ChaseSymbol
 
     対象外言語は空の ChaseSymbols を返す。
     """
+    line = line[:_MAX_CHASE_LINE]
     chaser = _CHASERS.get(language)
     if chaser is None:
         return ChaseSymbols()

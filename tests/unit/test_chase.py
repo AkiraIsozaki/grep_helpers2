@@ -167,3 +167,21 @@ def test_html_はchase非発火():
     from grep_analyzer.chase import extract_chase_symbols_tree
     assert extract_chase_symbols("html", "", "x = TRACKED").vars == ()
     assert extract_chase_symbols_tree("html", "x = TRACKED\n", 1).vars == ()
+
+
+import time
+
+from grep_analyzer.chase import extract_chase_symbols, _MAX_CHASE_LINE
+
+
+def test_groovy_長行でもクランプで有限時間():
+    pathological = "public " + "static " * 4000 + "x"   # 約 2.8 万文字・末尾 = 無し
+    t0 = time.perf_counter()
+    extract_chase_symbols("groovy", "bourne", pathological)
+    assert time.perf_counter() - t0 < 2.0               # 旧実装は数十秒〜（クランプ 800 で <0.5s）
+
+
+def test_クランプ閾値内のgroovyは従来どおり抽出():
+    cs = extract_chase_symbols("groovy", "bourne", "public static final int MAX = 1")
+    assert "MAX" in cs.constants
+    assert len("public static final int MAX = 1") < _MAX_CHASE_LINE
