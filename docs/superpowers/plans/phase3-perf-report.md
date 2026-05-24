@@ -128,3 +128,37 @@ items_per_mb   = floor(1_048_576 / 14.161380) = 74044
 不感を `tests/integration/test_inv1_items_per_mb.py` が再ベースライン後も PASS で機械保証）。
 注: フル perf スイート同時実行時は他テストが `tracemalloc` 基線へ影響し peak が
 小さく出るため、報告書の手順どおり**単体実行の CALIB 行**を権威値とする。
+
+---
+
+## 不動点パス改善（2026-05-24・lazy parse / hop間 LRU / rg既定 / pool再利用 / direct cache）
+
+適用変更（`docs/superpowers/plans/2026-05-24-perf-fixedpoint-caching.md`）:
+
+- **#2** `_scan_one` の tree-sitter parse を symbol ヒットまで遅延（非マッチ多数ファイルのパース排除）。
+- **#1** 不動点 hop 間の復号メタ（text/enc/lang/dialect）を 64MiB 予算つき LRU でキャッシュ
+  （再読込・再 chardet・再言語判定を排除。tree 非保持で常駐メモリ O(1) 維持）。
+- **#6** direct パスの `is_file`/物理行分割を relpath 単位にキャッシュ（高ヒット密度の毎ヒット stat/再 split を 1 回化）。
+- **#5** `multiprocessing.Pool` を run 単位で 1 度だけ生成し hop/chunk 間で再利用
+  （automaton は worker 側で signature 変化時のみ再構築・worker LRU 永続化）。
+- **#3** ripgrep prefilter を `rg` 検出時の既定 ON に（`--no-use-ripgrep` で opt-out）。
+
+### 測定（test_fixedpoint_heavy 相当・seed=7・実ファイル行 seed・jobs=1）
+
+同一セッションで連続 A/B/C 計測（各 warmup 後 3 回 min）。**注: 出力 byte 不変は golden
+全件＋`test_perf_caching` が機械保証。本表は速度のみ。** devcontainer はノイズが大きいため
+単発 pytest 値ではなく back-to-back min を権威とする。
+
+| 構成 | n=300 | n=600 |
+|------|-------|-------|
+| A: 改善前（commit 1ebcb92・rg OFF） | 1.138s | 1.914s |
+| B: 改善後 既定（rg ON） | 0.585s | 1.128s |
+| C: 改善後 rg OFF | 0.452s | 1.007s |
+
+- **A→B（既定どうし）**: n=300 ≈ **1.95×**、n=600 ≈ **1.70×** 高速化。
+- **B vs C（rg の寄与）**: 本合成コーパスでは **rg ON が OFF より遅い**（n=600 で +12%）。
+  理由: tiny ファイルが密に相互参照するため hop ごとに rg がほぼ全ファイルを keep し、
+  絞り込み効果なしに per-hop サブプロセス起動コストだけ乗る（rg 病理的コーパス）。
+  実コードベース（大きめファイル・疎な参照・初期 hop で symbol 集合が小）では rg が効く想定。
+  **#3 の既定 ON はワークロード依存**であり、密小ファイル系では `--no-use-ripgrep` 推奨。
+- 速度向上の主因は **#1（LRU）+ #2（lazy parse）**。メモリは rss ほぼ一定（O(1) 維持）。
