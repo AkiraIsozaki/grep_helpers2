@@ -31,6 +31,7 @@ class EngineOptions:
     progress: str = "off"
     spill_dir: Path | None = None
     force_chunks: int = 0
+    force_spill: int = 0          # >0 でエッジ N 件目から強制 spill（テスト用・本番 0）
     resume: bool = False
     output_encoding: str = "utf-8-sig"
     encoding_fallback: tuple[str, ...] = ("cp932", "euc-jp", "latin-1")

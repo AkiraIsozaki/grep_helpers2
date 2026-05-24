@@ -34,6 +34,10 @@ def initialize_state(seed_hits: list[Hit], source_root: Path,
     graph = ProvenanceGraph()
     keyword = sorted({s.keyword for s in seed_hits})[0] if seed_hits else ""
 
+    edge_store = EdgeStore(opts.spill_dir, budget)
+    if opts.force_spill and opts.force_spill > 0:
+        edge_store._force_spill_threshold = opts.force_spill
+
     state = ChaseState(
         source_root=source_root,
         options=opts,
@@ -41,7 +45,7 @@ def initialize_state(seed_hits: list[Hit], source_root: Path,
         policy=policy,
         budget=budget,
         graph=graph,
-        edge_store=EdgeStore(opts.spill_dir, budget),
+        edge_store=edge_store,
         keyword=keyword,
     )
 
