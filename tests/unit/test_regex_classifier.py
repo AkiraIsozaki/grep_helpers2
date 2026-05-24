@@ -20,7 +20,7 @@ def test_Shellのtest比較は比較と判定する():
 
 
 def test_該当規則がなければその他と判定する():
-    assert classify_sql("-- just a comment") == ("その他", "medium")
+    assert classify_sql("SELECT 1 FROM dual") == ("その他", "medium")
 
 
 def test_OracleのPLSQL代入は代入と判定する():
@@ -57,3 +57,24 @@ def test_cshellのswitchは分岐と判定する():
 def test_dialect既定bourneは従来挙動と同一():
     assert classify_shell('CODE="X"') == ("代入", "medium")
     assert classify_shell('[ "$x" = "X" ]') == ("比較", "medium")
+
+
+def test_SQLのコメント行はコメントlow():
+    assert classify_sql("-- comment 777") == ("コメント", "low")
+    assert classify_sql("  -- indented") == ("コメント", "low")
+    assert classify_sql("/* block 777 */") == ("コメント", "low")
+
+
+def test_SQLのOracleヒント句はコメントにしない():
+    assert classify_sql("/*+ INDEX(t idx) */") == ("その他", "medium")
+    assert classify_sql("--+ INDEX(t idx)") == ("その他", "medium")
+
+
+def test_SQLの同居コメントはコード優先():
+    assert classify_sql("WHERE col = 'X' -- trailing") == ("比較", "medium")
+
+
+def test_Shellのコメント行はコメントlow():
+    assert classify_shell("# comment 777") == ("コメント", "low")
+    assert classify_shell("  # indented") == ("コメント", "low")
+    assert classify_shell("# cshell comment", "cshell") == ("コメント", "low")

@@ -111,3 +111,21 @@ def test_classify_hit_TSコード行はtypescript不変():
     # L5 class field items = TRACKED → public_field_definition → 宣言（typescript 経路）。
     # 誤って angular_inline に routing されると領域外で空白化され その他 になる＝判別子。
     assert classify_hit("typescript", "", _C, 5, "")[0] == "宣言"
+
+
+def test_Perlのコメント行はコメントlow():
+    assert classify_perl("# perl comment 777") == ("コメント", "low")
+    assert classify_perl("  # indented") == ("コメント", "low")
+
+
+def test_Perlの同居コメントはコード優先():
+    assert classify_perl("my $x = 1; # trailing") == ("代入", "medium")
+
+
+def test_Groovyのコメント行はコメントlow():
+    assert classify_groovy("// groovy comment 777") == ("コメント", "low")
+    assert classify_groovy("/* block 777 */") == ("コメント", "low")
+
+
+def test_Groovyの同居コメントはコード優先():
+    assert classify_groovy("def x = 1 // trailing") == ("代入", "medium")

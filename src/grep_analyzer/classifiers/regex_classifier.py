@@ -43,16 +43,28 @@ def _apply(rules, line: str) -> ClassifyResult:
     return ("その他", "medium")
 
 
+# spec §7 コメントカテゴリ。行頭アンカーで純コメント行のみ（同居行はコード優先）。
+# Oracle ヒント句 /*+ ... */ ・ --+ ... は最適化指示でコメントではない（(?!\+) で除外）。
+_SQL_COMMENT = re.compile(r"^\s*--(?!\+)|^\s*/\*(?!\+).*\*/\s*$")
+_SHELL_COMMENT = re.compile(r"^\s*#")
+_PERL_COMMENT = re.compile(r"^\s*#")
+_GROOVY_COMMENT = re.compile(r"^\s*//|^\s*/\*.*\*/\s*$")
+
+
 def classify_sql(line: str) -> ClassifyResult:
-    """SQL行（Oracle方言）を分類する（spec §7・confidence=medium）。"""
+    """SQL行（Oracle方言）を分類する（spec §7・confidence=medium／コメントは low）。"""
+    if _SQL_COMMENT.match(line):
+        return ("コメント", "low")
     return _apply(_SQL_RULES, line)
 
 
 def classify_shell(line: str, dialect: str = "bourne") -> ClassifyResult:
-    """Shell行を分類する（spec §7・confidence=medium）。
+    """Shell行を分類する（spec §7・confidence=medium／コメントは low）。
 
     dialect="cshell" のとき csh/tcsh 規則、それ以外（既定）は bourne 規則。
     """
+    if _SHELL_COMMENT.match(line):
+        return ("コメント", "low")
     rules = _SHELL_RULES_CSHELL if dialect == "cshell" else _SHELL_RULES_BOURNE
     return _apply(rules, line)
 
@@ -86,10 +98,14 @@ _GROOVY_RULES = [
 
 
 def classify_perl(line: str) -> ClassifyResult:
-    """Perl行を分類する（spec §4.2・confidence=medium・内部 mask）。"""
+    """Perl行を分類する（spec §4.2・confidence=medium／コメントは low・内部 mask）。"""
+    if _PERL_COMMENT.match(line):
+        return ("コメント", "low")
     return _apply(_PERL_RULES, _mask("perl", line))
 
 
 def classify_groovy(line: str) -> ClassifyResult:
-    """Groovy行を分類する（spec §4.3・confidence=medium・内部 mask）。"""
+    """Groovy行を分類する（spec §4.3・confidence=medium／コメントは low・内部 mask）。"""
+    if _GROOVY_COMMENT.match(line):
+        return ("コメント", "low")
     return _apply(_GROOVY_RULES, _mask("groovy", line))
