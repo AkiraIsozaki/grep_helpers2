@@ -193,3 +193,60 @@ def test_java_jsp_経由():
     from grep_analyzer.chase import extract_chase_symbols_tree
     assert "x" in extract_chase_symbols_tree("jsp", "<% int x = TRACKED; %>\n", 1).vars
     assert extract_chase_symbols_tree("jsp", "${ TRACKED.code }\n", 1).vars == ()
+
+
+def _c(text, lineno, language="c"):
+    from grep_analyzer.classifiers.c_chaser import extract_tree
+    return extract_tree(language, parse_tree(language, text), lineno)
+
+
+def test_c_define_と_const_と_var():
+    assert _c("#define MAX_LEN 10\n", 1).constants == ("MAX_LEN",)
+    assert _c("const int FOO = 1;\n", 1).constants == ("FOO",)
+    assert _c("int n = 3;\n", 1).vars == ("n",)
+
+
+def test_c_関数様マクロ_const():
+    assert _c("#define SQ(x) ((x)*(x))\n", 1).constants == ("SQ",)
+
+
+def test_c_ポインタ_複数宣言子_noinit():
+    assert _c('char *p = "X";\n', 1).vars == ("p",)
+    assert _c("int a = 1, b = 2;\n", 1).vars == ("a", "b")
+    assert _c("int x;\n", 1).vars == ("x",)            # no-init も捕捉
+
+
+def test_c_struct_member_field_declaration():
+    src = "struct S { const int K; int *q; int a, b; };\n"
+    cs = _c(src, 1)
+    assert "K" in cs.constants
+    assert cs.vars == ("q", "a", "b")
+
+
+def test_c_関数宣言名_関数ポインタは非抽出():
+    assert _c("int foo(void);\n", 1) .vars == ()
+    assert _c("int (*fp)(void) = cb;\n", 1).vars == ()
+
+
+def test_c_複合代入捕捉():
+    assert _c("void f(){ total += x; arr[i] += 1; }\n", 1).vars == ("total",)
+
+
+def test_c_getter_setterは無し():
+    cs = _c("int n = 3;\n", 1)
+    assert cs.getters == () and cs.setters == ()
+
+
+@pytest.mark.skip(reason="Task5 で registry 登録後 green")
+def test_proc_exec_sql内は非抽出_区間外は抽出():
+    from grep_analyzer.chase import extract_chase_symbols_tree
+    # 単一行 EXEC SQL → mask_exec_sql で空白化
+    cs = extract_chase_symbols_tree("proc", "EXEC SQL SELECT c INTO :host FROM t;\n", 1)
+    assert cs.vars == () and cs.constants == () and "host" not in cs.vars
+    # 区間外の C 宣言は抽出
+    src = ("int f(){\n"
+           " EXEC SQL UPDATE t SET col = v WHERE id = :h;\n"
+           " int after = 1;\n"
+           "}\n")
+    assert extract_chase_symbols_tree("proc", src, 2).vars == ()       # EXEC SQL 行
+    assert extract_chase_symbols_tree("proc", src, 3).vars == ("after",)  # 区間外
