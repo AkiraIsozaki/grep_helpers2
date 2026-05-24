@@ -1,7 +1,10 @@
 """言語別 Chaser / Classifier モジュール群と Chaser registry。
 
-`_CHASERS` は方式α（eager import）で各 *_chaser.py を import 時に登録する。
-chase.py の dispatcher が `_CHASERS[language]` で対応モジュールを取得する。
+方式α（eager import）で各 *_chaser.py を import 時に登録する。chase.py の
+dispatcher が言語に応じて以下いずれかから対応モジュールを取得する:
+- `_AST_CHASERS`: tree-sitter AST で抽出する言語（java/c/proc/jsp/python/
+  javascript/typescript/tsx/angular(_inline)）。
+- `_CHASERS`: 行ベース regex で抽出する言語（shell/sql/perl/groovy）。
 """
 
 from grep_analyzer.classifiers import (
@@ -17,11 +20,11 @@ from grep_analyzer.classifiers import (
 )
 from grep_analyzer.classifiers.base import ASTChaser, Chaser
 
-# 行ベース chaser（残存）
+# 行ベース chaser（shell/sql/perl/groovy）
 _CHASERS: dict[str, Chaser] = {
     "shell": shell_chaser, "sql": sql_chaser, "perl": perl_chaser, "groovy": groovy_chaser,
 }
-# AST ベース chaser
+# AST ベース chaser（java/c/proc/jsp ＋ python/js/ts 系）
 _AST_CHASERS: dict[str, ASTChaser] = {
     "python": python_chaser,
     "javascript": javascript_chaser,
