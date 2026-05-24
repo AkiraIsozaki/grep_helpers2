@@ -1,0 +1,4 @@
+legacy.c:1:/* legacy 777 handler - see ticket #777 */
+legacy.c:3:	if (x == 777) {        /* 777 check */
+legacy.c:4:		int a=1; int b=777; int c=3;
+legacy.c:7:	// dead: int old = 777;
