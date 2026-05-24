@@ -1,0 +1,4 @@
+# golden はバイト完全一致の資産。eol 正規化を一切受けない（expected の BOM/CRLF/
+# 混在エンコーディング/バイナリ src を保護）。spec §11 / 設計 2026-05-24。
+tests/golden/cases/**                                 -text
+tests/golden/cases/grep_jar_artifact/src/lib/app.jar  binary
