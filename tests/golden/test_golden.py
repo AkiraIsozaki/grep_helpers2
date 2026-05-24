@@ -50,6 +50,20 @@ def test_合成ケースのTSVが期待値と完全一致する(golden_case, tmp
              if (sr + "/") in ln else ln)
             for ln in actual.splitlines(keepends=True))
         assert actual == expected.read_text("utf-8-sig"), expected.name
+    exp_sum = golden_case / "expected" / "diagnostics_summary.txt"
+    if exp_sum.is_file():                                 # spec §11 opt-in
+        diag_text = (out / "diagnostics.txt").read_text("utf-8")
+        lines, in_sum = [], False
+        for ln in diag_text.splitlines():
+            if ln == "# summary":
+                in_sum = True
+                continue
+            if ln == "# detail":
+                break
+            if in_sum:
+                lines.append(ln)
+        actual_sum = "\n".join(lines) + "\n"
+        assert actual_sum == exp_sum.read_text("utf-8"), "diagnostics_summary.txt"
     cfg = golden_case / "opts.json"
     if cfg.is_file() and json.loads(
             cfg.read_text("utf-8")).get("assert_resume_complete"):
