@@ -6,6 +6,7 @@
 
 from pathlib import Path
 
+import pytest
 import tree_sitter
 
 from grep_analyzer.pipeline import _default_opts, run
@@ -299,3 +300,26 @@ def test_jobs2の出力はjobs1とbyte一致(tmp_path):
         return (out / "S0.tsv").read_text("utf-8-sig")
 
     assert run_jobs(1) == run_jobs(2)
+
+
+@pytest.mark.requires_ripgrep
+def test_rg既定ONは非ASCIIシンボル_非UTF8で出力不変(tmp_path):
+    """rg prefilter（既定 ON）が非 ASCII chase シンボル＋非 UTF-8 ファイルでも
+    出力 byte を変えない回帰ロック。修正前は rg が automaton ヒット行を取りこぼし、
+    indirect ヒットが欠落＝出力不変違反だった（spec §9・対象は SJIS 混在環境）。"""
+    import dataclasses
+    src = tmp_path / "src"; src.mkdir()
+    (src / "def.sh").write_text("caféVar=1\n", "utf-8")            # seed 元（UTF-8）
+    (src / "use.sh").write_bytes("echo $caféVar\n".encode("latin-1"))  # 非 UTF-8 参照
+    inp = tmp_path / "in"; inp.mkdir()
+    (inp / "K.grep").write_text("def.sh:1:caféVar=1\n", "utf-8")
+
+    def go(rg):
+        out = tmp_path / f"o_{rg}"
+        run(input_dir=inp, output_dir=out, source_root=src,
+            opts=dataclasses.replace(_default_opts(), use_ripgrep=rg))
+        return (out / "K.tsv").read_text("utf-8-sig")
+
+    off = go(False)
+    assert "use.sh" in off, "前提崩れ: rg OFF でも indirect が出ていない"
+    assert go(True) == off                                          # rg ON == rg OFF（byte）

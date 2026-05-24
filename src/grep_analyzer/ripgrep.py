@@ -7,6 +7,7 @@
 Related: spec §8.2
 """
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -32,15 +33,25 @@ def prefilter(
         return None
     if not symbols:
         return set()
+    # rg は **生バイト** を -F 検索するが、symbol は **復号テキスト** 由来。非 ASCII の
+    # symbol は非 UTF-8 ファイル（cp932/euc-jp 等）でバイト不一致となり、automaton が
+    # 復号テキスト上でヒットするファイルを rg が取りこぼす＝出力不変違反になる。ASCII
+    # symbol は cp932/euc-jp/latin-1/utf-8 で同一バイトゆえ rg は安全な上位集合。よって
+    # 非 ASCII symbol を含む hop は prefilter を無効化（None＝全件走査）して出力を保証する。
+    if not all(s.isascii() for s in symbols):
+        return None
     with tempfile.NamedTemporaryFile("w", suffix=".pat", delete=False,
                                      encoding="utf-8") as pf:
         pf.write("\n".join(symbols))
         pat_path = pf.name
     try:
+        # text=False（bytes 出力）: SJIS 等の非 UTF-8 ファイル名を rg が生バイトで出力する
+        # ため、text=True だと communicate の UTF-8 デコードで全体が落ちる。bytes で受け
+        # os.fsdecode（FS codec＋surrogateescape）で walk.py の relpath 表現と一致させる。
         proc = subprocess.run(
             [_RG, "-l", "-F", "-a", "--no-messages", "--no-ignore", "--hidden",
              "--no-require-git", "-f", pat_path, "."],
-            cwd=str(root), capture_output=True, text=True, check=False)
+            cwd=str(root), capture_output=True, check=False)
     except OSError:
         Path(pat_path).unlink(missing_ok=True)
         return None
@@ -48,8 +59,12 @@ def prefilter(
     if proc.returncode not in (0, 1):
         return None
     hit = set()
-    for ln in proc.stdout.splitlines():
-        relpath = ln[2:] if ln.startswith("./") else ln
+    for raw in proc.stdout.split(b"\n"):
+        if not raw:
+            continue
+        if raw.startswith(b"./"):
+            raw = raw[2:]
+        relpath = os.fsdecode(raw)
         if relpath in rel_to_abs:
             hit.add(relpath)
     return hit

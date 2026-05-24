@@ -41,3 +41,29 @@ def test_gitignore隠しNUL含みも上位集合に含む(tmp_path):
 @pytest.mark.requires_ripgrep
 def test_空シンボルは空集合(tmp_path):
     assert prefilter(tmp_path, {}, []) == set()
+
+
+@pytest.mark.requires_ripgrep
+def test_非ASCII_symbolは無効化される_出力不変保証(tmp_path):
+    """symbol は復号テキスト由来。非 ASCII symbol は非 UTF-8 ファイルでバイト不一致と
+    なり rg が automaton ヒット行を取りこぼす（出力不変違反）。非 ASCII を含む場合は
+    None（＝全件走査）にフォールバックして取りこぼしを防ぐ。"""
+    # latin-1 で 'caféVar=1'（生バイト != UTF-8）。automaton は復号テキストでヒットする。
+    (tmp_path / "a.sh").write_bytes("caféVar=1".encode("latin-1") + b"\n")
+    got = prefilter(tmp_path, {"a.sh": tmp_path / "a.sh"}, ["caféVar"])
+    assert got is None                       # 非 ASCII symbol → prefilter 無効化（全件走査）
+    # ASCII symbol が混在しても、非 ASCII が 1 つでもあれば全体を無効化する。
+    assert prefilter(tmp_path, {"a.sh": tmp_path / "a.sh"}, ["x", "caféVar"]) is None
+
+
+@pytest.mark.requires_ripgrep
+def test_非UTF8ファイル名で落ちず正しく一致する(tmp_path):
+    """SJIS 等の非 UTF-8 ファイル名を rg が生バイトで出力しても、bytes 受け＋
+    os.fsdecode で walk の relpath 表現と一致させ、UnicodeDecodeError で落とさない。"""
+    import os
+    name = os.fsdecode("コード.sh".encode("cp932"))   # 非 UTF-8 ファイル名（FS 表現）
+    (tmp_path / name).write_text("getName=1\n", "utf-8")
+    (tmp_path / "other.sh").write_text("nope=1\n", "utf-8")
+    rel_abs = {name: tmp_path / name, "other.sh": tmp_path / "other.sh"}
+    got = prefilter(tmp_path, rel_abs, ["getName"])   # 例外を出さない
+    assert got is not None and name in got and "other.sh" not in got
