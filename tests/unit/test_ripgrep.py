@@ -56,6 +56,21 @@ def test_非ASCII_symbolは無効化される_出力不変保証(tmp_path):
     assert prefilter(tmp_path, {"a.sh": tmp_path / "a.sh"}, ["x", "caféVar"]) is None
 
 
+def test_utf16ファイルはbinary除外され_rg_ascii不変を守る(tmp_path):
+    """ASCII identity（ASCII codepoint = 同一 ASCII バイト）の唯一の例外は UTF-16/32。
+    だが chardet が UTF-16 を選ぶには NUL 交互パターンが必要で、そのパターンは
+    walk._is_binary が binary 判定して除外する。ゆえに ASCII symbol guard をすり抜ける
+    UTF-16 ファイルは automaton 走査対象（files）に入らず、rg-ON でも出力不変が保たれる。
+    この cross-module 結合（rg 安全性が _is_binary に依存）を回帰ロックする。"""
+    from grep_analyzer.diagnostics import Diagnostics
+    from grep_analyzer.walk import walk_files
+    f = tmp_path / "u16.sh"
+    f.write_bytes("foo_bar=1\n".encode("utf-16-le"))   # NUL 交互 → chardet=utf-16/_is_binary=True
+    got = list(walk_files(tmp_path, include=[], exclude=[], follow_symlinks=False,
+                          max_file_bytes=5_000_000, diag=Diagnostics()))
+    assert all(rel != "u16.sh" for rel, _ in got)      # binary として除外（走査対象外）
+
+
 @pytest.mark.requires_ripgrep
 def test_非UTF8ファイル名で落ちず正しく一致する(tmp_path):
     """SJIS 等の非 UTF-8 ファイル名を rg が生バイトで出力しても、bytes 受け＋
