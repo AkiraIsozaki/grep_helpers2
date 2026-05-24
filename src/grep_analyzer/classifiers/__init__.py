@@ -17,13 +17,11 @@ from grep_analyzer.classifiers import (
 )
 from grep_analyzer.classifiers.base import ASTChaser, Chaser
 
-# 行ベース chaser（既存）
+# 行ベース chaser（残存）
 _CHASERS: dict[str, Chaser] = {
-    "java": java_chaser, "c": c_chaser, "proc": c_chaser, "shell": shell_chaser,
-    "sql": sql_chaser, "perl": perl_chaser, "groovy": groovy_chaser,
-    "jsp": java_chaser,
+    "shell": shell_chaser, "sql": sql_chaser, "perl": perl_chaser, "groovy": groovy_chaser,
 }
-# AST ベース chaser（新規・行版 _CHASERS には載せない）
+# AST ベース chaser
 _AST_CHASERS: dict[str, ASTChaser] = {
     "python": python_chaser,
     "javascript": javascript_chaser,
@@ -31,6 +29,10 @@ _AST_CHASERS: dict[str, ASTChaser] = {
     "tsx": typescript_chaser,
     "angular": typescript_chaser,
     "angular_inline": typescript_chaser,
+    "java": java_chaser,
+    "c": c_chaser,
+    "proc": c_chaser,
+    "jsp": java_chaser,
 }
 
 __all__ = ["Chaser", "ASTChaser"]

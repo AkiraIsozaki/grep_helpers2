@@ -1,5 +1,4 @@
-"""AST chaser（python/javascript/typescript）field-directed 抽出（spec §6.5）。"""
-import pytest
+"""AST chaser（python/javascript/typescript/java/c/jsp/proc）field-directed 抽出（spec §6.5・§3.3・§3.4）。"""
 from grep_analyzer.classifiers.ts_classifier import parse_tree
 from grep_analyzer.model import ChaseSymbols
 
@@ -188,7 +187,6 @@ def test_java_try_with_resources():
     assert _java(src, 1).vars == ("r",)
 
 
-@pytest.mark.skip(reason="Task5 で registry 登録後 green")
 def test_java_jsp_経由():
     from grep_analyzer.chase import extract_chase_symbols_tree
     assert "x" in extract_chase_symbols_tree("jsp", "<% int x = TRACKED; %>\n", 1).vars
@@ -237,7 +235,6 @@ def test_c_getter_setterは無し():
     assert cs.getters == () and cs.setters == ()
 
 
-@pytest.mark.skip(reason="Task5 で registry 登録後 green")
 def test_proc_exec_sql内は非抽出_区間外は抽出():
     from grep_analyzer.chase import extract_chase_symbols_tree
     # 単一行 EXEC SQL → mask_exec_sql で空白化

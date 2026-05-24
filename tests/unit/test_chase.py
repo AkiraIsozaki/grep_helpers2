@@ -48,48 +48,14 @@ def test_Oracleのトリガ相関名とレコードフィールドはv1既知境
 
 
 def test_文字列とコメントをマスクし行長を保つ():
-    src = 'String s = "x=1"; // y=2'
-    out = mask_literals("java", src)
-    assert out == 'String s =      ;       '   # "x=1"=5字→空白5, // y=2=6字→空白6
-    assert len(out) == len(src) == 24
-    assert len(mask_literals("c", 'a=1; /* z=9 */ b=2')) == len('a=1; /* z=9 */ b=2')
+    # mask_literals は sql/shell/perl/groovy のみ対象（java/c は AST 化で非対象）
+    assert mask_literals("perl", 'my $s = "x=1"; # c') == "my $s =      ;    "
+    assert len(mask_literals("groovy", 'a=1; /* z=9 */ b=2')) == len('a=1; /* z=9 */ b=2')
 
-
-def test_文字列内の代入様字句は追跡シンボルにしない():
-    cs = extract_chase_symbols("java", "", 'String s = "url=/x"; int n = 1;')
-    assert "url" not in cs.vars and cs.vars == ("s", "n")
-
-
-def test_Java定数はstaticかつfinalのみでgenericと配列を許容する():
-    assert extract_chase_symbols(
-        "java", "", "private static final Map<String, Integer> CODE_MAP = init();"
-    ).constants == ("CODE_MAP",)
-    assert extract_chase_symbols("java", "", "static final int[] CODES = a;").constants == ("CODES",)
-    cs = extract_chase_symbols("java", "", "final int X = 1;")
-    assert cs.constants == () and cs.vars == ("X",)
-    assert extract_chase_symbols("java", "", "public static int Y = 1;").constants == ()
-
-
-def test_Javaのgetterとsetterとvarをマスクのうえ分類抽出する():
-    cs = extract_chase_symbols("java", "", "int count = svc.getName(); obj.setValue(count);")
-    assert cs.vars == ("count",)
-    assert cs.getters == ("getName",) and cs.setters == ("setValue",)
-
-
-def test_C定義とconst定数を抽出しProCホスト変数は追跡投入しない():
-    assert extract_chase_symbols("c", "", "#define MAX_LEN 10").constants == ("MAX_LEN",)
-    assert extract_chase_symbols("c", "", "const int FOO = 1;").constants == ("FOO",)
-    assert extract_chase_symbols("c", "", "int n = 3;").vars == ("n",)
-    # spec §8.1 手順1（8c21227 で本体明確化）: Pro*C ホスト変数 :host は
-    # 外部・ホスト境界＝追跡投入しない。手順5 は停止性の字句形のみで投入是非でない。
-    cs = extract_chase_symbols("proc", "", "EXEC SQL SELECT c INTO :host FROM t;")
-    assert "host" not in cs.vars and cs.vars == () and cs.constants == ()
 
 
 def test_ref_kind言語表の禁止セルは空を返す():
     # spec §9 ref_kind×言語表の `—` セルを負の契約で固定（将来改修の回帰防御）。
-    pc = extract_chase_symbols("proc", "", "int n = 3; #define M 1")
-    assert pc.getters == () and pc.setters == ()                 # C/Pro*C: getter/setter 無
     sq = extract_chase_symbols("sql", "", "v := 1;")
     assert sq.constants == () and sq.getters == () and sq.setters == ()  # SQL: const/getter/setter 無
     cs = extract_chase_symbols("shell", "cshell", "set CODE = 1")
@@ -186,7 +152,7 @@ def test_extract_chase_symbols_tree_python():
 
 def test_extract_chase_symbols_tree_非AST言語は空():
     from grep_analyzer.chase import extract_chase_symbols_tree
-    cs = extract_chase_symbols_tree("java", "int x = 1;\n", 1)
+    cs = extract_chase_symbols_tree("groovy", "int x = 1;\n", 1)
     assert cs.constants == () and cs.vars == ()
 
 
@@ -195,16 +161,6 @@ def test_extract_chase_symbols_from_root_js():
     from grep_analyzer.classifiers.ts_classifier import parse_tree
     cs = extract_chase_symbols_from_root("javascript", parse_tree("javascript", "const A = 1;\n"), 1)
     assert cs.constants == ("A",)
-
-
-def test_jsp_行ベースchaserが代入左辺を抽出():
-    cs = extract_chase_symbols("jsp", "", "<% int x = TRACKED; %>")
-    assert "x" in cs.vars
-
-
-def test_jsp_ELは束縛なし():
-    cs = extract_chase_symbols("jsp", "", "${ TRACKED.code }")
-    assert cs.vars == () and cs.constants == ()
 
 
 def test_html_はchase非発火():
