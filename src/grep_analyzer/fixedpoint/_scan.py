@@ -10,6 +10,7 @@ worker からの戻り値を呼出側で追跡状態へ反映する（worker iso
 """
 
 import multiprocessing
+from collections import OrderedDict
 from pathlib import Path
 
 from grep_analyzer import automaton
@@ -31,15 +32,65 @@ def file_meta(relpath: str, raw: bytes, lang_map: dict[str, str], fallback_chain
     return text, enc, replaced, language, dialect
 
 
-def _scan_one(relpath, abspath, automaton_obj, lang_map, fallback):
+_FILE_CACHE_BUDGET = 64 * 1024 * 1024   # 復号テキスト常駐の上限（定数＝常駐 O(1)）
+
+
+class _FileCache:
+    """abspath→(text,enc,replaced,language,dialect) の byte 予算つき LRU。
+
+    hop 間で再読込・再復号・再言語判定を抑止する。tree は保持しない
+    （巨大ファイルで予算が破綻するため。再 parse は lazy parse が回避）。
+    キーは abspath（run 内で一意・ソースは run 中不変前提でメモ化は出力不変）。
+    """
+
+    def __init__(self, budget: int = _FILE_CACHE_BUDGET):
+        self.budget = budget
+        self._d: "OrderedDict[str, tuple]" = OrderedDict()
+        self._bytes = 0
+
+    def get(self, key: str):
+        v = self._d.get(key)
+        if v is not None:
+            self._d.move_to_end(key)
+        return v
+
+    def put(self, key: str, value: tuple) -> None:
+        if key in self._d:
+            self._bytes -= len(self._d[key][0])
+            del self._d[key]
+        self._d[key] = value
+        self._bytes += len(value[0])
+        while self._bytes > self.budget and len(self._d) > 1:
+            _, old = self._d.popitem(last=False)
+            self._bytes -= len(old[0])
+
+
+def make_file_cache() -> _FileCache:
+    """run 単位の hop 間ファイルキャッシュを生成する。"""
+    return _FileCache()
+
+
+def _read_meta(relpath, abspath, lang_map, fallback, cache):
+    """file_meta 結果を cache 経由で取得（cache=None は従来どおり毎回読込）。"""
+    if cache is not None:
+        hit = cache.get(abspath)
+        if hit is not None:
+            return hit
+    meta = file_meta(relpath, Path(abspath).read_bytes(), lang_map, fallback_chain=fallback)
+    if cache is not None:
+        cache.put(abspath, meta)
+    return meta
+
+
+def _scan_one(relpath, abspath, automaton_obj, lang_map, fallback, cache=None):
     """1 ファイルを **構築済 automaton** で読み走査しヒット素片を返す純関数。
 
     ストリーミング化＝親に bytes 非常駐・abspath から読む。automaton 走査はデコード済
     テキストの各行。automaton はチャンク単位で 1 度だけ構築し全ファイルで使い回す
     （scan_line は iter のみで非破壊＝再利用安全）。
     """
-    raw = Path(abspath).read_bytes()
-    text, enc, replaced, language, dialect = file_meta(relpath, raw, lang_map, fallback_chain=fallback)
+    text, enc, replaced, language, dialect = _read_meta(
+        relpath, abspath, lang_map, fallback, cache)
     found = []
     if automaton_obj is not None:
         is_ast = language in _AST_CHASERS
@@ -120,7 +171,7 @@ def kinds_of(chase_symbols: ChaseSymbols) -> dict[str, str]:
     return out
 
 
-def scan_hop(scan_symbols, scan_files, opts, nchunks):
+def scan_hop(scan_symbols, scan_files, opts, nchunks, file_cache=None):
     """1 hop の走査を chunks に分けて実行し、relpath 単位の集約済み結果を返す。
 
     `nchunks=1` の場合は単一 chunk として全 symbol を 1 度に走査する。`nchunks>1`
@@ -152,7 +203,8 @@ def scan_hop(scan_symbols, scan_files, opts, nchunks):
                                [(relpath, str(abspath)) for relpath, abspath in scan_files])
         else:
             automaton_obj = automaton.build(chunk)
-            res = [_scan_one(relpath, str(abspath), automaton_obj, opts.lang_map, fallback)
+            res = [_scan_one(relpath, str(abspath), automaton_obj,
+                             opts.lang_map, fallback, cache=file_cache)
                    for relpath, abspath in scan_files]
         for relpath, enc, replaced, language, dialect, found in res:
             file_meta_by_relpath.setdefault(relpath, (enc, replaced, language, dialect))

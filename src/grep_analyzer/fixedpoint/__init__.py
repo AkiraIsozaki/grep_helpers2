@@ -25,7 +25,7 @@ from grep_analyzer.fixedpoint._budget_control import (
 from grep_analyzer.fixedpoint._finalize import build_indirect_hits
 from grep_analyzer.fixedpoint._ingest import absorb_results
 from grep_analyzer.fixedpoint._options import EngineOptions
-from grep_analyzer.fixedpoint._scan import scan_hop
+from grep_analyzer.fixedpoint._scan import make_file_cache, scan_hop
 from grep_analyzer.fixedpoint._seed import initialize_state
 from grep_analyzer.model import Hit
 from grep_analyzer.progress import Progress
@@ -52,6 +52,7 @@ def run_fixedpoint(
     state.rel_to_abs = {relpath: abspath for relpath, abspath in files}
     progress = Progress(opts.progress)
     progress.start(len(files))
+    file_cache = make_file_cache()
 
     try:
         hop = 1
@@ -73,7 +74,8 @@ def run_fixedpoint(
                 if keep_rels is not None:
                     scan_files = [(r, a) for r, a in files if r in keep_rels]
             nchunks = compute_nchunks(state, scan_symbols)
-            pass_results, n_actual_chunks = scan_hop(scan_symbols, scan_files, opts, nchunks)
+            pass_results, n_actual_chunks = scan_hop(
+                scan_symbols, scan_files, opts, nchunks, file_cache=file_cache)
             if nchunks > 1:
                 diag.add("automaton_split", f"hop={hop} chunks={n_actual_chunks}")
             absorb_results(state, pass_results, scan_chase, scan_term, hop)
