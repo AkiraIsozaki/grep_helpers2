@@ -7,7 +7,7 @@ import os
 from dataclasses import replace
 from pathlib import Path
 
-from grep_analyzer import output_writer, resume, ripgrep
+from grep_analyzer import output_writer, resume
 from grep_analyzer.classify import classify_hit
 from grep_analyzer.diagnostics import Diagnostics, SECTION_8_4_CATEGORIES
 from grep_analyzer.dispatch import (
@@ -30,8 +30,7 @@ def _default_opts() -> EngineOptions:
     return EngineOptions(
         max_depth=10, min_specificity=2, stoplist_path=None, lang_map={},
         include=[], exclude=list(DEFAULT_EXCLUDE), jobs=1, follow_symlinks=False,
-        max_file_bytes=5_000_000, max_symbols=100_000, max_paths=1000,
-        use_ripgrep=ripgrep.available())
+        max_file_bytes=5_000_000, max_symbols=100_000, max_paths=1000)
 
 
 def run(

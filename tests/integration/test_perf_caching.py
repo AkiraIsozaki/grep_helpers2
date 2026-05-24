@@ -303,8 +303,8 @@ def test_jobs2の出力はjobs1とbyte一致(tmp_path):
 
 
 @pytest.mark.requires_ripgrep
-def test_rg既定ONは非ASCIIシンボル_非UTF8で出力不変(tmp_path):
-    """rg prefilter（既定 ON）が非 ASCII chase シンボル＋非 UTF-8 ファイルでも
+def test_rg_optinは非ASCIIシンボル_非UTF8で出力不変(tmp_path):
+    """--use-ripgrep（opt-in）が非 ASCII chase シンボル＋非 UTF-8 ファイルでも
     出力 byte を変えない回帰ロック。修正前は rg が automaton ヒット行を取りこぼし、
     indirect ヒットが欠落＝出力不変違反だった（spec §9・対象は SJIS 混在環境）。"""
     import dataclasses
