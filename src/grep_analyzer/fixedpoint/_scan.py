@@ -97,8 +97,12 @@ def _scan_one(relpath, abspath, automaton_obj, lang_map, fallback, cache=None):
     テキストの各行。automaton はチャンク単位で 1 度だけ構築し全ファイルで使い回す
     （scan_line は iter のみで非破壊＝再利用安全）。
     """
-    text, enc, replaced, language, dialect = _read_meta(
-        relpath, abspath, lang_map, fallback, cache)
+    try:
+        text, enc, replaced, language, dialect = _read_meta(
+            relpath, abspath, lang_map, fallback, cache)
+    except OSError:
+        # walk 後の TOCTOU（消失/権限変化）等。run 全体を落とさず空ヒットへ降格。
+        return relpath, "utf-8", False, "c", "bourne", []
     found = []
     if automaton_obj is not None:
         is_ast = language in _AST_CHASERS
