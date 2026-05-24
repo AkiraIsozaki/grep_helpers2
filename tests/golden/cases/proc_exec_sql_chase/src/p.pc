@@ -1,0 +1,7 @@
+int f(){
+  EXEC SQL UPDATE t
+    SET col = TRACKED
+    WHERE id = :h;
+  int after = TRACKED;
+}
+int g(){ int col = 99; }

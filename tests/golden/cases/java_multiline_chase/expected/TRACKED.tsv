@@ -1,0 +1,7 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+TRACKED	java	{SOURCE_ROOT}/A.java	1	direct	その他		その他 (java)		TRACKED@A.java:1	class A { static final String TRACKED = "T"; }	utf-8	high
+TRACKED	java	{SOURCE_ROOT}/B.java	4	direct	宣言		宣言 (java)		TRACKED@B.java:4	    String alias = \n         TRACKED;	utf-8	high
+TRACKED	java	{SOURCE_ROOT}/B.java	3	indirect:var	宣言		宣言 (java)	alias	TRACKED@A.java:1 -> TRACKED@B.java:4 -> alias@B.java:3	    String alias = \n         TRACKED;	utf-8	high
+TRACKED	java	{SOURCE_ROOT}/B.java	5	indirect:var	その他		その他 (java)	alias	TRACKED@A.java:1 -> TRACKED@B.java:4 -> alias@B.java:5	    use(alias);	utf-8	high
+TRACKED	java	{SOURCE_ROOT}/B.java	3	indirect:var	宣言		宣言 (java)	alias	TRACKED@B.java:4 -> alias@B.java:3	    String alias = \n         TRACKED;	utf-8	high
+TRACKED	java	{SOURCE_ROOT}/B.java	5	indirect:var	その他		その他 (java)	alias	TRACKED@B.java:4 -> alias@B.java:5	    use(alias);	utf-8	high

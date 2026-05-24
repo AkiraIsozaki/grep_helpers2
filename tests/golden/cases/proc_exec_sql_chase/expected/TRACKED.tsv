@@ -1,0 +1,3 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+TRACKED	proc	{SOURCE_ROOT}/p.pc	3	direct	その他		その他 (proc)		TRACKED@p.pc:3	  EXEC SQL UPDATE t \n     SET col = TRACKED \n     WHERE id = :h;	utf-8	high
+TRACKED	proc	{SOURCE_ROOT}/p.pc	5	direct	宣言		宣言 (proc)		TRACKED@p.pc:5	  int after = TRACKED;	utf-8	high
