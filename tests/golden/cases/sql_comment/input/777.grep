@@ -1,0 +1,2 @@
+q.sql:1:-- 777 はステータスコードのコメント
+q.sql:2:SELECT name FROM t WHERE code = '777';

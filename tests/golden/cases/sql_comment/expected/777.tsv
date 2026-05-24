@@ -1,0 +1,3 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+777	sql	{SOURCE_ROOT}/q.sql	1	direct	コメント		コメント (sql)		777@q.sql:1	-- 777 はステータスコードのコメント \n SELECT name FROM t WHERE code = '777';	utf-8	low
+777	sql	{SOURCE_ROOT}/q.sql	2	direct	比較		比較 (sql)		777@q.sql:2	-- 777 はステータスコードのコメント \n SELECT name FROM t WHERE code = '777';	utf-8	medium
