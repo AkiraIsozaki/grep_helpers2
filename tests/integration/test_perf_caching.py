@@ -252,3 +252,50 @@ def test_診断は同一ファイルでもヒット行ごとに発火する(tmp_
     detail = [ln for ln in detail_text.splitlines()
               if ln.startswith("unsupported_shebang\t")]
     assert len(detail) == n_hits
+
+
+def test_pool_はrun単位で1回だけ生成される(tmp_path, monkeypatch):
+    """jobs>1 の複数 hop でも Pool 生成は 1 回（chunk×hop 再生成しない）。"""
+    import dataclasses
+    import grep_analyzer.fixedpoint as fp
+    from tests.perf.corpus_gen import generate
+    src = tmp_path / "src"; generate(src, seed=7, n_files=60)
+    c0 = (src / "pkg0" / "C0.java").read_text("utf-8").splitlines()[0]
+    inp = tmp_path / "in"; inp.mkdir()
+    (inp / "S0.grep").write_text(f"pkg0/C0.java:1:{c0}\n", "utf-8")
+
+    n_pools = {"n": 0}
+    real = fp.make_pool
+
+    def spy(opts):
+        p = real(opts)
+        if p is not None:
+            n_pools["n"] += 1
+        return p
+
+    # run_fixedpoint は `from ..._scan import make_pool` で名前を束縛するため、
+    # 利用箇所（fixedpoint パッケージ名前空間）の make_pool を差し替える。
+    monkeypatch.setattr(fp, "make_pool", spy)
+    opts = dataclasses.replace(_default_opts(), jobs=2)
+    rc = run(input_dir=inp, output_dir=tmp_path / "o", source_root=src, opts=opts)
+    assert rc == 0
+    assert n_pools["n"] == 1
+
+
+def test_jobs2の出力はjobs1とbyte一致(tmp_path):
+    """並列でも TSV byte 一致（§9 並列完了順非依存）。同一 source_root を共有して
+    出力中の絶対パスを揃え、2 つの output dir を直接比較する。"""
+    import dataclasses
+    from tests.perf.corpus_gen import generate
+    src = tmp_path / "src"; generate(src, seed=7, n_files=60)
+    c0 = (src / "pkg0" / "C0.java").read_text("utf-8").splitlines()[0]
+    inp = tmp_path / "in"; inp.mkdir()
+    (inp / "S0.grep").write_text(f"pkg0/C0.java:1:{c0}\n", "utf-8")
+
+    def run_jobs(jobs):
+        out = tmp_path / f"o{jobs}"
+        run(input_dir=inp, output_dir=out, source_root=src,
+            opts=dataclasses.replace(_default_opts(), jobs=jobs))
+        return (out / "S0.tsv").read_text("utf-8-sig")
+
+    assert run_jobs(1) == run_jobs(2)

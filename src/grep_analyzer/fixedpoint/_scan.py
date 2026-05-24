@@ -9,7 +9,9 @@ worker からの戻り値を呼出側で追跡状態へ反映する（worker iso
 `_seed` / `_ingest` / `_finalize` から共有 import される（pickle 制約と矛盾なし）。
 """
 
+import json
 import multiprocessing
+import tempfile
 from collections import OrderedDict
 from pathlib import Path
 
@@ -138,27 +140,47 @@ def _scan_file(args):
     return _scan_one(relpath, abspath, automaton.build(symbol_list), lang_map, fallback)
 
 
-# multiprocessing ワーカ：automaton / lang_map / fallback はワーカ毎に initializer で
-# 1 度だけ構築・保持する（pickle 制約下でチャンク内の全ファイルが共有＝再構築回避）。
-# automaton を initializer で各ワーカが明示構築するため start method 非依存
-# （fork でも spawn でも正しく初期化される。グローバルは fork 継承に依存しない）。
+# multiprocessing ワーカ：Pool は run 単位で 1 度だけ生成し全 hop/chunk で再利用する。
+# initializer では lang_map / fallback / 空 LRU のみ確定し、automaton はチャンク到来時に
+# signature 変化を見て遅延再構築する（symbols は chunk ごと temp ファイル経由で軽量伝達）。
+# automaton を各ワーカが明示構築するため start method 非依存（fork/spawn いずれも可）。
+# worker LRU は Pool 永続化により hop 間で効く（#1 の並列版）。
 _WORKER_AUTOMATON = None
+_WORKER_SIG = None
 _WORKER_LANG_MAP: dict[str, str] | None = None
 _WORKER_FALLBACK: list[str] | None = None
+_WORKER_CACHE: "_FileCache | None" = None
 
 
-def _worker_init(symbol_list, lang_map, fallback) -> None:
-    """Pool worker 初期化：チャンク symbol から automaton を 1 度だけ構築。"""
-    global _WORKER_AUTOMATON, _WORKER_LANG_MAP, _WORKER_FALLBACK
-    _WORKER_AUTOMATON = automaton.build(symbol_list)
+def _worker_init(lang_map, fallback) -> None:
+    """Pool worker 初期化（run 単位 1 回）。automaton は chunk 到来時に遅延構築。"""
+    global _WORKER_LANG_MAP, _WORKER_FALLBACK, _WORKER_CACHE, _WORKER_SIG, _WORKER_AUTOMATON
     _WORKER_LANG_MAP = lang_map
     _WORKER_FALLBACK = fallback
+    _WORKER_CACHE = _FileCache()
+    _WORKER_SIG = None
+    _WORKER_AUTOMATON = None
 
 
 def _scan_file_worker(args):
-    """Pool worker 本体：initializer 構築済の automaton を使って 1 ファイル走査。"""
-    relpath, abspath = args
-    return _scan_one(relpath, abspath, _WORKER_AUTOMATON, _WORKER_LANG_MAP, _WORKER_FALLBACK)
+    """Pool worker 本体：signature 変化時のみ automaton を再構築して 1 ファイル走査。"""
+    relpath, abspath, sig, sym_path = args
+    global _WORKER_AUTOMATON, _WORKER_SIG
+    if sig != _WORKER_SIG:
+        with open(sym_path, encoding="utf-8") as f:
+            _WORKER_AUTOMATON = automaton.build(json.load(f))
+        _WORKER_SIG = sig
+    return _scan_one(relpath, abspath, _WORKER_AUTOMATON,
+                     _WORKER_LANG_MAP, _WORKER_FALLBACK, cache=_WORKER_CACHE)
+
+
+def make_pool(opts):
+    """jobs>1 のとき run 単位の Pool を 1 度だけ生成する（jobs<=1 は None）。"""
+    if opts.jobs <= 1:
+        return None
+    return multiprocessing.Pool(
+        opts.jobs, initializer=_worker_init,
+        initargs=(opts.lang_map, list(opts.encoding_fallback)))
 
 
 def kinds_of(chase_symbols: ChaseSymbols) -> dict[str, str]:
@@ -171,7 +193,7 @@ def kinds_of(chase_symbols: ChaseSymbols) -> dict[str, str]:
     return out
 
 
-def scan_hop(scan_symbols, scan_files, opts, nchunks, file_cache=None):
+def scan_hop(scan_symbols, scan_files, opts, nchunks, file_cache=None, pool=None):
     """1 hop の走査を chunks に分けて実行し、relpath 単位の集約済み結果を返す。
 
     `nchunks=1` の場合は単一 chunk として全 symbol を 1 度に走査する。`nchunks>1`
@@ -193,14 +215,20 @@ def scan_hop(scan_symbols, scan_files, opts, nchunks, file_cache=None):
     fallback = list(opts.encoding_fallback)
     for chunk in chunks:
         # automaton はチャンク単位で 1 度だけ構築する（旧実装はファイル毎に再構築していた）。
-        # Pool はチャンク毎に automaton が変わるためチャンク毎生成（degrade で nchunks が
-        # 大きいと fork×jobs×nchunks のプロセス起動コストが残る＝将来の最適化余地）。
-        if opts.jobs > 1:
-            with multiprocessing.Pool(
-                    opts.jobs, initializer=_worker_init,
-                    initargs=(chunk, opts.lang_map, fallback)) as pool:
-                res = pool.map(_scan_file_worker,
-                               [(relpath, str(abspath)) for relpath, abspath in scan_files])
+        # Pool は run 単位で 1 度だけ生成され（make_pool）、chunk の automaton は worker 側で
+        # signature(=sym_path) 変化時のみ再構築する。symbols は temp ファイル経由で軽量伝達。
+        if opts.jobs > 1 and pool is not None:
+            with tempfile.NamedTemporaryFile("w", suffix=".sym", delete=False,
+                                             encoding="utf-8") as sf:
+                json.dump(chunk, sf)
+                sym_path = sf.name
+            try:
+                res = pool.map(
+                    _scan_file_worker,
+                    [(relpath, str(abspath), sym_path, sym_path)
+                     for relpath, abspath in scan_files])
+            finally:
+                Path(sym_path).unlink(missing_ok=True)
         else:
             automaton_obj = automaton.build(chunk)
             res = [_scan_one(relpath, str(abspath), automaton_obj,
