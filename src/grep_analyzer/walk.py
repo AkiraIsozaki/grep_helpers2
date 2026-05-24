@@ -44,6 +44,16 @@ def _match_any(relpath: str, patterns: list[str]) -> bool:
     return False
 
 
+def is_contained_relpath(relpath: str) -> bool:
+    """relpath が source_root 配下に収まる安全な相対パスか。
+
+    絶対パス・空・`..` を含むパスを拒否する（パストラバーサル／絶対パス注入の防御）。
+    """
+    if not relpath or os.path.isabs(relpath):
+        return False
+    return ".." not in Path(relpath).parts
+
+
 def _is_binary(path: Path) -> bool:
     with open(path, "rb") as f:
         return b"\x00" in f.read(8192)

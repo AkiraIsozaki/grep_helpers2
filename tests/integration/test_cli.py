@@ -31,3 +31,27 @@ def test_use_ripgrepで明示ON():
     from grep_analyzer.cli import _build_opts
     o = _build_opts(["--input", "i", "--output", "o", "--source-root", "s", "--use-ripgrep"])
     assert o.use_ripgrep is True
+
+
+import hashlib
+
+
+def test_grep入力の絶対パスはsource_root外を読まない(tmp_path):
+    from grep_analyzer.cli import main
+    src = tmp_path / "src"; src.mkdir()
+    (src / "A.java").write_text("class A{ int x=1; }\n", "utf-8")
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOP_SECRET_TOKEN\n", "utf-8")
+    inp = tmp_path / "input"; inp.mkdir()
+    # 絶対パスと .. トラバーサルの両方を仕込む
+    (inp / "x.grep").write_text(
+        f"{secret}:1:TOP_SECRET_TOKEN\n"
+        f"../../secret.txt:1:TOP_SECRET_TOKEN\n", "utf-8")
+    out = tmp_path / "o"
+    assert main(["--input", str(inp), "--output", str(out),
+                 "--source-root", str(src)]) == 0
+    tsv = (out / "x.tsv").read_text("utf-8-sig")
+    assert "TOP_SECRET_TOKEN" not in tsv          # 秘密の内容が漏れない
+    assert str(secret) not in tsv
+    diag = (out / "diagnostics.txt").read_text("utf-8")
+    assert "missing_source" in diag               # 拒否は診断へ

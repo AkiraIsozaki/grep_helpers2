@@ -23,7 +23,7 @@ from grep_analyzer.ingest import parse_grep_line
 from grep_analyzer.model import Hit
 from grep_analyzer.snippet import build_snippet
 from grep_analyzer.snippet._sanitize_line import _physical_lines
-from grep_analyzer.walk import DEFAULT_EXCLUDE, collect_files
+from grep_analyzer.walk import DEFAULT_EXCLUDE, collect_files, is_contained_relpath
 
 
 def _default_opts() -> EngineOptions:
@@ -86,7 +86,7 @@ def run(
             if relpath != cur_relpath:
                 cur_relpath = relpath
                 target = Path(source_root) / relpath
-                if target.is_file():
+                if is_contained_relpath(relpath) and target.is_file():
                     file_text, enc, replaced = decode_bytes(target.read_bytes(), fb)
                     sample = file_text[:4096]
                     language = detect_language(relpath, sample, lang_map)
