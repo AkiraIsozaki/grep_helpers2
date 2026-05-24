@@ -6,8 +6,7 @@
 - SQL (Oracle/PL-SQL): 宣言/代入 `name [CONSTANT] [TYPE] := …` の先頭 id（型名は捨てる）。CONSTANT は定数。バインド `:v`／置換 `&v` は非抽出
 - Shell (bourne): 行頭 `var=` の左辺
 - Shell (cshell): `set v =` / `setenv V` / `@ v =` の左辺
-- Java: getter/setter, static final 定数, 一般変数代入
-- C / Pro*C: `#define`, `const ... var =`, 一般変数代入
+注: Java/C は AST 化（_AST_CHASERS 経路）のため regex 非対象（除去済）。
 """
 
 import re
@@ -25,20 +24,6 @@ BOURNE_ASSIGN_RE = re.compile(r"^\s*([A-Za-z_]\w*)=")
 CSHELL_ASSIGN_RE = re.compile(
     r"^\s*(?:set\s+([A-Za-z_]\w*)\s*=|setenv\s+([A-Za-z_]\w*)\b|@\s+([A-Za-z_]\w*)\s*=)"
 )
-
-JAVA_GETSET_RE = re.compile(r"\b((?:get|set)[A-Z]\w*)\s*\(")
-
-JAVA_CONST_RE = re.compile(
-    r"\b((?:public|protected|private|static|final)(?:\s+(?:public|protected|private|static|final))*)"
-    r"\s+[\w.$]+(?:\s*<[^=;{}]*?>)?(?:\s*\[\s*\])*\s+([A-Za-z_]\w*)\s*=")
-
-JAVA_VAR_RE = re.compile(r"(?<![=!<>+\-*/%&|^])\b([A-Za-z_]\w*)\s*=(?!=)")
-
-C_DEFINE_RE = re.compile(r"^\s*#\s*define\s+([A-Za-z_]\w*)")
-
-C_CONST_RE = re.compile(r"\bconst\b[\w\s*]*?\b([A-Za-z_]\w*)\s*=")
-
-C_VAR_RE = re.compile(r"(?<![=!<>+\-*/%&|^])\b([A-Za-z_]\w*)\s*=(?!=)")
 
 BOURNE_READONLY_RE = re.compile(r"^\s*readonly\s+([A-Za-z_]\w*)=")
 

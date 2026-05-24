@@ -1,9 +1,10 @@
 """追跡シンボル抽出 dispatcher。
 
-各言語の規則は `classifiers/{java,c,shell,sql}_chaser.py` に分散され、
-`_CHASERS[language]` で取得する。本ファイルは public API
-（extract_var_symbols / mask_literals / extract_chase_symbols）を保持しつつ
-内部実装を Chaser に委譲する薄い dispatcher のみ。
+各言語の規則は classifiers/ 以下の各 chaser に分散される。
+行ベース（_CHASERS）: shell/sql/perl/groovy。
+AST ベース（_AST_CHASERS）: python/javascript/typescript/tsx/angular/java/c/proc/jsp。
+本ファイルは public API（extract_var_symbols / mask_literals / extract_chase_symbols）を
+保持しつつ内部実装を Chaser に委譲する薄い dispatcher のみ。
 """
 
 from grep_analyzer.classifiers import _AST_CHASERS, _CHASERS
