@@ -1,0 +1,4 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+777	sql	{SOURCE_ROOT}/cp932_q.sql	3	direct	比較		比較 (sql)		777@cp932_q.sql:3	-- ステータスコードのマスタ参照クエリ \n -- 日本語コメント行を増やして文字コード検出を安定させる目的 \n SELECT name FROM master WHERE code = '777';	shift_jis	medium
+777	sql	{SOURCE_ROOT}/eucjp_q.sql	3	direct	比較		比較 (sql)		777@eucjp_q.sql:3	-- ステータスコードのマスタ参照クエリ \n -- 日本語コメント行を増やして文字コード検出を安定させる目的 \n SELECT name FROM master WHERE code = '777';	euc-jp	medium
+777	sql	{SOURCE_ROOT}/utf8_q.sql	3	direct	比較		比較 (sql)		777@utf8_q.sql:3	-- ステータスコードのマスタ参照クエリ \n -- 日本語コメント行を増やして文字コード検出を安定させる目的 \n SELECT name FROM master WHERE code = '777';	utf-8	medium
