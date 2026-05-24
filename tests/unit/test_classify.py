@@ -129,3 +129,9 @@ def test_Groovyのコメント行はコメントlow():
 
 def test_Groovyの同居コメントはコード優先():
     assert classify_groovy("def x = 1 // trailing") == ("代入", "medium")
+
+
+def test_classify_hit_コメント統合_ASTとregex():
+    assert classify_hit("java", "", "class A {\n // 777\n}\n", 2, "// 777") == \
+        ("コメント", "low")
+    assert classify_hit("sql", "", "", 1, "-- 777 comment") == ("コメント", "low")
