@@ -17,3 +17,28 @@ def test_必須引数で実行しexit0とTSVを返す(tmp_path: Path):
     ])
     assert rc == 0
     assert (out / "K.tsv").exists()
+
+
+def test_use_ripgrep既定はrg検出で自動ON(monkeypatch):
+    from grep_analyzer import ripgrep
+    from grep_analyzer.cli import _build_opts
+    monkeypatch.setattr(ripgrep, "available", lambda: True)
+    assert _build_opts(["--input", "i", "--output", "o", "--source-root", "s"]).use_ripgrep is True
+    monkeypatch.setattr(ripgrep, "available", lambda: False)
+    assert _build_opts(["--input", "i", "--output", "o", "--source-root", "s"]).use_ripgrep is False
+
+
+def test_no_use_ripgrepで明示OFF(monkeypatch):
+    from grep_analyzer import ripgrep
+    from grep_analyzer.cli import _build_opts
+    monkeypatch.setattr(ripgrep, "available", lambda: True)
+    o = _build_opts(["--input", "i", "--output", "o", "--source-root", "s", "--no-use-ripgrep"])
+    assert o.use_ripgrep is False
+
+
+def test_use_ripgrepで明示ON(monkeypatch):
+    from grep_analyzer import ripgrep
+    from grep_analyzer.cli import _build_opts
+    monkeypatch.setattr(ripgrep, "available", lambda: False)
+    o = _build_opts(["--input", "i", "--output", "o", "--source-root", "s", "--use-ripgrep"])
+    assert o.use_ripgrep is True

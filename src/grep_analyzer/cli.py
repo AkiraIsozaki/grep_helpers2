@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 
+from grep_analyzer import ripgrep
 from grep_analyzer.fixedpoint import EngineOptions
 from grep_analyzer.pipeline import run
 from grep_analyzer.walk import DEFAULT_EXCLUDE
@@ -35,7 +36,8 @@ def _make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-symbols", type=int, default=100_000, dest="max_symbols")
     parser.add_argument("--max-paths", type=int, default=1000, dest="max_paths")
     parser.add_argument("--memory-limit", type=int, default=None, dest="memory_limit_mb")
-    parser.add_argument("--use-ripgrep", action="store_true", dest="use_ripgrep")
+    parser.add_argument("--use-ripgrep", action=argparse.BooleanOptionalAction,
+                        default=None, dest="use_ripgrep")
     parser.add_argument("--max-passes", type=int, default=8, dest="max_passes")
     parser.add_argument("--progress", default="off")
     parser.add_argument("--resume", action="store_true")
@@ -59,7 +61,9 @@ def _opts_from(args: argparse.Namespace) -> EngineOptions:
         jobs=args.jobs, follow_symlinks=args.follow_symlinks,
         max_file_bytes=args.max_file_bytes, max_symbols=args.max_symbols,
         max_paths=args.max_paths,
-        memory_limit_mb=args.memory_limit_mb, use_ripgrep=args.use_ripgrep,
+        memory_limit_mb=args.memory_limit_mb,
+        use_ripgrep=(args.use_ripgrep if args.use_ripgrep is not None
+                     else ripgrep.available()),
         max_passes=args.max_passes, progress=args.progress,
         resume=args.resume,
         output_encoding=args.output_encoding,
