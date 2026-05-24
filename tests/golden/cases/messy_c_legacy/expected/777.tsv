@@ -1,5 +1,5 @@
 ﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
-777	c	{SOURCE_ROOT}/legacy.c	1	direct	その他		その他 (c)		777@legacy.c:1	/* legacy 777 handler - see ticket #777 */	utf-8	high
+777	c	{SOURCE_ROOT}/legacy.c	1	direct	コメント		コメント (c)		777@legacy.c:1	/* legacy 777 handler - see ticket #777 */	utf-8	low
 777	c	{SOURCE_ROOT}/legacy.c	3	direct	比較		比較 (c)		777@legacy.c:3	 if (x == 777) {        /* 777 check */	utf-8	high
 777	c	{SOURCE_ROOT}/legacy.c	4	direct	宣言		宣言 (c)		777@legacy.c:4	  int a=1; int b=777; int c=3;	utf-8	high
-777	c	{SOURCE_ROOT}/legacy.c	7	direct	その他		その他 (c)		777@legacy.c:7	 // dead: int old = 777;	utf-8	high
+777	c	{SOURCE_ROOT}/legacy.c	7	direct	コメント		コメント (c)		777@legacy.c:7	 // dead: int old = 777;	utf-8	low
