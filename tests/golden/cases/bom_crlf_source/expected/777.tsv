@@ -1,0 +1,2 @@
+﻿keyword	language	file	lineno	ref_kind	category	category_sub	usage_summary	via_symbol	chain	snippet	encoding	confidence
+777	c	{SOURCE_ROOT}/win.c	3	direct	宣言		宣言 (c)		777@win.c:3	  int x = 777; 	utf-8	high
