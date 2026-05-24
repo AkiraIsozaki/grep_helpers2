@@ -9,6 +9,7 @@ worker からの戻り値を呼出側で追跡状態へ反映する（worker iso
 `_seed` / `_ingest` / `_finalize` から共有 import される（pickle 制約と矛盾なし）。
 """
 
+import hashlib
 import json
 import multiprocessing
 import tempfile
@@ -34,15 +35,20 @@ def file_meta(relpath: str, raw: bytes, lang_map: dict[str, str], fallback_chain
     return text, enc, replaced, language, dialect
 
 
-_FILE_CACHE_BUDGET = 64 * 1024 * 1024   # 復号テキスト常駐の上限（定数＝常駐 O(1)）
+_FILE_CACHE_BUDGET = 64 * 1024 * 1024   # 復号テキスト常駐の上限（文字数の概算予算）
 
 
 class _FileCache:
-    """abspath→(text,enc,replaced,language,dialect) の byte 予算つき LRU。
+    """abspath→(text,enc,replaced,language,dialect) の予算つき LRU。
 
     hop 間で再読込・再復号・再言語判定を抑止する。tree は保持しない
     （巨大ファイルで予算が破綻するため。再 parse は lazy parse が回避）。
     キーは abspath（run 内で一意・ソースは run 中不変前提でメモ化は出力不変）。
+
+    予算は復号テキストの **文字数** 合計の概算上限（多バイト文字では実バイトは
+    最大数倍）。`len(self._d) > 1` ガードにより、予算超の単一巨大ファイルは退避せず
+    常駐させる（thrash 回避）。ゆえに常駐は厳密には O(最大ファイル長)＝定数上限内で
+    実質 O(1)。並列時は worker ごとに本クラスを持つため予算は jobs 分割する。
     """
 
     def __init__(self, budget: int = _FILE_CACHE_BUDGET):
@@ -142,9 +148,11 @@ def _scan_file(args):
 
 # multiprocessing ワーカ：Pool は run 単位で 1 度だけ生成し全 hop/chunk で再利用する。
 # initializer では lang_map / fallback / 空 LRU のみ確定し、automaton はチャンク到来時に
-# signature 変化を見て遅延再構築する（symbols は chunk ごと temp ファイル経由で軽量伝達）。
+# signature（= chunk 内容のハッシュ）変化を見て再構築する（symbols は temp ファイル経由）。
+# sig が内容ハッシュなので同一 symbol 集合の hop 連続では再構築をスキップする。
 # automaton を各ワーカが明示構築するため start method 非依存（fork/spawn いずれも可）。
-# worker LRU は Pool 永続化により hop 間で効く（#1 の並列版）。
+# worker LRU は Pool 永続化により hop 間で効く（#1 の並列版）。常駐は worker ごとに独立な
+# ため予算は jobs 分割し、全 worker 合計を単一 run と同じ上限（O(1)）に保つ。
 _WORKER_AUTOMATON = None
 _WORKER_SIG = None
 _WORKER_LANG_MAP: dict[str, str] | None = None
@@ -152,12 +160,13 @@ _WORKER_FALLBACK: list[str] | None = None
 _WORKER_CACHE: "_FileCache | None" = None
 
 
-def _worker_init(lang_map, fallback) -> None:
+def _worker_init(lang_map, fallback, jobs) -> None:
     """Pool worker 初期化（run 単位 1 回）。automaton は chunk 到来時に遅延構築。"""
     global _WORKER_LANG_MAP, _WORKER_FALLBACK, _WORKER_CACHE, _WORKER_SIG, _WORKER_AUTOMATON
     _WORKER_LANG_MAP = lang_map
     _WORKER_FALLBACK = fallback
-    _WORKER_CACHE = _FileCache()
+    # worker ごとに独立 LRU を持つため予算を jobs 分割（合計常駐 ≤ 単一 run 上限）。
+    _WORKER_CACHE = _FileCache(budget=_FILE_CACHE_BUDGET // max(1, jobs))
     _WORKER_SIG = None
     _WORKER_AUTOMATON = None
 
@@ -180,7 +189,7 @@ def make_pool(opts):
         return None
     return multiprocessing.Pool(
         opts.jobs, initializer=_worker_init,
-        initargs=(opts.lang_map, list(opts.encoding_fallback)))
+        initargs=(opts.lang_map, list(opts.encoding_fallback), opts.jobs))
 
 
 def kinds_of(chase_symbols: ChaseSymbols) -> dict[str, str]:
@@ -216,16 +225,20 @@ def scan_hop(scan_symbols, scan_files, opts, nchunks, file_cache=None, pool=None
     for chunk in chunks:
         # automaton はチャンク単位で 1 度だけ構築する（旧実装はファイル毎に再構築していた）。
         # Pool は run 単位で 1 度だけ生成され（make_pool）、chunk の automaton は worker 側で
-        # signature(=sym_path) 変化時のみ再構築する。symbols は temp ファイル経由で軽量伝達。
+        # signature(= chunk 内容ハッシュ)変化時のみ再構築する。symbols は temp ファイル経由。
+        # sig を内容ハッシュにすることで (a) temp パス再利用での stale automaton を排除し、
+        # (b) 同一 symbol 集合の hop 連続で worker の再構築をスキップできる。
         if opts.jobs > 1 and pool is not None:
-            with tempfile.NamedTemporaryFile("w", suffix=".sym", delete=False,
-                                             encoding="utf-8") as sf:
-                json.dump(chunk, sf)
-                sym_path = sf.name
+            sig = hashlib.sha1(json.dumps(chunk).encode("utf-8")).hexdigest()
+            sf = tempfile.NamedTemporaryFile("w", suffix=".sym", delete=False,
+                                             encoding="utf-8")
+            sym_path = sf.name
             try:
+                with sf:
+                    json.dump(chunk, sf)
                 res = pool.map(
                     _scan_file_worker,
-                    [(relpath, str(abspath), sym_path, sym_path)
+                    [(relpath, str(abspath), sig, sym_path)
                      for relpath, abspath in scan_files])
             finally:
                 Path(sym_path).unlink(missing_ok=True)

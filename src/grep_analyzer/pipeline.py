@@ -69,9 +69,11 @@ def run(
         # ディスク再読込と tree-sitter 再パースを抑止する（追加メモリは O(1)＝1 ファイル分）。
         # 診断（decode_replaced/unsupported_shebang/missing_source）は §10.3 の件数・順序を
         # 保つため従来どおりヒット行ごとに発火する。
+        # cur_ctx は relpath 単位のキャッシュ。欠落ファイルでは None を入れ、
+        # 「cur_ctx is None ⇔ 現 relpath は非ファイル」を構造的不変条件にする
+        # （別フラグと cur_ctx の手動同期を排し、欠落診断の取りこぼしを防ぐ）。
         cur_relpath = None
         cur_ctx: tuple | None = None
-        cur_is_file = False
         for raw_line in lines:
             parsed = parse_grep_line(raw_line)
             if parsed is None:
@@ -83,9 +85,9 @@ def run(
             relpath = os.fsdecode(path_bytes)
             content = content_bytes.decode(grep_enc, errors="replace")
             if relpath != cur_relpath:
+                cur_relpath = relpath
                 target = Path(source_root) / relpath
-                cur_is_file = target.is_file()
-                if cur_is_file:
+                if target.is_file():
                     file_text, enc, replaced = decode_bytes(target.read_bytes(), fb)
                     sample = file_text[:4096]
                     language = detect_language(relpath, sample, lang_map)
@@ -98,8 +100,9 @@ def run(
                     )
                     cur_ctx = (file_text, enc, replaced, language, dialect,
                                unsupported, {}, _physical_lines(file_text))
-                cur_relpath = relpath
-            if not cur_is_file:
+                else:
+                    cur_ctx = None
+            if cur_ctx is None:
                 diag.add("missing_source", relpath)
                 continue
             (file_text, enc, replaced, language, dialect,
