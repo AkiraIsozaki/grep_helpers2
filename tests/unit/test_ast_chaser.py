@@ -1,4 +1,5 @@
 """AST chaser（python/javascript/typescript）field-directed 抽出（spec §6.5）。"""
+import pytest
 from grep_analyzer.classifiers.ts_classifier import parse_tree
 from grep_analyzer.model import ChaseSymbols
 
@@ -135,3 +136,60 @@ def test_angular_inline_chaser_ngFor():
     src = '@Component({ template: `<li *ngFor="let row of TRACKED">{{row.code}}</li>` })\n'
     cs = extract_chase_symbols_tree("angular_inline", src, 1)
     assert "row" in cs.vars
+
+
+def _java(text, lineno):
+    from grep_analyzer.classifiers.java_chaser import extract_tree
+    return extract_tree("java", parse_tree("java", text), lineno)
+
+
+def test_java_static_final_const_と_var():
+    assert _java("class C { static final String K = init(); }\n", 1).constants == ("K",)
+    assert _java("class C { int n = 1; }\n", 1).vars == ("n",)
+    # 配列・ジェネリクスも const
+    assert _java("class C { static final int[] A = x; }\n", 1).constants == ("A",)
+    assert _java(
+        "class C { private static final Map<String,Integer> M = init(); }\n", 1
+    ).constants == ("M",)
+    # final のみ（static 無し）は var
+    cs = _java("class C { void f(){ final int X = 1; } }\n", 1)
+    assert cs.constants == () and cs.vars == ("X",)
+
+
+def test_java_文字列内の代入様字句は非抽出():
+    cs = _java('class C { void f(){ String s = "url=/x"; int n = 1; } }\n', 1)
+    assert cs.vars == ("s", "n") and "url" not in cs.vars
+
+
+def test_java_getter_setter_var_同行multinode():
+    cs = _java("class C { void f(){ int count = svc.getName(); obj.setValue(count); } }\n", 1)
+    assert cs.vars == ("count",)
+    assert cs.getters == ("getName",) and cs.setters == ("setValue",)
+
+
+def test_java_getter_setter_本体行は過抽出しない():
+    src = ("class C {\n"
+           "  public String getName() {\n"     # L2 シグネチャ（name 行）
+           "    return this.name;\n"           # L3 本体
+           "  }\n"
+           "}\n")
+    assert _java(src, 2).getters == ("getName",)   # name 行は採用
+    assert _java(src, 3).getters == ()             # 本体行は過抽出しない
+
+
+def test_java_field_access_左辺は非抽出():
+    cs = _java("class C { void f(){ this.y = 6; total += 1; } }\n", 1)
+    assert "y" not in cs.vars            # field_access 左辺は非抽出
+    assert cs.vars == ("total",)         # 複合代入は捕捉
+
+
+def test_java_try_with_resources():
+    src = "class C { void f() throws Exception { try (java.io.Reader r = open()) { } } }\n"
+    assert _java(src, 1).vars == ("r",)
+
+
+@pytest.mark.skip(reason="Task5 で registry 登録後 green")
+def test_java_jsp_経由():
+    from grep_analyzer.chase import extract_chase_symbols_tree
+    assert "x" in extract_chase_symbols_tree("jsp", "<% int x = TRACKED; %>\n", 1).vars
+    assert extract_chase_symbols_tree("jsp", "${ TRACKED.code }\n", 1).vars == ()
