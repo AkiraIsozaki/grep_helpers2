@@ -54,6 +54,13 @@ def is_contained_relpath(relpath: str) -> bool:
     return ".." not in Path(relpath).parts
 
 
+def is_within_root(root, target) -> bool:
+    """target の realpath が root の realpath 配下か（symlink 越えの脱出を拒否）。"""
+    root_real = os.path.realpath(root)
+    target_real = os.path.realpath(target)
+    return target_real == root_real or target_real.startswith(root_real + os.sep)
+
+
 def _is_binary(path: Path) -> bool:
     with open(path, "rb") as f:
         return b"\x00" in f.read(8192)

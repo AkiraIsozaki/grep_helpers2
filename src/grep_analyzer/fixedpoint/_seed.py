@@ -58,9 +58,9 @@ def initialize_state(seed_hits: list[Hit], source_root: Path,
     for s in seed_hits:
         occ = Occurrence(s.keyword, s.file, s.lineno)
         state.graph.add_seed(occ)
-        from grep_analyzer.walk import is_contained_relpath
+        from grep_analyzer.walk import is_contained_relpath, is_within_root
         sp = source_root / s.file
-        if is_contained_relpath(s.file) and sp.is_file():
+        if is_contained_relpath(s.file) and sp.is_file() and is_within_root(source_root, sp):
             if s.file != cur_relpath:
                 cur_text, _, _, cur_lang, cur_dialect = file_meta(
                     s.file, sp.read_bytes(), opts.lang_map,

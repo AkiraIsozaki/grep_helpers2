@@ -7,7 +7,6 @@ from grep_analyzer.classifiers.javascript_chaser import _BINDING as _JS_BINDING
 from grep_analyzer.classifiers.javascript_chaser import handle_binding as _handle_js
 from grep_analyzer.classifiers.javascript_chaser import _dedup_symbols
 from grep_analyzer.classifiers.ts_classifier import bindings_at_line
-from grep_analyzer.model import ChaseSymbols
 
 _BINDING = _JS_BINDING | {"public_field_definition", "enum_declaration"}
 
