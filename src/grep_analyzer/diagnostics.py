@@ -7,6 +7,11 @@ from collections import Counter, defaultdict
 
 SECTION_8_4_CATEGORIES = frozenset({"symbol_rejected", "getter_setter_no_expand"})
 
+# メモリ安全のための「カテゴリごとの詳細保持上限」。カウント(_counts)は常に全件で
+# 正確だが、明細(_detail)はこの件数で頭打ちにして OOM を防ぐ（A-2）。実運用・
+# 全テストで到達しない高さに設定。render の縮約（detail_limit）とは独立。
+_MAX_RETAINED = 200_000
+
 
 def _is_exempt(cat: str, exempt=SECTION_8_4_CATEGORIES) -> bool:
     """§8.4 全件性カテゴリ（縮約免除）。prov_ プレフィックス一致を含む。
@@ -24,12 +29,14 @@ class Diagnostics:
         self._detail: dict[str, list[str]] = defaultdict(list)
 
     def add(self, category: str, message: str) -> None:
-        """1件の診断を記録する。"""
+        """1件の診断を記録する（カウントは全件、明細は _MAX_RETAINED 件で頭打ち）。"""
         self._counts[category] += 1
-        self._detail[category].append(message)
+        lst = self._detail[category]
+        if len(lst) < _MAX_RETAINED:
+            lst.append(message)
 
     def render(self, detail_limit: int = 0, exempt=None) -> str:
-        """spec §10.3 スキーマ。detail_limit=0 は無制限＝現行と完全同一。"""
+        """spec §10.3 スキーマ。detail_limit=0 は無制限＝保持上限内なら現行と完全同一。"""
         is_exempt = (lambda c: _is_exempt(c, exempt)) \
             if exempt is not None else (lambda c: False)  # prov_ ロジック単一源
         out = ["# summary"]
@@ -38,12 +45,14 @@ class Diagnostics:
         out.append("# detail")
         for cat in sorted(self._detail):
             msgs = self._detail[cat]
-            if detail_limit > 0 and not is_exempt(cat) and len(msgs) > detail_limit:
+            total = self._counts[cat]                    # 真総数（保持上限で msgs より大のことあり）
+            if detail_limit > 0 and not is_exempt(cat) and total > detail_limit:
                 for msg in msgs[:detail_limit]:
                     out.append(f"{cat}\t{msg}")
-                extra = len(msgs) - detail_limit
-                out.append(f"{cat}\t(... {extra} more, {len(msgs)} total)")
+                out.append(f"{cat}\t(... {total - detail_limit} more, {total} total)")
             else:
                 for msg in msgs:
                     out.append(f"{cat}\t{msg}")
+                if total > len(msgs):                    # 保持上限で落ちた明細を明示
+                    out.append(f"{cat}\t(... retained cap {_MAX_RETAINED}, {total} total)")
         return "\n".join(out) + "\n"
