@@ -1,0 +1,2 @@
+bad_grep_line	1
+walk_skipped_binary	1
