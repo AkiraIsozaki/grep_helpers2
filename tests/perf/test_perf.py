@@ -22,6 +22,42 @@ def test_scale(tmp_path, n):
 
 
 @pytest.mark.perf
+@pytest.mark.parametrize("hits_per_file", [50, 200])
+def test_high_hit_density(tmp_path, hits_per_file):
+    """高ヒット密度＝1 ファイルに多数の direct ヒット（grep はファイル単位でまとまる）。
+
+    direct パスのファイル単位キャッシュ（読込/復号/言語判定/tree-sitter パース）の
+    効きを単離するため、ヒット行は追跡シンボルを生まないコメント行にして不動点を
+    不活性化する（旧実装はヒット毎にファイル全体を再読込・2 回再パースしていた）。
+    """
+    n_files = 20
+    src = tmp_path / "src"
+    src.mkdir()
+    grep_lines = []
+    for f in range(n_files):
+        body = ["class C%d {" % f]
+        for i in range(hits_per_file):
+            body.append("  // KW marker %d" % i)
+        body.append("}")
+        (src / f"C{f}.java").write_text("\n".join(body) + "\n", "utf-8")
+        for i in range(hits_per_file):
+            lineno = i + 2                       # class 行の次から
+            grep_lines.append(f"C{f}.java:{lineno}:  // KW marker {i}")
+
+    inp = tmp_path / "in"
+    inp.mkdir()
+    (inp / "KW.grep").write_text("\n".join(grep_lines) + "\n", "utf-8")
+    out = tmp_path / "o"
+    t0 = time.perf_counter()
+    main(["--input", str(inp), "--output", str(out), "--source-root", str(src)])
+    dt = time.perf_counter() - t0
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    total = n_files * hits_per_file
+    print(f"PERF density files={n_files} hits/file={hits_per_file} "
+          f"total_hits={total} dt={dt:.3f}s rss_kb={rss}")
+
+
+@pytest.mark.perf
 def test_calibrate_items_per_mb(tmp_path, monkeypatch):
     """`_ITEMS_PER_MB` 較正の具体手順（実行可能・非ゲート）。
 
