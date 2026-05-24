@@ -51,21 +51,34 @@ class ProvenanceGraph:
     ) -> list[str]:
         """各 seed から target への単純パスを chain 文字列の決定的リストで返す。
 
-        単純パス＝同一 Occurrence 非反復、起点以降の追跡識別子(symbol)非反復
-        （spec §9・07e81bb 明確化）。max_depth はホップ数(` -> `本数)。
-        循環/深さ/経路数の打ち切り＝prov_cycle_cut/prov_max_depth/prov_path_capped。
+        生成時打ち切り（spec §9 安全弁）: 収集本数が max_paths+1 に達した時点で
+        DFS を停止する（+1 は「真に超過したか」を判定し prov_path_capped の誤発火を
+        防ぐため＝旧 `> max_paths` 意味を厳密復元）。DFS 順は seed `sorted`・隣接
+        `sort` で決定的なので打ち切り後の集合も決定的。max_paths 未達は従来と同値。
+        深い連鎖での RecursionError は捕捉し prov_recursion_skipped を記録のうえ
+        ここまでの結果で打ち切る（巨大 --max-depth クラッシュの防御。再帰上限は固定で
+        入力も固定ゆえ打ち切り点・部分結果とも決定的）。
         """
+        limit = max_paths + 1
         results: list[str] = []
-        for seed in sorted(self._seeds):
-            self._dfs(seed, target, [seed], {seed}, set(), max_depth, diag, results)
+        try:
+            for seed in sorted(self._seeds):
+                if len(results) >= limit:
+                    break
+                self._dfs(seed, target, [seed], {seed}, set(),
+                          max_depth, limit, diag, results)
+        except RecursionError:
+            diag.add("prov_recursion_skipped", _hop(target))
         results = sorted(set(results))
         if len(results) > max_paths:
-            diag.add("prov_path_capped", f"{_hop(target)}\t{len(results)}>{max_paths}")
+            diag.add("prov_path_capped", f"{_hop(target)}\t>={max_paths}")
             results = results[:max_paths]
         return results
 
     def _dfs(self, node, target, path, visited_occurrences, visited_symbols,
-             max_depth, diag, results) -> None:
+             max_depth, limit, diag, results) -> None:
+        if len(results) >= limit:               # 生成時打ち切り（指数爆発の根治）
+            return
         if node == target:
             results.append(" -> ".join(_hop(o) for o in path))
             return
@@ -73,9 +86,12 @@ class ProvenanceGraph:
             diag.add("prov_max_depth", _hop(path[0]) + " ... " + _hop(node))
             return
         for next_occ in self._adj.get(node, []):
+            if len(results) >= limit:
+                return
             if next_occ in visited_occurrences or next_occ.symbol in visited_symbols:
                 diag.add("prov_cycle_cut", _hop(node) + " -> " + _hop(next_occ))
                 continue
             self._dfs(next_occ, target, path + [next_occ],
                       visited_occurrences | {next_occ},
-                      visited_symbols | {next_occ.symbol}, max_depth, diag, results)
+                      visited_symbols | {next_occ.symbol},
+                      max_depth, limit, diag, results)
