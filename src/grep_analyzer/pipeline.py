@@ -22,6 +22,7 @@ from grep_analyzer.fixedpoint import EngineOptions, run_fixedpoint
 from grep_analyzer.ingest import parse_grep_line
 from grep_analyzer.model import Hit
 from grep_analyzer.snippet import build_snippet
+from grep_analyzer.snippet._sanitize_line import _physical_lines
 from grep_analyzer.walk import DEFAULT_EXCLUDE, collect_files
 
 
@@ -70,6 +71,7 @@ def run(
         # 保つため従来どおりヒット行ごとに発火する。
         cur_relpath = None
         cur_ctx: tuple | None = None
+        cur_is_file = False
         for raw_line in lines:
             parsed = parse_grep_line(raw_line)
             if parsed is None:
@@ -80,24 +82,28 @@ def run(
             # walk.py の relpath 表現とも統一され、SJIS 混在名でも is_file が当たる。
             relpath = os.fsdecode(path_bytes)
             content = content_bytes.decode(grep_enc, errors="replace")
-            target = Path(source_root) / relpath
-            if not target.is_file():
+            if relpath != cur_relpath:
+                target = Path(source_root) / relpath
+                cur_is_file = target.is_file()
+                if cur_is_file:
+                    file_text, enc, replaced = decode_bytes(target.read_bytes(), fb)
+                    sample = file_text[:4096]
+                    language = detect_language(relpath, sample, lang_map)
+                    dialect = (detect_shell_dialect(relpath, sample)
+                               if language == "shell" else "bourne")
+                    unsupported = (
+                        not extension_resolves_language(relpath, lang_map)
+                        and shebang_dialect(sample) is not None  # シェバン行が存在
+                        and shebang_language(sample) is None      # 対応言語に解決しない
+                    )
+                    cur_ctx = (file_text, enc, replaced, language, dialect,
+                               unsupported, {}, _physical_lines(file_text))
+                cur_relpath = relpath
+            if not cur_is_file:
                 diag.add("missing_source", relpath)
                 continue
-            if relpath != cur_relpath:
-                file_text, enc, replaced = decode_bytes(target.read_bytes(), fb)
-                sample = file_text[:4096]
-                language = detect_language(relpath, sample, lang_map)
-                dialect = (detect_shell_dialect(relpath, sample)
-                           if language == "shell" else "bourne")
-                unsupported = (
-                    not extension_resolves_language(relpath, lang_map)
-                    and shebang_dialect(sample) is not None  # シェバン行が存在
-                    and shebang_language(sample) is None      # 対応言語に解決しない
-                )
-                cur_ctx = (file_text, enc, replaced, language, dialect, unsupported, {})
-                cur_relpath = relpath
-            file_text, enc, replaced, language, dialect, unsupported, tree_cache = cur_ctx
+            (file_text, enc, replaced, language, dialect,
+             unsupported, tree_cache, phys_lines) = cur_ctx
             if replaced:
                 diag.add("decode_replaced", str(relpath))
             if unsupported:
@@ -109,7 +115,8 @@ def run(
                 ref_kind="direct", category=category, category_sub="",
                 usage_summary=f"{category} ({language})", via_symbol="",
                 chain=f"{keyword}@{relpath}:{lineno}",
-                snippet=build_snippet(language, dialect, file_text, lineno, cache=tree_cache),
+                snippet=build_snippet(language, dialect, file_text, lineno,
+                                      cache=tree_cache, lines=phys_lines),
                 encoding=enc + (" 要確認" if replaced else ""), confidence=confidence,
             ))
 

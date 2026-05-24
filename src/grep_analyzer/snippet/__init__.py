@@ -23,7 +23,8 @@ __all__ = [
 
 
 def build_snippet(language: str, dialect: str, file_text: str,
-                  lineno: int, cache: dict | None = None) -> str:
+                  lineno: int, cache: dict | None = None,
+                  lines: list[str] | None = None) -> str:
     """spec §9 snippet 切り出しのエントリ。確定済み 1 セル文字列を返す。
 
     java/c: ts_span→無ければ ヒット 1 行（spec §9 フォールバック: java/c に
@@ -36,7 +37,7 @@ def build_snippet(language: str, dialect: str, file_text: str,
 
     Related: spec §7, §9
     """
-    lines = _physical_lines(file_text)
+    lines = lines if lines is not None else _physical_lines(file_text)
     hit = lineno - 1
     if hit < 0 or hit >= len(lines):
         return ""
