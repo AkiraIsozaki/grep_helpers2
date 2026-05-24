@@ -67,7 +67,8 @@ def _decl_names(node, out):
 
 
 def _is_const(node) -> bool:
-    return any(ch.type == "type_qualifier" and "const" in ch.text.decode("utf-8", "replace").split()
+    # tree-sitter-c の type_qualifier は1トークン1ノード（const/volatile/...）
+    return any(ch.type == "type_qualifier" and ch.text.decode("utf-8", "replace") == "const"
                for ch in node.children)
 
 
