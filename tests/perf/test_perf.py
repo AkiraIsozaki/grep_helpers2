@@ -58,6 +58,25 @@ def test_high_hit_density(tmp_path, hits_per_file):
 
 
 @pytest.mark.perf
+@pytest.mark.parametrize("n", [300, 600])
+def test_fixedpoint_heavy(tmp_path, n):
+    """不動点多ホップの実測。corpus は相互参照(u{i}=S{ref})で連鎖を作るため、
+    実ファイル行を seed にすると extract_chase_symbols が連鎖を起動する
+    (test_calibrate_items_per_mb と同じ起動条件)。"""
+    from tests.perf.corpus_gen import generate
+    src = tmp_path / "src"; generate(src, seed=7, n_files=n)
+    c0_line = (src / "pkg0" / "C0.java").read_text("utf-8").splitlines()[0]
+    inp = tmp_path / "in"; inp.mkdir()
+    (inp / "S0.grep").write_text(f"pkg0/C0.java:1:{c0_line}\n", "utf-8")
+    out = tmp_path / "o"
+    t0 = time.perf_counter()
+    main(["--input", str(inp), "--output", str(out), "--source-root", str(src)])
+    dt = time.perf_counter() - t0
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    print(f"PERF fixedpoint n={n} dt={dt:.3f}s rss_kb={rss}")
+
+
+@pytest.mark.perf
 def test_calibrate_items_per_mb(tmp_path, monkeypatch):
     """`_ITEMS_PER_MB` 較正の具体手順（実行可能・非ゲート）。
 
