@@ -26,7 +26,8 @@ class EngineOptions:
     max_symbols: int
     max_paths: int
     memory_limit_mb: int | None = None
-    use_ripgrep: bool = False
+    use_ripgrep: bool | None = None
+    ripgrep_threshold_bytes: int = 1 << 30
     max_passes: int = 8
     progress: str = "off"
     spill_dir: Path | None = None

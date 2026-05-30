@@ -38,7 +38,13 @@ def _make_parser() -> argparse.ArgumentParser:
     # rg prefilter は既定 OFF（opt-in）。実測で中規模実コードでは #1 LRU+#2 lazy parse が
     # savings を先取り済みで利得ゼロ、密集小ファイルでは subprocess コストで微減速だったため
     # （phase3-perf-report.md）。巨大木(>LRU 予算)向けに明示オプションとして温存する。
-    parser.add_argument("--use-ripgrep", action="store_true", dest="use_ripgrep")
+    g = parser.add_mutually_exclusive_group()
+    g.add_argument("--use-ripgrep", dest="use_ripgrep", action="store_const",
+                   const=True, default=None)
+    g.add_argument("--no-use-ripgrep", dest="use_ripgrep", action="store_const",
+                   const=False)
+    parser.add_argument("--ripgrep-threshold-bytes", type=int, default=1 << 30,
+                        dest="ripgrep_threshold_bytes")
     parser.add_argument("--max-passes", type=int, default=8, dest="max_passes")
     parser.add_argument("--progress", default="off")
     parser.add_argument("--resume", action="store_true")
@@ -63,6 +69,7 @@ def _opts_from(args: argparse.Namespace) -> EngineOptions:
         max_file_bytes=args.max_file_bytes, max_symbols=args.max_symbols,
         max_paths=args.max_paths,
         memory_limit_mb=args.memory_limit_mb, use_ripgrep=args.use_ripgrep,
+        ripgrep_threshold_bytes=args.ripgrep_threshold_bytes,
         max_passes=args.max_passes, progress=args.progress,
         resume=args.resume,
         output_encoding=args.output_encoding,

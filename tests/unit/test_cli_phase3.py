@@ -24,3 +24,18 @@ def test_phase3フラグ明示指定():
     assert list(o.encoding_fallback) == ["euc-jp", "latin-1"]
     assert o.max_rows_per_part == 5
     assert o.diagnostics_detail_limit == 0
+
+
+def test_use_ripgrep既定はNone_明示でTrueFalse():
+    from grep_analyzer.cli import _build_opts
+    base = ["--input", "i", "--output", "o", "--source-root", "s"]
+    assert _build_opts(base).use_ripgrep is None
+    assert _build_opts(base + ["--use-ripgrep"]).use_ripgrep is True
+    assert _build_opts(base + ["--no-use-ripgrep"]).use_ripgrep is False
+
+
+def test_閾値既定は1GiB_可変():
+    from grep_analyzer.cli import _build_opts
+    base = ["--input", "i", "--output", "o", "--source-root", "s"]
+    assert _build_opts(base).ripgrep_threshold_bytes == 1 << 30
+    assert _build_opts(base + ["--ripgrep-threshold-bytes", "100"]).ripgrep_threshold_bytes == 100
