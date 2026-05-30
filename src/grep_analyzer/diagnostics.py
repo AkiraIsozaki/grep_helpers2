@@ -35,6 +35,21 @@ class Diagnostics:
         if len(lst) < _MAX_RETAINED:
             lst.append(message)
 
+    def merge_in_order(self, others) -> None:
+        """複数 Diagnostics を与えた順でカテゴリ別 detail を連結し件数を合算する。
+
+        counts は全件正確（_counts 加算）。detail は _MAX_RETAINED を尊重して extend
+        （超過分は捨て、render の retained 行で表現）。逐次版の「A 全部→B 全部」追記順を再現。
+        """
+        for other in others:
+            for cat, cnt in other._counts.items():
+                self._counts[cat] += cnt
+            for cat, msgs in other._detail.items():
+                lst = self._detail[cat]
+                room = _MAX_RETAINED - len(lst)
+                if room > 0:
+                    lst.extend(msgs[:room])
+
     def render(self, detail_limit: int = 0, exempt=None) -> str:
         """spec §10.3 スキーマ。detail_limit=0 は無制限＝保持上限内なら現行と完全同一。"""
         is_exempt = (lambda c: _is_exempt(c, exempt)) \

@@ -39,3 +39,21 @@ def test_保持上限内は従来どおり全件詳細():
     assert "decode_replaced\ta.c" in text
     assert "decode_replaced\tb.c" in text
     assert "retained" not in text
+
+
+def test_merge_in_orderはカテゴリ内detailを与えた順で連結():
+    base = Diagnostics()
+    a = Diagnostics(); a.add("decode_replaced", "A.java")
+    b = Diagnostics(); b.add("decode_replaced", "B.java"); b.add("missing_source", "X")
+    base.merge_in_order([a, b])
+    out = base.render(detail_limit=1000, exempt=frozenset())
+    assert out.index("A.java") < out.index("B.java")   # decode_replaced は A→B 順
+    assert "missing_source" in out and "X" in out
+
+
+def test_merge_in_orderはカテゴリ件数を合算する():
+    base = Diagnostics()
+    a = Diagnostics(); a.add("decode_replaced", "a1"); a.add("decode_replaced", "a2")
+    b = Diagnostics(); b.add("decode_replaced", "b1"); b.add("decode_replaced", "b2")
+    base.merge_in_order([a, b])
+    assert base._counts["decode_replaced"] == 4
