@@ -74,21 +74,42 @@ def test_単一keywordの走査済み非ヒットreplacedファイルのdecode_r
 
 
 def test_pipeline_lockstepは複数keywordで各TSV逐次版一致(tmp_path):
+    """複数 keyword の lock-step 出力が逐次版（各 keyword 単独 run）と byte 同値であり、
+    かつ indirect 経路を実際に駆動することを検証する（Phase4 U3 レビュー反映）。
+
+    コーパスは両 keyword が SHARED シンボル（ALPHA/BETA 両定数を宣言する Const.java:1）を
+    seed し、OVERLAPPING ファイル（UseA/UseB）へ chase する形にしてある:
+    - ALPHA は ALPHA/BETA を chase → UseA(ALPHA) と UseB(BETA) に hit
+    - BETA も ALPHA/BETA を chase → UseA(ALPHA) と UseB(BETA) に hit
+    これにより run_fixedpoint_multi の hop ループ本体（union 走査・cross-keyword chase・
+    per-keyword absorb）が実走する。旧コーパス（K1=1/K2=2 の int リテラル）は indirect が
+    一切出ず、ループ本体を一度も実行しなかった（lockstep エンジン未検証）。
+    """
     from grep_analyzer.pipeline import run, _default_opts
     src = tmp_path / "src"; src.mkdir()
-    (src / "A.java").write_text(
-        "class A { static final int K1=1; int a=K1; static final int K2=2; int b=K2; }\n", "utf-8")
+    (src / "Const.java").write_text(
+        "class Const { public static final int ALPHA = 1; public static final int BETA = 2; }\n", "utf-8")
+    (src / "UseA.java").write_text("class UseA { int x = Const.ALPHA; }\n", "utf-8")
+    (src / "UseB.java").write_text("class UseB { int y = Const.BETA; }\n", "utf-8")
     inp = tmp_path / "in"; inp.mkdir()
-    (inp / "K1.grep").write_text("A.java:1:    static final int K1=1;\n", "utf-8")
-    (inp / "K2.grep").write_text("A.java:1:    static final int K2=2;\n", "utf-8")
+    (inp / "ALPHA.grep").write_text("Const.java:1:    public static final int ALPHA = 1;\n", "utf-8")
+    (inp / "BETA.grep").write_text("Const.java:1:    public static final int BETA = 2;\n", "utf-8")
     out_new = tmp_path / "new"; run(inp, out_new, src, _default_opts())
     out_seq = tmp_path / "seq"
-    for kw in ("K1", "K2"):
+    for kw in ("ALPHA", "BETA"):
         sub = tmp_path / f"in_{kw}"; sub.mkdir()
         (sub / f"{kw}.grep").write_text((inp / f"{kw}.grep").read_text("utf-8"), "utf-8")
         run(sub, out_seq, src, _default_opts())
-    assert (out_new / "K1.tsv").read_bytes() == (out_seq / "K1.tsv").read_bytes()
-    assert (out_new / "K2.tsv").read_bytes() == (out_seq / "K2.tsv").read_bytes()
+    alpha_new = (out_new / "ALPHA.tsv").read_bytes()
+    beta_new = (out_new / "BETA.tsv").read_bytes()
+    assert alpha_new == (out_seq / "ALPHA.tsv").read_bytes()
+    assert beta_new == (out_seq / "BETA.tsv").read_bytes()
+    # lockstep ループ本体が実走したことの保証: 各 TSV に indirect 行（chain は ` -> ` を含む）が
+    # 存在する。将来 zero-indirect なコーパスに退行しても silently pass しないようロックする。
+    assert b"indirect:" in alpha_new and b" -> " in alpha_new, \
+        "ALPHA.tsv に indirect 行が無い（lockstep ループ本体が実走していない）"
+    assert b"indirect:" in beta_new and b" -> " in beta_new, \
+        "BETA.tsv に indirect 行が無い（lockstep ループ本体が実走していない）"
 
 
 def test_pipeline_lockstep_resume済keywordは再finalizeされない(tmp_path):

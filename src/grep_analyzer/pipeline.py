@@ -194,6 +194,9 @@ def run(
     # NOTE(Task5): keyword 横断の DETAIL 順 byte 一致（特に automaton_split を含む共有 hop
     # 診断）は Phase4 Task5 の課題。本タスクのゲートは golden（TSV + diagnostics SUMMARY 件数）
     # と per-keyword TSV byte 一致。counts は merge_in_order の合算で逐次版と一致する。
+    # 加えて resume_skipped の DETAIL 順も変化している（旧: glob ループ中に inline 追記され
+    # 他診断とインターリーブ／新: 末尾に sorted 順でまとめて append）。件数は不変だが、これも
+    # Task5 の detail-order 負債の一部であり、Task5 が見落とさないよう明記する。
     diag = Diagnostics()
     ordered_diags = [walk_diag]
     for kw in sorted(states_by_kw):

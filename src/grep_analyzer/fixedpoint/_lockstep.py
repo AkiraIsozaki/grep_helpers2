@@ -97,7 +97,10 @@ def run_fixedpoint_multi(states_by_kw, source_root, opts, *, files,
             # - prefilter ON（union_keep が keep 集合）: keyword K 自身の scan 集合
             #   keep_K = prefilter(K の sorted(sc|stm)) | unsafe_rels を計算し、pass_results を
             #   keep_K の relpath に絞って渡す＝逐次版 keyword K が走査した relpath と一致。
-            #   union 走査（高価な共有復号/automaton）は1回のままで、追加コストは安価な rg keep のみ。
+            #   高価な共有処理（union の復号/automaton）は global hop ごとに1回のままだが、
+            #   各 per-keyword prefilter は木全体を走査する rg subprocess を1つ spawn する。
+            #   よって ON 経路の rg コストは hop あたり K+1 プロセス（union 1 + per-keyword K）で、
+            #   従来の 1 プロセスより増える（"無料" ではない）。use_ripgrep=ON のときのみ発生。
             for kw, st in states_by_kw.items():
                 sc, stm = per_kw[kw]
                 kw_results = pass_results
