@@ -8,9 +8,13 @@ from grep_analyzer.ripgrep import available, prefilter
 
 
 def test_利用不可時はNoneでフィルタ無効(monkeypatch):
-    monkeypatch.setattr("grep_analyzer.ripgrep._RG", None)
-    assert available() is False
-    assert prefilter(Path("."), {}, ["CODE"]) is None
+    from grep_analyzer import ripgrep
+    monkeypatch.setattr(ripgrep, "_resolve_rg", lambda force=False: None)
+    monkeypatch.setattr(ripgrep, "_vendored_rg_path", lambda: None)
+    monkeypatch.setattr(ripgrep.shutil, "which", lambda _: None)
+    monkeypatch.delenv("GREP_ANALYZER_RG", raising=False)
+    assert ripgrep.available() is False
+    assert ripgrep.prefilter(Path("."), {}, ["CODE"]) is None
 
 
 @pytest.mark.requires_ripgrep
