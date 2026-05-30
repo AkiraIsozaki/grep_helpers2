@@ -50,6 +50,7 @@ class ChaseState:
     capped: set[str] = field(default_factory=set)
     rel_to_abs: dict[str, Path] = field(default_factory=dict)
     encoding_of: dict[str, tuple[str, bool]] = field(default_factory=dict)
+    enc_memo: object | None = None
     spill_logged: bool = False
     no_expand_logged: set[str] = field(default_factory=set)
     replaced_logged: set[str] = field(default_factory=set)

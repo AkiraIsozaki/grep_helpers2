@@ -22,7 +22,8 @@ from grep_analyzer.classifiers import _AST_CHASERS
 from grep_analyzer.classifiers.ts_classifier import parse_tree
 from grep_analyzer.dispatch import detect_language, detect_shell_dialect
 from grep_analyzer.embed_preprocess import inline_template_spans
-from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
+from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes, decode_with_memo
+from grep_analyzer.fixedpoint._encmemo import EncMemo
 from grep_analyzer.model import ChaseSymbols
 
 
@@ -78,19 +79,32 @@ def make_file_cache() -> _FileCache:
     return _FileCache()
 
 
-def _read_meta(relpath, abspath, lang_map, fallback, cache):
-    """file_meta 結果を cache 経由で取得（cache=None は従来どおり毎回読込）。"""
+def _read_meta(relpath, abspath, lang_map, fallback, cache, enc_memo=None):
+    """file_meta 結果を階層キャッシュ経由で取得。
+
+    上段=テキストキャッシュ(cache)、下段=enc-memo(enc_memo)。cache hit は即返す。
+    cache miss かつ enc_memo がある場合は decode_with_memo で chardet を回避し、
+    file_meta と **byte 同値** の 5 タプルを text[:4096] サンプリングで再構築する。
+    cache=None は従来どおり毎回読込（enc_memo の効果は decode 段にのみ及ぶ）。
+    """
     if cache is not None:
         hit = cache.get(abspath)
         if hit is not None:
-            return hit
-    meta = file_meta(relpath, Path(abspath).read_bytes(), lang_map, fallback_chain=fallback)
+            return hit                       # 5要素 (text,enc,replaced,language,dialect)
+    if enc_memo is None:
+        meta = file_meta(relpath, Path(abspath).read_bytes(), lang_map, fallback_chain=fallback)
+    else:
+        raw = Path(abspath).read_bytes()
+        text, enc, replaced = decode_with_memo(enc_memo, abspath, raw, fallback)
+        language = detect_language(relpath, text[:4096], lang_map)
+        dialect = detect_shell_dialect(relpath, text[:4096]) if language == "shell" else "bourne"
+        meta = (text, enc, replaced, language, dialect)
     if cache is not None:
         cache.put(abspath, meta)
     return meta
 
 
-def _scan_one(relpath, abspath, automaton_obj, lang_map, fallback, cache=None):
+def _scan_one(relpath, abspath, automaton_obj, lang_map, fallback, cache=None, enc_memo=None):
     """1 ファイルを **構築済 automaton** で読み走査しヒット素片を返す純関数。
 
     ストリーミング化＝親に bytes 非常駐・abspath から読む。automaton 走査はデコード済
@@ -99,7 +113,7 @@ def _scan_one(relpath, abspath, automaton_obj, lang_map, fallback, cache=None):
     """
     try:
         text, enc, replaced, language, dialect = _read_meta(
-            relpath, abspath, lang_map, fallback, cache)
+            relpath, abspath, lang_map, fallback, cache, enc_memo)
     except OSError:
         # walk 後の TOCTOU（消失/権限変化）等。run 全体を落とさず空ヒットへ降格。
         return relpath, "utf-8", False, "c", "bourne", []
@@ -162,15 +176,18 @@ _WORKER_SIG = None
 _WORKER_LANG_MAP: dict[str, str] | None = None
 _WORKER_FALLBACK: list[str] | None = None
 _WORKER_CACHE: "_FileCache | None" = None
+_WORKER_ENC: "EncMemo | None" = None
 
 
 def _worker_init(lang_map, fallback, jobs) -> None:
     """Pool worker 初期化（run 単位 1 回）。automaton は chunk 到来時に遅延構築。"""
     global _WORKER_LANG_MAP, _WORKER_FALLBACK, _WORKER_CACHE, _WORKER_SIG, _WORKER_AUTOMATON
+    global _WORKER_ENC
     _WORKER_LANG_MAP = lang_map
     _WORKER_FALLBACK = fallback
     # worker ごとに独立 LRU を持つため予算を jobs 分割（合計常駐 ≤ 単一 run 上限）。
     _WORKER_CACHE = _FileCache(budget=_FILE_CACHE_BUDGET // max(1, jobs))
+    _WORKER_ENC = EncMemo()                  # worker ローカル enc-memo（process 境界を越えない）
     _WORKER_SIG = None
     _WORKER_AUTOMATON = None
 
@@ -184,7 +201,8 @@ def _scan_file_worker(args):
             _WORKER_AUTOMATON = automaton.build(json.load(f))
         _WORKER_SIG = sig
     return _scan_one(relpath, abspath, _WORKER_AUTOMATON,
-                     _WORKER_LANG_MAP, _WORKER_FALLBACK, cache=_WORKER_CACHE)
+                     _WORKER_LANG_MAP, _WORKER_FALLBACK,
+                     cache=_WORKER_CACHE, enc_memo=_WORKER_ENC)
 
 
 def make_pool(opts):
@@ -206,7 +224,7 @@ def kinds_of(chase_symbols: ChaseSymbols) -> dict[str, str]:
     return out
 
 
-def scan_hop(scan_symbols, scan_files, opts, nchunks, file_cache=None, pool=None):
+def scan_hop(scan_symbols, scan_files, opts, nchunks, file_cache=None, pool=None, enc_memo=None):
     """1 hop の走査を chunks に分けて実行し、relpath 単位の集約済み結果を返す。
 
     `nchunks=1` の場合は単一 chunk として全 symbol を 1 度に走査する。`nchunks>1`
@@ -249,7 +267,8 @@ def scan_hop(scan_symbols, scan_files, opts, nchunks, file_cache=None, pool=None
         else:
             automaton_obj = automaton.build(chunk)
             res = [_scan_one(relpath, str(abspath), automaton_obj,
-                             opts.lang_map, fallback, cache=file_cache)
+                             opts.lang_map, fallback,
+                             cache=file_cache, enc_memo=enc_memo)
                    for relpath, abspath in scan_files]
         for relpath, enc, replaced, language, dialect, found in res:
             file_meta_by_relpath.setdefault(relpath, (enc, replaced, language, dialect))

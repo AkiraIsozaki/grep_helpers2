@@ -35,7 +35,7 @@ __all__ = ["EngineOptions", "run_fixedpoint"]
 
 def run_fixedpoint(
     seed_hits: list[Hit], source_root: Path, opts: EngineOptions, diag: Diagnostics,
-    *, files=None, unsafe_rels=None
+    *, files=None, unsafe_rels=None, enc_memo=None
 ) -> list[Hit]:
     """seed から不動点まで多ホップ追跡し indirect Hit を決定的に返す（spec §8.1）。
 
@@ -52,6 +52,10 @@ def run_fixedpoint(
             "unsafe_rels は files と併用必須（files=None の walk フォールバックは unsafe 救済を適用しない）")
     source_root = Path(source_root)
     state = initialize_state(seed_hits, source_root, opts, diag)
+    if enc_memo is None:
+        from grep_analyzer.fixedpoint._encmemo import EncMemo
+        enc_memo = EncMemo()                  # 後方互換の内部既定（run 共有 enc-memo）
+    state.enc_memo = enc_memo
 
     if files is None:
         files = list(walk.walk_files(
@@ -87,7 +91,7 @@ def run_fixedpoint(
             nchunks = compute_nchunks(state, scan_symbols)
             pass_results, n_actual_chunks = scan_hop(
                 scan_symbols, scan_files, opts, nchunks,
-                file_cache=file_cache, pool=pool)
+                file_cache=file_cache, pool=pool, enc_memo=enc_memo)
             if nchunks > 1:
                 diag.add("automaton_split", f"hop={hop} chunks={n_actual_chunks}")
             absorb_results(state, pass_results, scan_chase, scan_term, hop)
