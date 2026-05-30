@@ -88,6 +88,21 @@ def test_sha256_sidecar破損はFalse(tmp_path):
     assert _verify_sha256(b) is False
 
 
+def test_resolve_キャッシュ短絡で2回目はsmokeを呼ばない(monkeypatch):
+    from grep_analyzer import ripgrep
+    monkeypatch.setattr(ripgrep, "_RG_RESOLVED", False)
+    monkeypatch.setattr(ripgrep, "_RG_CACHE", None)
+    monkeypatch.setattr(ripgrep, "_vendored_rg_path", lambda: None)
+    monkeypatch.delenv("GREP_ANALYZER_RG", raising=False)
+    monkeypatch.setattr(ripgrep.shutil, "which", lambda _: "/usr/bin/rg")
+    calls = {"n": 0}
+    monkeypatch.setattr(ripgrep, "_smoke_ok",
+                        lambda p: calls.__setitem__("n", calls["n"] + 1) or True)
+    assert ripgrep._resolve_rg() == "/usr/bin/rg"
+    assert ripgrep._resolve_rg() == "/usr/bin/rg"   # 2回目はキャッシュ
+    assert calls["n"] == 1
+
+
 def test_available副作用フリー_smokeを呼ばない(monkeypatch, tmp_path):
     from grep_analyzer import ripgrep
     called = {"smoke": 0}

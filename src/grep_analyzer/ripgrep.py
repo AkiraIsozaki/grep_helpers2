@@ -51,11 +51,10 @@ def _vendored_rg_path():
 
 def _verify_sha256(rg_path) -> bool:
     """併置 `<rg>.sha256`（16進1行）と実バイトの sha256 を照合。sidecar 不在は False。"""
-    from pathlib import Path as _P
-    side = _P(str(rg_path) + ".sha256")
+    side = Path(str(rg_path) + ".sha256")
     try:
         want = side.read_text(encoding="ascii").strip().split()[0].lower()
-        got = hashlib.sha256(_P(rg_path).read_bytes()).hexdigest()
+        got = hashlib.sha256(Path(rg_path).read_bytes()).hexdigest()
         return got == want
     except (OSError, IndexError):
         return False
@@ -66,22 +65,26 @@ _RG_CACHE = None
 _RG_RESOLVED = False
 
 
+def _rg_candidates(env, vendored, which):
+    """rg 候補を優先順位（env→同梱→which）で返す（None は除外）。順序の単一情報源。"""
+    return [c for c in (env, vendored, which) if c]
+
+
 def _resolve_rg_impl(env, vendored, which):
     """採用順（env→同梱→which）で最初の非 None を返す純選択。"""
-    for cand in (env, vendored, which):
-        if cand:
-            return cand
-    return None
+    cands = _rg_candidates(env, vendored, which)
+    return cands[0] if cands else None
 
 
 def _smoke_ok(rg_path) -> bool:
     """実行可否（X_OK・必要なら chmod）＋ `rg --version` rc=0 スモーク（副作用あり）。"""
     try:
         if not os.access(rg_path, os.X_OK):
-            os.chmod(rg_path, 0o755)
-        r = subprocess.run([str(rg_path), "--version"], capture_output=True, check=False)
+            os.chmod(rg_path, 0o755)  # zip/tar 展開で実行ビットが落ちた同梱バイナリを救済
+        r = subprocess.run([str(rg_path), "--version"], capture_output=True,
+                           check=False, timeout=5)
         return r.returncode == 0
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 
@@ -95,10 +98,9 @@ def _resolve_rg(force: bool = False):
     if vendored is not None and not _verify_sha256(vendored):
         vendored = None
     which = shutil.which("rg")
-    pool = [env, str(vendored) if vendored else None, which]
     _RG_CACHE = None
-    for c in pool:
-        if c and _smoke_ok(c):
+    for c in _rg_candidates(env, str(vendored) if vendored else None, which):
+        if _smoke_ok(c):
             _RG_CACHE = c
             break
     _RG_RESOLVED = True
