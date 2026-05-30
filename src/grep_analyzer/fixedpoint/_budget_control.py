@@ -77,3 +77,29 @@ def compute_nchunks(state: ChaseState, scan_symbols: list[str]) -> int:
                 n_edges=state.edge_store.in_memory_len(), n_intro=n_intro)):
         nchunks += 1
     return nchunks
+
+
+def compute_nchunks_union(states, union_symbols, *, opts, budget) -> int:
+    """lockstep 共有エンジンの union 予算版 nchunks。
+
+    compute_nchunks を複数 state にまたがる集計量で鏡写しにする（rev.2 H-1）:
+    n_live=len(union_symbols)、n_intro=Σ_states Σ introducers、
+    in_memory_len=Σ_states edge_store.in_memory_len()。`budget`/`opts` は明示注入。
+    """
+    nchunks = 1
+    if opts.force_chunks and opts.force_chunks > 1:
+        return min(opts.force_chunks, opts.max_passes, max(1, len(union_symbols)))
+    if budget.unlimited:
+        return 1
+    n_intro = sum(sum(len(v) for v in st.introducers.values()) for st in states)
+    in_memory_len = sum(st.edge_store.in_memory_len() for st in states)
+    n_live = len(union_symbols)
+    if not budget.exceeded(_budget.estimate_items(
+            n_symbols=n_live, n_edges=in_memory_len, n_intro=n_intro)):
+        return 1
+    while nchunks < opts.max_passes and nchunks < len(union_symbols) and \
+            budget.exceeded(_budget.estimate_items(
+                n_symbols=-(-len(union_symbols) // (nchunks + 1)),
+                n_edges=in_memory_len, n_intro=n_intro)):
+        nchunks += 1
+    return nchunks
