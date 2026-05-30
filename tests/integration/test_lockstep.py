@@ -257,3 +257,68 @@ def test_lockstep_diagnostics順序が逐次版と一致_除外automaton_split_g
         assert ls_summary.get(cat, 0) == seq_summary.get(cat, 0), (
             f"非除外カテゴリ {cat} の summary 件数が不一致: "
             f"lock-step={ls_summary.get(cat, 0)} sequential={seq_summary.get(cat, 0)}")
+
+
+def test_lockstep_scan_hopはglobal_hop回のみ呼ばれ走査が圧縮される(tmp_path):
+    """lock-step は scan_hop を GLOBAL hop ごとに1回だけ呼び、逐次版の Σ(per-keyword hop)
+    より厳密に少ない回数で走査する（Phase4 Task6 走査圧縮）。
+
+    コーパスは 2 keyword × 各2 hop を要するよう構成: 各 keyword は ALPHA/BETA を seed し
+    （Const.java:1 が両定数を宣言）、hop1 で MidA(MIDA)/MidB(MIDB) を発見、hop2 で
+    LeafA/LeafB へ chase が届く。lock-step の global hop は 2 だが、逐次版は 2 keyword ×
+    2 hop = 4 回 scan_hop を呼ぶ。
+    """
+    import dataclasses
+    from grep_analyzer.pipeline import run, _default_opts
+    import grep_analyzer.fixedpoint._lockstep as lockstep_mod
+
+    src = tmp_path / "src"; src.mkdir()
+    (src / "Const.java").write_text(
+        "class Const { public static final int ALPHA = 1; "
+        "public static final int BETA = 2; }\n", "utf-8")
+    # hop1: ALPHA/BETA を参照しつつ新定数 MIDA/MIDB を定義 → 次 hop の chase 源。
+    (src / "MidA.java").write_text(
+        "class MidA { public static final int MIDA = Const.ALPHA; }\n", "utf-8")
+    (src / "MidB.java").write_text(
+        "class MidB { public static final int MIDB = Const.BETA; }\n", "utf-8")
+    # hop2: MIDA/MIDB の利用箇所（chase がここまで届く＝各 keyword ≥2 hop を保証）。
+    (src / "LeafA.java").write_text("class LeafA { int z = MidA.MIDA; }\n", "utf-8")
+    (src / "LeafB.java").write_text("class LeafB { int z = MidB.MIDB; }\n", "utf-8")
+
+    inp = tmp_path / "in"; inp.mkdir()
+    (inp / "ALPHA.grep").write_text(
+        "Const.java:1:    public static final int ALPHA = 1;\n", "utf-8")
+    (inp / "BETA.grep").write_text(
+        "Const.java:1:    public static final int BETA = 2;\n", "utf-8")
+    opts = dataclasses.replace(_default_opts(), jobs=1, use_ripgrep=False)
+
+    GLOBAL_HOPS = 2          # 本コーパスの最大 keyword hop 数
+    SEQUENTIAL_SUM = 4       # 2 keyword × 2 hop（逐次版が払うであろう走査回数）
+
+    # _lockstep が import 済みの scan_hop を計数ラッパに差し替える。
+    orig_scan_hop = lockstep_mod.scan_hop
+    calls = {"n": 0}
+
+    def counting_scan_hop(*args, **kwargs):
+        calls["n"] += 1
+        return orig_scan_hop(*args, **kwargs)
+
+    lockstep_mod.scan_hop = counting_scan_hop
+    try:
+        out = tmp_path / "o"
+        assert run(inp, out, src, opts) == 0
+    finally:
+        lockstep_mod.scan_hop = orig_scan_hop
+
+    # コーパスが実際に多段 chase を駆動したこと（hop2 シンボル MIDA/MIDB に到達）。
+    alpha_tsv = (out / "ALPHA.tsv").read_text("utf-8")
+    beta_tsv = (out / "BETA.tsv").read_text("utf-8")
+    assert "MIDA" in alpha_tsv and "MIDB" in beta_tsv, \
+        "コーパスが hop2 まで chase していない（走査圧縮テストが無意味化）"
+
+    # 走査圧縮: scan_hop は global hop 回のみ。逐次版の Σhop より厳密に少ない。
+    assert calls["n"] == GLOBAL_HOPS, \
+        f"scan_hop 呼出が global hop 数と不一致: {calls['n']} != {GLOBAL_HOPS}"
+    assert calls["n"] <= GLOBAL_HOPS
+    assert calls["n"] < SEQUENTIAL_SUM, \
+        f"走査が圧縮されていない: {calls['n']} >= 逐次版 Σhop {SEQUENTIAL_SUM}"
