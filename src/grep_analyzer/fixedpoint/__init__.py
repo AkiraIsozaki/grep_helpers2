@@ -14,24 +14,16 @@ Related: spec §8.1, §8.2, §8.3, §8.4, §9
 
 from pathlib import Path
 
-from grep_analyzer import ripgrep as _rg
 from grep_analyzer import walk
 from grep_analyzer.diagnostics import Diagnostics
-from grep_analyzer.fixedpoint._budget_control import (
-    apply_global_cap,
-    compute_nchunks,
-    maybe_spill,
-)
 from grep_analyzer.fixedpoint._encmemo import EncMemo
-from grep_analyzer.fixedpoint._finalize import build_indirect_hits
-from grep_analyzer.fixedpoint._ingest import absorb_results
+from grep_analyzer.fixedpoint._lockstep import run_fixedpoint_multi
 from grep_analyzer.fixedpoint._options import EngineOptions
-from grep_analyzer.fixedpoint._scan import make_file_cache, make_pool, scan_hop
+from grep_analyzer.fixedpoint._scan import make_pool
 from grep_analyzer.fixedpoint._seed import initialize_state
 from grep_analyzer.model import Hit
-from grep_analyzer.progress import Progress
 
-__all__ = ["EngineOptions", "run_fixedpoint"]
+__all__ = ["EngineOptions", "make_pool", "run_fixedpoint", "run_fixedpoint_multi"]
 
 
 def run_fixedpoint(
@@ -57,55 +49,17 @@ def run_fixedpoint(
     # seed 初期化の復号も run 共有 enc-memo を通し、同一ファイルの再 chardet を抑止する
     # （direct/scan/finalize と単一情報源を共有）。
     state = initialize_state(seed_hits, source_root, opts, diag, enc_memo=enc_memo)
-    # _finalize.build_indirect_hits が state.enc_memo を消費（Phase3 Task4 で配線）
-    state.enc_memo = enc_memo
 
     if files is None:
         files = list(walk.walk_files(
             source_root, include=opts.include, exclude=opts.exclude,
             follow_symlinks=opts.follow_symlinks,
             max_file_bytes=opts.max_file_bytes, diag=diag))
-    state.rel_to_abs = {relpath: abspath for relpath, abspath in files}
-    progress = Progress(opts.progress)
-    progress.start(len(files))
-    file_cache = make_file_cache()
-    pool = make_pool(opts)
 
-    try:
-        hop = 1
-        while state.chase_active or state.terminal_active:
-            apply_global_cap(state)
-            maybe_spill(state, hop)
-            scan_chase = {s for s in state.chase_active if s not in state.capped}
-            scan_term = {s for s in state.terminal_active if s not in state.capped}
-            scan_symbols = sorted(scan_chase | scan_term)
-            state.chase_done |= state.chase_active
-            state.chase_active = set()
-            state.terminal_done |= state.terminal_active
-            state.terminal_active = set()
-            if not scan_symbols or hop > opts.max_depth:
-                break
-            scan_files = files
-            if opts.use_ripgrep:
-                keep_rels = _rg.prefilter(source_root, state.rel_to_abs, scan_symbols)
-                if keep_rels is not None:
-                    safe_keep = keep_rels | (unsafe_rels or set())   # 非ASCII透過は常に走査対象に残す
-                    scan_files = [(r, a) for r, a in files if r in safe_keep]
-            nchunks = compute_nchunks(state, scan_symbols)
-            pass_results, n_actual_chunks = scan_hop(
-                scan_symbols, scan_files, opts, nchunks,
-                file_cache=file_cache, pool=pool, enc_memo=enc_memo)
-            if nchunks > 1:
-                diag.add("automaton_split", f"hop={hop} chunks={n_actual_chunks}")
-            absorb_results(state, pass_results, scan_chase, scan_term, hop)
-            progress.hop(hop, len(scan_symbols), len(scan_files))
-            hop += 1
-
-        indirect = build_indirect_hits(state)
-        progress.done()
-        return indirect
-    finally:
-        if pool is not None:
-            pool.close()
-            pool.join()
-        state.edge_store.close()
+    # ループは lock-step 共有エンジンへ委譲（rev.2 C-3）。単一 keyword は byte 同値。
+    # state.rel_to_abs / state.enc_memo / Progress / automaton_split は
+    # run_fixedpoint_multi 側で駆動する（二重駆動しない）。
+    result = run_fixedpoint_multi(
+        {state.keyword: state}, source_root, opts,
+        files=files, unsafe_rels=unsafe_rels, enc_memo=enc_memo)
+    return result[state.keyword]

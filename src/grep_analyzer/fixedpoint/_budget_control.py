@@ -57,26 +57,15 @@ def maybe_spill(state: ChaseState, hop: int):
 
 
 def compute_nchunks(state: ChaseState, scan_symbols: list[str]) -> int:
-    """1 hop の chunk 数を決める。`force_chunks` 指定優先、超過予算時のみ自動増やす。"""
-    opts = state.options
-    nchunks = 1
-    if opts.force_chunks and opts.force_chunks > 1:
-        return min(opts.force_chunks, opts.max_passes, max(1, len(scan_symbols)))
-    if state.budget.unlimited:
-        return 1
-    n_intro = sum(len(v) for v in state.introducers.values())
-    n_live = len(state.chase_active | state.chase_done
-                 | state.terminal_active | state.terminal_done)
-    if not state.budget.exceeded(_budget.estimate_items(
-            n_symbols=n_live, n_edges=state.edge_store.in_memory_len(),
-            n_intro=n_intro)):
-        return 1
-    while nchunks < opts.max_passes and nchunks < len(scan_symbols) and \
-            state.budget.exceeded(_budget.estimate_items(
-                n_symbols=-(-len(scan_symbols) // (nchunks + 1)),
-                n_edges=state.edge_store.in_memory_len(), n_intro=n_intro)):
-        nchunks += 1
-    return nchunks
+    """1 hop の chunk 数を決める（単一 state 版）。
+
+    compute_nchunks_union への薄い委譲（単一情報源・drift 排除）。単一 state では
+    n_live=len(union)＝(chase|terminal)_done 集合のサイズ（呼出は active を空に
+    した直後ゆえ union_symbols=scan_symbols は done のうち未 cap 分＝同値）、
+    n_intro/in_memory_len も単一 state 集計と一致する（Task2 で 6480 シナリオ証明済）。
+    """
+    return compute_nchunks_union(
+        [state], scan_symbols, opts=state.options, budget=state.budget)
 
 
 def compute_nchunks_union(states, union_symbols, *, opts, budget) -> int:
