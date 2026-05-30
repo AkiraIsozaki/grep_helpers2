@@ -16,10 +16,9 @@ from grep_analyzer.classifiers import _AST_CHASERS
 from grep_analyzer.classifiers.ts_classifier import parse_tree
 from grep_analyzer.diagnostics import Diagnostics
 from grep_analyzer.embed_preprocess import effective_language
-from grep_analyzer.encoding import decode_with_memo
 from grep_analyzer.fixedpoint._ingest import ingest_one
 from grep_analyzer.fixedpoint._options import EngineOptions
-from grep_analyzer.fixedpoint._scan import _meta_from_text, file_meta, kinds_of
+from grep_analyzer.fixedpoint._scan import file_meta, kinds_of, meta_via_memo
 from grep_analyzer.fixedpoint._state import ChaseState
 from grep_analyzer.model import ChaseSymbols, Hit
 from grep_analyzer.provenance import Occurrence, ProvenanceGraph
@@ -65,14 +64,9 @@ def initialize_state(seed_hits: list[Hit], source_root: Path,
         if is_contained_relpath(s.file) and sp.is_file() and is_within_root(source_root, sp):
             if s.file != cur_relpath:
                 if enc_memo is not None:
-                    # run 共有 enc-memo 経由＝direct/scan/finalize と同一キー(str(sp))で
-                    # chardet 再実行を抑止。_meta_from_text で file_meta と byte 同値の
-                    # 5-tuple を再構築する（golden 不変）。
-                    _t, _e, _r = decode_with_memo(
-                        enc_memo, str(sp), sp.read_bytes(),
-                        list(opts.encoding_fallback))
-                    cur_text, _, _, cur_lang, cur_dialect = _meta_from_text(
-                        s.file, _t, _e, _r, opts.lang_map)
+                    cur_text, _, _, cur_lang, cur_dialect = meta_via_memo(
+                        enc_memo, str(sp), s.file, sp.read_bytes(),
+                        opts.lang_map, list(opts.encoding_fallback))
                 else:
                     cur_text, _, _, cur_lang, cur_dialect = file_meta(
                         s.file, sp.read_bytes(), opts.lang_map,

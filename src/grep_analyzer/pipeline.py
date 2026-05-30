@@ -70,8 +70,10 @@ def run(
                  f"total_bytes={total_bytes} threshold={opts.ripgrep_threshold_bytes}")
 
     fb = list(opts.encoding_fallback) or DEFAULT_FALLBACK
-    # run 共有 enc-memo：direct 経路と各 keyword の不動点（finalize 再読込）で同一インスタンスを
-    # 共有し、ユニークファイルあたり chardet を run 全体で高々 1 回に抑える（jobs=1 in-process）。
+    # run 共有 enc-memo：direct/seed/finalize の再読込で keyword をまたいで chardet を重複排除する
+    # （jobs>1 の並列 SCAN は process-local の _WORKER_ENC を使い fork 越しに共有不可＝scan の
+    # keyword 間重複排除は逐次経路のみ）。キーは str(abspath)（未正規化）だが memo は純粋なので
+    # キー差異は冗長 chardet（性能）に留まり出力は不変。
     enc_memo = EncMemo()
     for grep_file in sorted(Path(input_dir).glob("*.grep")):
         keyword = grep_file.stem

@@ -45,6 +45,16 @@ def file_meta(relpath: str, raw: bytes, lang_map: dict[str, str], fallback_chain
     return _meta_from_text(relpath, text, enc, replaced, lang_map)
 
 
+def meta_via_memo(enc_memo, key, relpath, raw, lang_map, fallback):
+    """file_meta と byte 同値だが enc_memo 経由で chardet を抑止する 5-tuple（単一情報源）。
+
+    key は str(abspath)（未正規化）。memo は純粋な再計算メモ化ゆえ key の差異
+    （例: source_root 非正規化）は冗長な chardet（性能）を生むだけで出力は不変。
+    """
+    text, enc, replaced = decode_with_memo(enc_memo, key, raw, fallback)
+    return _meta_from_text(relpath, text, enc, replaced, lang_map)
+
+
 _FILE_CACHE_BUDGET = 64 * 1024 * 1024   # 復号テキスト常駐の上限（文字数の概算予算）
 
 
@@ -104,8 +114,7 @@ def _read_meta(relpath, abspath, lang_map, fallback, cache, enc_memo=None):
         meta = file_meta(relpath, Path(abspath).read_bytes(), lang_map, fallback_chain=fallback)
     else:
         raw = Path(abspath).read_bytes()
-        text, enc, replaced = decode_with_memo(enc_memo, abspath, raw, fallback)
-        meta = _meta_from_text(relpath, text, enc, replaced, lang_map)
+        meta = meta_via_memo(enc_memo, abspath, relpath, raw, lang_map, fallback)
     if cache is not None:
         cache.put(abspath, meta)
     return meta

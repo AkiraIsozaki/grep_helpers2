@@ -70,4 +70,4 @@ def test_direct経路は同一ファイル複数keywordでchardet1回(tmp_path, 
     (inp / "K1.grep").write_text("A.java:1:KCODE\n", "utf-8")
     (inp / "K2.grep").write_text("A.java:1:KCODE\n", "utf-8")
     run(inp, tmp_path / "out", src, dataclasses.replace(_default_opts(), jobs=1))
-    assert calls["n"] <= 1               # A.java の chardet は run 全体で 1 回（jobs=1）
+    assert calls["n"] == 1               # euc-jp は utf-8-strict 不成立＝chardet が確定的に 1 回（jobs=1）
