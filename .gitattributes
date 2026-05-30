@@ -2,3 +2,7 @@
 # 混在エンコーディング/バイナリ src を保護）。spec §11 / 設計 2026-05-24。
 tests/golden/cases/**                                 -text
 tests/golden/cases/grep_jar_artifact/src/lib/app.jar  binary
+src/grep_analyzer/vendor/ripgrep/*/rg                      binary
+src/grep_analyzer/vendor/ripgrep/*/rg.sha256              -text
+src/grep_analyzer/vendor/ripgrep/*/LICENSE-MIT            -text
+src/grep_analyzer/vendor/ripgrep/*/UNLICENSE             -text

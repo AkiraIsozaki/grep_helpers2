@@ -111,3 +111,15 @@ def test_available副作用フリー_smokeを呼ばない(monkeypatch, tmp_path)
     monkeypatch.setenv("GREP_ANALYZER_RG", "/x/rg")
     assert ripgrep.available() is True
     assert called["smoke"] == 0
+
+
+def test_fetch_extract_は期待sha不一致で例外(tmp_path):
+    import importlib.util, hashlib
+    import pytest
+    spec = importlib.util.spec_from_file_location(
+        "fetch_ripgrep", "scripts/fetch_ripgrep.py")
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    blob = b"not-a-real-rg"
+    with pytest.raises(ValueError):
+        mod._check_sha256(blob, "deadbeef")
+    mod._check_sha256(blob, hashlib.sha256(blob).hexdigest())  # 一致は例外なし
