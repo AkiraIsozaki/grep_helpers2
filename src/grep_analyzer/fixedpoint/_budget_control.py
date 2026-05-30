@@ -4,10 +4,10 @@
   単調縮小・決定的（キー: (symbol_hop, len(s), s)）。
 - maybe_spill: in-memory edge 数と introducers 数で予算超過判定し、超過時に
   edge_store.maybe_spill_now() を呼ぶ。1 度だけ diag を立てる。
-- compute_nchunks: 1 hop の chunk 数を予算と force_chunks から決める。
-
-注: compute_nchunks は **chase_active/terminal_active を空にした直後**に呼ばれる
-前提（n_live はその時点の (chase|terminal)_done 集合のみから計算される）。
+- compute_nchunks_union: lockstep 共有エンジンの union 予算版。1 hop の chunk 数を
+  予算と force_chunks から決める。**chase_active/terminal_active を空にした直後**に
+  呼ばれる前提。
+- compute_nchunks: 旧逐次版互換の単一 state 委譲シム（現在は呼出元なし＝未使用）。
 
 Related: spec §8.2, §8.3
 """
@@ -57,23 +57,33 @@ def maybe_spill(state: ChaseState, hop: int):
 
 
 def compute_nchunks(state: ChaseState, scan_symbols: list[str]) -> int:
-    """1 hop の chunk 数を決める（単一 state 版）。
+    """1 hop の chunk 数を決める（旧逐次版互換の単一 state シム・現在は未使用）。
 
-    compute_nchunks_union への薄い委譲（単一情報源・drift 排除）。単一 state では
-    n_live=len(union)＝(chase|terminal)_done 集合のサイズ（呼出は active を空に
-    した直後ゆえ union_symbols=scan_symbols は done のうち未 cap 分＝同値）、
-    n_intro/in_memory_len も単一 state 集計と一致する（Task2 で 6480 シナリオ証明済）。
+    compute_nchunks_union への薄い委譲（単一情報源・drift 排除）。
+
+    注意（意味論の差）: 旧逐次版 compute_nchunks は n_live を
+    len(chase_done|terminal_done|chase_active|terminal_active)＝累積 done 集合の
+    サイズで計算していた。委譲先 compute_nchunks_union は n_live=len(union_symbols)＝
+    その hop の union 記号数（spec §4.1 の union エンジン意味論）で計算する。両者は
+    finite --memory-limit で hop≥2 に達したとき差を生み、automaton_split 診断と
+    chunk 数が変わり得る。これは許容される: automaton_split は §6.2/§8.4 で
+    byte 同値の EXEMPT であり、chunking は出力中立（scan_hop が同一に再集約＝TSV 不変）。
     """
     return compute_nchunks_union(
         [state], scan_symbols, opts=state.options, budget=state.budget)
 
 
 def compute_nchunks_union(states, union_symbols, *, opts, budget) -> int:
-    """lockstep 共有エンジンの union 予算版 nchunks。
+    """lockstep 共有エンジンの union 予算版 nchunks（spec §4.1）。
 
-    compute_nchunks を複数 state にまたがる集計量で鏡写しにする（rev.2 H-1）:
-    n_live=len(union_symbols)、n_intro=Σ_states Σ introducers、
-    in_memory_len=Σ_states edge_store.in_memory_len()。`budget`/`opts` は明示注入。
+    複数 state にまたがる集計量で chunk 数を決める（rev.2 H-1）:
+    n_live=len(union_symbols)＝その hop の union 記号数（spec §4.1 の union 意味論。
+    旧逐次版 compute_nchunks の n_live=|done集合| とは意味が異なる）、
+    n_intro=Σ_states Σ introducers、in_memory_len=Σ_states edge_store.in_memory_len()。
+    `budget`/`opts` は明示注入。
+
+    finite --memory-limit かつ hop≥2 では旧逐次版と chunk 数・automaton_split 診断が
+    異なり得るが、automaton_split は §6.2/§8.4-EXEMPT・chunking は出力中立ゆえ TSV 不変。
     """
     nchunks = 1
     if opts.force_chunks and opts.force_chunks > 1:

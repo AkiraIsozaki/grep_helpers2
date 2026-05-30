@@ -258,7 +258,7 @@ def test_診断は同一ファイルでもヒット行ごとに発火する(tmp_
 def test_pool_はrun単位で1回だけ生成される(tmp_path, monkeypatch):
     """jobs>1 の複数 hop でも Pool 生成は 1 回（chunk×hop 再生成しない）。"""
     import dataclasses
-    import grep_analyzer.fixedpoint as fp
+    from grep_analyzer.fixedpoint import _lockstep
     from tests.perf.corpus_gen import generate
     src = tmp_path / "src"; generate(src, seed=7, n_files=60)
     c0 = (src / "pkg0" / "C0.java").read_text("utf-8").splitlines()[0]
@@ -266,7 +266,7 @@ def test_pool_はrun単位で1回だけ生成される(tmp_path, monkeypatch):
     (inp / "S0.grep").write_text(f"pkg0/C0.java:1:{c0}\n", "utf-8")
 
     n_pools = {"n": 0}
-    real = fp.make_pool
+    real = _lockstep.make_pool
 
     def spy(opts):
         p = real(opts)
@@ -274,9 +274,9 @@ def test_pool_はrun単位で1回だけ生成される(tmp_path, monkeypatch):
             n_pools["n"] += 1
         return p
 
-    # run_fixedpoint は `from ..._scan import make_pool` で名前を束縛するため、
-    # 利用箇所（fixedpoint パッケージ名前空間）の make_pool を差し替える。
-    monkeypatch.setattr(fp, "make_pool", spy)
+    # _lockstep は `from ..._scan import make_pool` で名前を束縛し bare 呼出するため、
+    # 利用箇所（_lockstep モジュール名前空間）の make_pool を差し替える。
+    monkeypatch.setattr(_lockstep, "make_pool", spy)
     opts = dataclasses.replace(_default_opts(), jobs=2)
     rc = run(input_dir=inp, output_dir=tmp_path / "o", source_root=src, opts=opts)
     assert rc == 0

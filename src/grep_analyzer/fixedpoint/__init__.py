@@ -19,11 +19,10 @@ from grep_analyzer.diagnostics import Diagnostics
 from grep_analyzer.fixedpoint._encmemo import EncMemo
 from grep_analyzer.fixedpoint._lockstep import run_fixedpoint_multi
 from grep_analyzer.fixedpoint._options import EngineOptions
-from grep_analyzer.fixedpoint._scan import make_pool
 from grep_analyzer.fixedpoint._seed import initialize_state
 from grep_analyzer.model import Hit
 
-__all__ = ["EngineOptions", "make_pool", "run_fixedpoint", "run_fixedpoint_multi"]
+__all__ = ["EngineOptions", "run_fixedpoint", "run_fixedpoint_multi"]
 
 
 def run_fixedpoint(
