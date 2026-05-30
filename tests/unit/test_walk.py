@@ -151,3 +151,76 @@ def test_collect_files_exはlargeを除外しtotalに含めずbinary診断を発
     rendered = diag.render(detail_limit=1000, exempt=frozenset())
     assert "walk_skipped_large" in rendered and "big.c" in rendered  # large 診断
     assert "walk_skipped_binary" in rendered and "b.bin" in rendered # binary 診断
+
+
+# === GUARD 1: 8KiB→64KiB バイナリ検出窓の差分を回帰固定（Phase2 統合レビュー） ===
+# _classify_bytes/collect_files_ex は 64KiB(_PREFIX)、legacy _is_binary/walk_files は 8KiB。
+# 8〜64KiB の窓に NUL があるファイルで両者が分岐することを LIVE で固定する。
+
+def test_classify_bytesは9000バイト目のNULをbinaryと判定_64KiB窓内():
+    # 8KiB(8192) を超え 64KiB 未満のオフセットの NUL。_is_binary(8KiB) では見えないが
+    # _classify_bytes は与えられた head 全域を走査するので binary。
+    from grep_analyzer.walk import _classify_bytes
+    head = b"x" * 9000 + b"\x00rest"
+    assert len(head) > 8192
+    assert _classify_bytes(head) == "binary"
+
+
+def test_classify_bytesは与えられた範囲のみ検査する_読取り窓は呼び出し側責務():
+    # _classify_bytes は純関数であり「読み取り窓」を持たない＝渡されたものしか見ない。
+    # 64KiB の読取り窓は collect_files_ex/_walk_classified 側(_PREFIX)の責務。
+    # ここでは 64KiB を超えた位置の NUL を含む head から先頭 _PREFIX だけ渡すと
+    # NUL が見えない（"ok"）ことを示す。実際の読取り窓検証は下の統合テストで行う。
+    from grep_analyzer.walk import _classify_bytes, _PREFIX
+    full = b"x" * (_PREFIX + 100) + b"\x00"   # NUL は _PREFIX より後ろ
+    assert _classify_bytes(full[:_PREFIX]) == "ok"   # 先頭 _PREFIX には NUL なし
+    assert _classify_bytes(full) == "binary"          # 全体を渡せば見える（範囲依存）
+
+
+def test_walk_files8KiBとcollect_files_ex64KiBが9000バイト目NULで分岐_LIVE(tmp_path):
+    from grep_analyzer.walk import walk_files, collect_files_ex
+    from grep_analyzer.diagnostics import Diagnostics
+    # 先頭 9000 バイトは純 ASCII、その後に NUL。8KiB 走査では見えず 64KiB 走査では見える。
+    (tmp_path / "edge.c").write_bytes(b"x" * 9000 + b"\x00rest")
+    # legacy walk_files(8KiB): NUL が窓外なので非バイナリ扱いで YIELD する。
+    diag_legacy = Diagnostics()
+    legacy_rels = [r for r, _ in walk_files(
+        tmp_path, include=[], exclude=[], follow_symlinks=False,
+        max_file_bytes=5_000_000, diag=diag_legacy)]
+    assert "edge.c" in legacy_rels                       # 8KiB: バイナリと見なさない
+    # collect_files_ex(64KiB): NUL が窓内なのでバイナリ判定して EXCLUDE する。
+    diag_strict = Diagnostics()
+    files, _total, _unsafe = collect_files_ex(
+        tmp_path, include=[], exclude=[], follow_symlinks=False,
+        max_file_bytes=5_000_000, diag=diag_strict)
+    strict_rels = {r for r, _ in files}
+    assert "edge.c" not in strict_rels                   # 64KiB: バイナリとして除外
+    assert "walk_skipped_binary" in diag_strict.render() # 厳格化が LIVE であることを固定
+
+
+# === GUARD 2: _walk_classified と walk_files の stage-1 パリティ（意図的複製のドリフト防止） ===
+# stage-1（os.walk 順・exclude/include・sort）と共有 stage-2（large/dedup）が一致することを固定。
+# 唯一の正当な差はバイナリ判定窓(8KiB vs 64KiB)と kind タプル。よって 8〜64KiB の窓に NUL を
+# 持つファイルを作らない（バイナリは先頭 NUL の小ファイルにする）ことで両者が完全一致する。
+
+def test_walk_classifiedとwalk_filesのstage1パリティ(tmp_path):
+    from grep_analyzer.walk import walk_files, _walk_classified
+    from grep_analyzer.diagnostics import Diagnostics
+    # ネスト/除外dir/include対象外/large/binary(先頭NUL小)/ok を含む中規模ツリー。
+    (tmp_path / "a.c").write_text("int CODE=1;\n", "utf-8")          # ok (top)
+    (tmp_path / "z.txt").write_text("note\n", "utf-8")              # include 対象外
+    sub = tmp_path / "sub"; sub.mkdir()
+    (sub / "b.c").write_text("int y=1;\n", "utf-8")                 # ok (nested)
+    deep = sub / "deep"; deep.mkdir()
+    (deep / "c.c").write_text("int z=1;\n", "utf-8")               # ok (deeper)
+    (tmp_path / "build").mkdir()
+    (tmp_path / "build" / "G.c").write_text("gen\n", "utf-8")       # excluded dir
+    (tmp_path / "big.c").write_text("x" * 5000, "utf-8")           # large → 両者除外
+    (sub / "small.bin").write_bytes(b"\x00binary")                  # 先頭NUL小 → 両者バイナリ除外
+    kw = dict(include=["*.c", "*.bin"], exclude=["**/build/**"],
+              follow_symlinks=False, max_file_bytes=1000)
+    legacy = [r for r, _ in walk_files(tmp_path, diag=Diagnostics(), **kw)]
+    classified = [r for r, _, _ in _walk_classified(tmp_path, diag=Diagnostics(), **kw)]
+    assert legacy == classified
+    # 期待: large/binary/excluded/include対象外 が落ち、ok のみ昇順で残る。
+    assert legacy == ["a.c", "sub/b.c", "sub/deep/c.c"]
