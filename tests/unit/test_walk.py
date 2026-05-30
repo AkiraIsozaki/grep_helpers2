@@ -119,3 +119,17 @@ def test_classify_utf16BOMはunsafe():
 def test_classify_純ASCIIはok():
     assert _classify_bytes(b"int CODE = 1;\n") == "ok"
 
+
+def test_collect_files_exはtotalbytesとunsafeを返す(tmp_path):
+    from grep_analyzer.walk import collect_files_ex
+    from grep_analyzer.diagnostics import Diagnostics
+    (tmp_path / "a.c").write_text("int CODE=1;\n", "utf-8")          # ok
+    (tmp_path / "u.c").write_bytes(b"\xff\xfe" + "漢=1".encode("utf-16-le"))  # unsafe
+    (tmp_path / "b.bin").write_bytes(b"x\x00y")                       # binary skip
+    files, total, unsafe = collect_files_ex(
+        tmp_path, include=[], exclude=[], follow_symlinks=False,
+        max_file_bytes=5_000_000, diag=Diagnostics())
+    rels = {r for r, _ in files}
+    assert "a.c" in rels and "u.c" in rels and "b.bin" not in rels
+    assert "u.c" in unsafe and "a.c" not in unsafe
+    assert total == (tmp_path / "a.c").stat().st_size + (tmp_path / "u.c").stat().st_size
