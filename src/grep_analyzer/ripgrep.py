@@ -13,6 +13,17 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+_MACHINE_ALIASES = {
+    "aarch64": "aarch64", "arm64": "aarch64",
+    "x86_64": "x86_64", "amd64": "x86_64", "AMD64": "x86_64",
+}
+
+
+def _normalize_machine(machine: str) -> str | None:
+    """platform.machine() の表記ゆれを同梱ディレクトリ名へ正規化（未知は None）。"""
+    return _MACHINE_ALIASES.get(machine)
+
+
 _RG = shutil.which("rg")
 
 
