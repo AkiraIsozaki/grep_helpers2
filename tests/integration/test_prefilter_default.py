@@ -1,4 +1,5 @@
 import dataclasses
+from pathlib import Path
 
 import pytest
 
@@ -84,3 +85,14 @@ def test_unsafe_utf32BOMファイルはprefilterで脱落しない(tmp_path):
     #     U.java:2 行が両者に存在する。
     assert on == off
     assert b"U.java" in off and b"indirect" in off
+
+
+def test_golden最大ケース総バイトは閾値未満():
+    """既定閾値 1GiB により golden は全て OFF 据置＝完全不変であることの番兵。"""
+    # cwd 非依存に repo root 経由で anchor（tests/integration → parents[2]＝repo root）。
+    root = Path(__file__).resolve().parents[2] / "tests" / "golden" / "cases"
+    if not root.is_dir():
+        pytest.skip("golden cases ディレクトリ不在")
+    biggest = max((sum(f.stat().st_size for f in (c / "src").rglob("*") if f.is_file())
+                   for c in root.iterdir() if (c / "src").is_dir()), default=0)
+    assert biggest < (1 << 30)
