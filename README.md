@@ -190,6 +190,7 @@ docs/superpowers/    設計 spec・実装計画・ゲート記録
 
 ## 設計ドキュメント
 
+- **アーキテクチャ概観（まずここ・横断 North Star）: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** — 入力→出力の処理フロー・モジュール責務・不変条件を図つきで俯瞰
 - マスター設計: `docs/superpowers/specs/2026-05-16-grep-analyzer-design.md`
 - Phase 3 設計: `docs/superpowers/specs/2026-05-17-grep-analyzer-phase3-design.md`
 - 実装計画: `docs/superpowers/plans/2026-05-17-grep-analyzer-phase3.md`
