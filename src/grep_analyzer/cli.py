@@ -35,9 +35,11 @@ def _make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-symbols", type=int, default=100_000, dest="max_symbols")
     parser.add_argument("--max-paths", type=int, default=1000, dest="max_paths")
     parser.add_argument("--memory-limit", type=int, default=None, dest="memory_limit_mb")
-    # rg prefilter は既定 OFF（opt-in）。実測で中規模実コードでは #1 LRU+#2 lazy parse が
-    # savings を先取り済みで利得ゼロ、密集小ファイルでは subprocess コストで微減速だったため
-    # （phase3-perf-report.md）。巨大木(>LRU 予算)向けに明示オプションとして温存する。
+    # rg prefilter は tri-state（既定 None＝閾値判定）。None なら rg 解決可能かつ総バイト
+    # ≥ --ripgrep-threshold-bytes(既定 1GiB) のとき自動 ON、それ未満は OFF（pipeline で決定）。
+    # --use-ripgrep/--no-use-ripgrep で明示上書き。中規模実コードでは #1 LRU+#2 lazy parse が
+    # savings を先取り済みで利得ゼロ〜微減速のため（phase3-perf-report.md）、巨大コーパス限定で
+    # 自動 ON にする設計。
     g = parser.add_mutually_exclusive_group()
     g.add_argument("--use-ripgrep", dest="use_ripgrep", action="store_const",
                    const=True, default=None)
