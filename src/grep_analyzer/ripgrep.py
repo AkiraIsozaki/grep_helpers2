@@ -7,6 +7,7 @@
 Related: spec §8.2
 """
 
+import hashlib
 import os
 import platform
 import shutil
@@ -46,6 +47,18 @@ def _vendored_rg_path():
         return cand if cand.is_file() else None
     except Exception:
         return None
+
+
+def _verify_sha256(rg_path) -> bool:
+    """併置 `<rg>.sha256`（16進1行）と実バイトの sha256 を照合。sidecar 不在は False。"""
+    from pathlib import Path as _P
+    side = _P(str(rg_path) + ".sha256")
+    try:
+        want = side.read_text(encoding="ascii").strip().split()[0].lower()
+        got = hashlib.sha256(_P(rg_path).read_bytes()).hexdigest()
+        return got == want
+    except (OSError, IndexError):
+        return False
 
 
 _RG = shutil.which("rg")

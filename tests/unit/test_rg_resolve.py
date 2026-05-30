@@ -32,3 +32,19 @@ def test_vendored_pathは存在する同梱を返す(tmp_path, monkeypatch):
     monkeypatch.setattr(ripgrep.platform, "machine", lambda: "aarch64")
     monkeypatch.setattr(ripgrep, "_VENDOR_ROOT", tmp_path / "vendor" / "ripgrep")
     assert ripgrep._vendored_rg_path() == vroot / "rg"
+
+
+def test_sha256照合は一致でTrue_不一致でFalse(tmp_path):
+    from grep_analyzer.ripgrep import _verify_sha256
+    import hashlib
+    binp = tmp_path / "rg"; binp.write_bytes(b"hello")
+    (tmp_path / "rg.sha256").write_text(hashlib.sha256(b"hello").hexdigest() + "\n")
+    assert _verify_sha256(binp) is True
+    (tmp_path / "rg.sha256").write_text("deadbeef\n")
+    assert _verify_sha256(binp) is False
+
+
+def test_sha256照合はsidecar不在でFalse(tmp_path):
+    from grep_analyzer.ripgrep import _verify_sha256
+    binp = tmp_path / "rg"; binp.write_bytes(b"x")
+    assert _verify_sha256(binp) is False
