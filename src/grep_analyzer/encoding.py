@@ -39,3 +39,21 @@ def decode_bytes(data: bytes, fallback_chain: list[str]) -> tuple[str, str, bool
 
     last = fallback_chain[-1]
     return data.decode(last, errors="replace"), last, True
+
+
+def decode_with_memo(memo: dict, abspath: str, data: bytes, fallback_chain):
+    """decode_bytes の純粋メモ化。memo[abspath]=(enc,replaced) を再利用し chardet を回避。
+
+    memo hit 時は保存済み (enc, replaced) で再 decode（errors ポリシーを replaced で一致させ
+    decode_bytes と同一テキストを得る）。codec 名非等価/再 decode 失敗は安全側に再計算へ降格。
+    """
+    hit = memo.get(abspath)
+    if hit is not None:
+        enc, replaced = hit
+        try:
+            return data.decode(enc, errors="replace" if replaced else "strict"), enc, replaced
+        except (LookupError, UnicodeDecodeError):
+            pass                              # codec名非等価等の保険＝再計算へ降格
+    text, enc, replaced = decode_bytes(data, fallback_chain)
+    memo[abspath] = (enc, replaced)
+    return text, enc, replaced

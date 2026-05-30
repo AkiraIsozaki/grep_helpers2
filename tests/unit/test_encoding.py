@@ -6,7 +6,9 @@ chardet の検出は短い/曖昧な入力で結果が揺れる（実測: 短い
 writing-tests.md のモック線引きに合致）。実 chardet 経路は「決して落ちない」契約のみ検証。
 """
 
-from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
+import pytest
+
+from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes, decode_with_memo
 
 
 def test_UTF8は置換なしで復号される():
@@ -40,3 +42,31 @@ def test_どの厳格復号も不可ならlatin1置換で要確認になる(monk
 def test_実chardet経路でも例外を投げない():
     text, enc, replaced = decode_bytes("日本語".encode("cp932"), DEFAULT_FALLBACK)
     assert isinstance(text, str)  # 誤検出し得るが「決して落ちない」契約のみ検証
+
+
+@pytest.mark.parametrize("raw", [
+    "abc".encode("utf-8"),
+    "日本語".encode("cp932"),
+    "日本語".encode("euc-jp"),
+    b"\xff\xfe\x80",                     # 実測: chardet が UTF-16(decode失敗)を検出→fallback の
+                                        # cp932 で復号成功 → enc=cp932, replaced=False（latin-1 ではない）
+])
+def test_decode_with_memoはdecode_bytesとバイト同値(raw):
+    memo = {}
+    want = decode_bytes(raw, DEFAULT_FALLBACK)
+    got1 = decode_with_memo(memo, "/p/x", raw, DEFAULT_FALLBACK)
+    got2 = decode_with_memo(memo, "/p/x", raw, DEFAULT_FALLBACK)   # 2回目=memo hit
+    assert got1 == want and got2 == want
+
+
+def test_decode_with_memoはhit時chardetを呼ばない(monkeypatch):
+    import grep_analyzer.encoding as enc
+    calls = {"n": 0}
+    real = enc.chardet.detect
+    monkeypatch.setattr(enc.chardet, "detect",
+                        lambda b: calls.__setitem__("n", calls["n"] + 1) or real(b))
+    memo = {}
+    raw = "あ".encode("euc-jp")          # utf-8 strict 失敗→chardet 経路
+    decode_with_memo(memo, "/p/y", raw, DEFAULT_FALLBACK)
+    decode_with_memo(memo, "/p/y", raw, DEFAULT_FALLBACK)
+    assert calls["n"] == 1               # 2回目は memo hit で chardet 非実行
