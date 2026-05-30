@@ -65,10 +65,11 @@ def run_fixedpoint_multi(states_by_kw, source_root, opts, *, files,
             if not scan_symbols or ghop > opts.max_depth:
                 break
             scan_files = files
+            union_keep = None       # prefilter が返した union keep（None＝全件走査）
             if opts.use_ripgrep:
-                keep = _rg.prefilter(source_root, rel_to_abs, scan_symbols)
-                if keep is not None:
-                    safe = keep | unsafe_rels
+                union_keep = _rg.prefilter(source_root, rel_to_abs, scan_symbols)
+                if union_keep is not None:
+                    safe = union_keep | unsafe_rels
                     scan_files = [(r, a) for r, a in files if r in safe]
             # 全 state は opts 由来の等価な budget（MemoryBudget(opts.memory_limit_mb)）を持つ＝
             # 先頭を採るのは安全。
@@ -83,21 +84,30 @@ def run_fixedpoint_multi(states_by_kw, source_root, opts, *, files,
             if nchunks > 1:
                 for st in states_by_kw.values():
                     st.diagnostics.add("automaton_split", f"hop={ghop} chunks={n_actual_chunks}")
-            # absorb は OLD run_fixedpoint と同一＝FULL pass_results を各 keyword に渡す。
-            # 単一 keyword: 逐次エンジンと byte 同値。pass_results は走査した全 relpath を
-            #   含む（found が空＝復号のみ・symbol 非ヒットの relpath も含む）。absorb_results は
-            #   symbol filter（_ingest.py:78）の手前で per-relpath 副作用（encoding_of.setdefault /
-            #   decode_replaced 診断、_ingest.py:72-76）を発火させるため、found が空でも replaced=True
-            #   なファイルの decode_replaced が保たれる。FULL pass_results を渡すことがこの同値の要。
-            # 複数 keyword: per-relpath 診断を keyword 横断で過剰報告する（他 keyword の scan 集合で
-            #   しか hit しない relpath の decode_replaced/encoding_of が全 keyword に流入＝
-            #   cross-keyword pollution）。正しい per-keyword scan-set 帰属は Phase4 Task 4 へ DEFER。
-            #   rev.2 C-2 の「any found」絞り込みは INCORRECT（走査済み・symbol 非ヒットの
-            #   replaced ファイルの decode_replaced を落とす）と判明したため撤回。Task 4 で
-            #   pipeline が実 multi-keyword 走査を配線する際に per-keyword scan-set 帰属で再設計する。
+            # per-keyword decode_replaced/encoding_of 帰属（Phase4 Task4a・rev.2 C-2）。
+            # 共有 union 走査（scan_files・automaton・復号）は global hop ごとに1回だが、
+            # absorb の per-relpath 副作用（encoding_of.setdefault / decode_replaced 診断、
+            # _ingest.py:72-76）は「逐次版 keyword K がその hop で走査したであろう relpath 集合」に
+            # 帰属させる必要がある。さもないと他 keyword の scan 集合でしか hit しない relpath の
+            # decode_replaced が全 keyword に流入する（cross-keyword pollution）。
+            #
+            # - prefilter OFF（または keep=None／非ASCII記号で全件走査）: keep_K = 走査した全 relpath
+            #   ＝FULL pass_results を渡す（U2 既定挙動。golden/tests が通る経路）。単一 keyword では
+            #   union_keep も同じく全件ゆえ FULL＝逐次版と byte 同値（regression test がロック）。
+            # - prefilter ON（union_keep が keep 集合）: keyword K 自身の scan 集合
+            #   keep_K = prefilter(K の sorted(sc|stm)) | unsafe_rels を計算し、pass_results を
+            #   keep_K の relpath に絞って渡す＝逐次版 keyword K が走査した relpath と一致。
+            #   union 走査（高価な共有復号/automaton）は1回のままで、追加コストは安価な rg keep のみ。
             for kw, st in states_by_kw.items():
                 sc, stm = per_kw[kw]
-                absorb_results(st, pass_results, sc, stm, ghop)
+                kw_results = pass_results
+                if opts.use_ripgrep and union_keep is not None:
+                    keep_k = _rg.prefilter(source_root, rel_to_abs, sorted(sc | stm))
+                    if keep_k is not None:
+                        keep_k = keep_k | unsafe_rels
+                        kw_results = [r for r in pass_results if r[0] in keep_k]
+                    # keep_k is None（非ASCII記号 → 全件走査）の場合は FULL のまま
+                absorb_results(st, kw_results, sc, stm, ghop)
             progress.hop(ghop, len(scan_symbols), len(scan_files))
             ghop += 1
         result = {kw: build_indirect_hits(st) for kw, st in states_by_kw.items()}
