@@ -249,10 +249,12 @@ git commit -m "feat(rg): sha256 照合ヘルパを追加（Phase1 Task3）"
 - Modify: `src/grep_analyzer/ripgrep.py`（`_RG = shutil.which("rg")` と `available()` を置換、`prefilter` の `_RG` 参照を解決器に）
 - Test: `tests/unit/test_rg_resolve.py`
 
-設計（spec §4.5）:
-- `_resolve_rg(env, vendored, which)`（純: 3 引数注入）→ 採用パス文字列 or None。順序 **env → 同梱 → which**。同梱採用時は sha256 照合（不一致なら同梱を捨て次候補）。採用候補は **実行可否（`os.access(X_OK)`→不可なら chmod 試行）＋ `rg --version` スモーク**を通す（`_resolve_rg` は副作用あり）。
-- `available()` は**副作用フリー**（解決結果が None でないかだけを返す。chmod/スモークを起こさない軽量版＝解決のキャッシュ参照）。
-- run 単位キャッシュ: `_resolve_rg()`（引数なしの実体）が env/vendored/which を集めて純関数 `_resolve_rg_impl` に渡し、結果を `_RG_CACHE` に保持。`_RG`（後方互換名）は `_RG_CACHE` を指す。
+設計（spec §4.5・**副作用境界を厳守**）:
+- `_resolve_rg_impl(env, vendored, which)`（純: 3 引数注入）→ 採用順 **env → 同梱 → which** の最初の非 None。テスト容易な純選択。
+- `_resolve_rg(force=False)`（**副作用あり・本番 prefilter 経路専用**）→ env/同梱(sha256照合)/which を集め、候補ごとに **実行可否（`os.access(X_OK)`→不可なら chmod）＋ `rg --version` スモーク**を適用し、最初に通った候補を run 単位キャッシュ。zip install 対応として同梱採用時は **`importlib.resources.as_file` で実体化し、その ExitStack を run 寿命で保持**（毎回再実体化しない）。
+- **`available()` は副作用フリー**（spec §4.5 厳守）: chmod もスモーク（subprocess）も起こさず、「env 設定あり or 同梱パス `is_file` or `shutil.which` 非 None」の**存在判定のみ**。conftest gate（collection・read-only）がこれを呼んでも同梱バイナリ mode を書き換えない。`available()=True` でも prefilter の `_resolve_rg()` がスモーク失格で None になり得る（available は gate ヒント、prefilter が権威）点を docstring に明記。
+- `_RG` 死変数は持たない（誰も読まない名は作らない）。制御点は `_resolve_rg`/`available` のみ。
+- **test 間汚染防止**: `_resolve_rg` のキャッシュ（`_RG_RESOLVED`/`_RG_CACHE`）を毎テストでリセットする autouse fixture を `tests/conftest.py` に追加（`ripgrep._RG_RESOLVED=False`）。
 
 - [ ] **Step 1: Write the failing test**
 
@@ -311,7 +313,7 @@ def _smoke_ok(rg_path) -> bool:
 
 def _resolve_rg(force: bool = False):
     """env→同梱(sha256照合)→which の順で実行可能な rg を解決（run 単位キャッシュ・副作用あり）。"""
-    global _RG_CACHE, _RG_RESOLVED, _RG
+    global _RG_CACHE, _RG_RESOLVED
     if _RG_RESOLVED and not force:
         return _RG_CACHE
     env = os.environ.get(_GREP_ANALYZER_RG_ENV) or None
@@ -320,25 +322,33 @@ def _resolve_rg(force: bool = False):
     if vendored is not None and not _verify_sha256(vendored):
         vendored = None
     which = shutil.which("rg")
-    # 候補を順に実行スモーク。失格なら次へ。
-    for cand in (env, str(vendored) if vendored else None, which):
-        if cand and _smoke_ok(cand):
-            _RG_CACHE = cand
+    cand = _resolve_rg_impl(env, str(vendored) if vendored else None, which)
+    # 候補が失格なら次候補へ（純選択を残り候補で再評価）。
+    pool = [env, str(vendored) if vendored else None, which]
+    _RG_CACHE = None
+    for c in pool:
+        if c and _smoke_ok(c):
+            _RG_CACHE = c
             break
-    else:
-        _RG_CACHE = None
     _RG_RESOLVED = True
-    _RG = _RG_CACHE
     return _RG_CACHE
 
 
 def available() -> bool:
-    """rg が解決でき実行可能か（解決キャッシュ参照・副作用は初回 _resolve_rg に集約）。"""
-    return _resolve_rg() is not None
+    """rg が解決可能か（**副作用フリー**＝存在判定のみ。chmod/スモークを起こさない）。
 
-
-_RG = None                # 後方互換: prefilter は _resolve_rg() を直接呼ぶ
+    True でも prefilter 経路の _resolve_rg() がスモーク失格で None になり得る
+    （available は gate ヒント、prefilter が権威）。spec §4.5 準拠で collection
+    フェーズから安全に呼べる。
+    """
+    if os.environ.get(_GREP_ANALYZER_RG_ENV):
+        return True
+    if _vendored_rg_path() is not None:
+        return True
+    return shutil.which("rg") is not None
 ```
+
+> `_smoke_ok` 内の `as_file` 実体化（同梱パスが Traversable の場合）は `_resolve_rg` 側で `contextlib.ExitStack` を **モジュールグローバルに保持**して行う（run 寿命）。通常ディレクトリ install では `_vendored_rg_path()` が実 Path を返すため as_file は no-op 同然。
 
 `prefilter()` 冒頭の `if _RG is None: return None` を `rg = _resolve_rg()` に変更し以降 `rg` を使用:
 
@@ -646,7 +656,8 @@ Expected: FAIL（`scripts/probe_candidates.py` 不在）
 import argparse
 from pathlib import Path
 
-from grep_analyzer.chase import extract_chase_symbols
+from grep_analyzer.chase import extract_chase_symbols, extract_chase_symbols_tree
+from grep_analyzer.classifiers import _AST_CHASERS
 from grep_analyzer.dispatch import detect_language, detect_shell_dialect
 from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
 from grep_analyzer.ingest import parse_grep_line
@@ -656,8 +667,14 @@ import os
 
 
 def compute_initial_union(input_dir: Path, source_root: Path) -> set[str]:
-    """全 .grep のヒット行から初回 chase∪terminal 記号（stoplist 適用後）を算出。"""
-    policy = SymbolPolicy(min_specificity=2, stop=frozenset())
+    """全 .grep のヒット行から初回 chase∪terminal 記号（stoplist 適用後）を算出。
+
+    AST 言語（java/c/typescript 等＝_AST_CHASERS）はファイル全文＋lineno で
+    `extract_chase_symbols_tree`、行ベース言語（shell/sql/perl/groovy）は
+    `extract_chase_symbols` を使う（dispatch の二経路に追従）。本体不動点との
+    完全一致は要さない概算で良い。
+    """
+    policy = SymbolPolicy(min_specificity=2, user_stoplist=frozenset())
     union: set[str] = set()
     for grep_file in sorted(Path(input_dir).glob("*.grep")):
         for raw in grep_file.read_bytes().split(b"\n"):
@@ -672,10 +689,13 @@ def compute_initial_union(input_dir: Path, source_root: Path) -> set[str]:
             except OSError:
                 continue
             language = detect_language(relpath, text[:4096], {})
-            dialect = (detect_shell_dialect(relpath, text[:4096])
-                       if language == "shell" else "bourne")
-            content = content_b.decode("utf-8", errors="replace")
-            cs = extract_chase_symbols(language, dialect, content)
+            if language in _AST_CHASERS:
+                cs = extract_chase_symbols_tree(language, text, lineno)
+            else:
+                dialect = (detect_shell_dialect(relpath, text[:4096])
+                           if language == "shell" else "bourne")
+                content = content_b.decode("utf-8", errors="replace")
+                cs = extract_chase_symbols(language, dialect, content)
             part = partition(cs, language, policy)
             union |= set(part.chase) | set(part.terminal)
     return union
@@ -731,7 +751,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-> 注: `SymbolPolicy`/`partition` のシグネチャは実装に合わせる（Task 実行時に `src/grep_analyzer/stoplist.py` を確認し引数名を一致させる。`stop=frozenset()` は --stoplist 無し相当）。プローブは概算で良く、本体の不動点と完全一致は要しない。
+> 注（実 API・確認済）: `SymbolPolicy(min_specificity:int, user_stoplist:frozenset[str])`、`partition(chase_symbols:ChaseSymbols, language:str, policy)->Partition(chase:list, terminal:list, rejected)`、`extract_chase_symbols(language, dialect, line)`、`extract_chase_symbols_tree(language, text, lineno)`、`_AST_CHASERS`（`grep_analyzer.classifiers`）。プローブは概算で良く本体不動点との完全一致は要しない。
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -775,6 +795,138 @@ git tag -a phase1-rg-probe -m "Phase1: rg 解決・同梱・プローブ完了"
 - **プレースホルダ**: `PIN_*_TARBALL_SHA256` のみ意図的な「オンライン取得時に確定」値（Task 6 Step 6 で実値化を明示）。他は実コード。
 - **型整合**: `_resolve_rg`/`_resolve_rg_impl`/`available`/`_vendored_rg_path`/`_verify_sha256`/`_normalize_machine` の名称・引数は全 Task で一貫。`prefilter` は `_resolve_rg()` を使用。
 - **未配備依存**: プローブの `SymbolPolicy`/`partition`/`extract_chase_symbols` は実装に追従（Task 7 注記）。本体は非変更。
+
+---
+
+## rev.2 補遺（計画レビュー第1ラウンド反映・上記タスクへの確定修正）
+
+以下は上記 Task に**上書き適用**する確定事項（レビュー Critical/High）。実装者はこれを優先する。
+
+### A. Task4 異常系テストの追加（H3）— `tests/unit/test_rg_resolve.py` に追記
+
+```python
+def test_resolve_sha256不一致で同梱を捨てwhichへ(tmp_path, monkeypatch):
+    from grep_analyzer import ripgrep
+    monkeypatch.setattr(ripgrep, "_RG_RESOLVED", False)
+    v = tmp_path / "aarch64" / "rg"; v.parent.mkdir(parents=True)
+    v.write_bytes(b"#!/bin/sh\nexit 0\n"); v.chmod(0o755)
+    (tmp_path / "aarch64" / "rg.sha256").write_text("deadbeef\n")   # 故意に不一致
+    monkeypatch.setattr(ripgrep, "_VENDOR_ROOT", tmp_path)
+    monkeypatch.setattr(ripgrep.platform, "machine", lambda: "aarch64")
+    monkeypatch.setattr(ripgrep.shutil, "which", lambda _: "/usr/bin/rg")
+    monkeypatch.setattr(ripgrep, "_smoke_ok", lambda p: p == "/usr/bin/rg")
+    assert ripgrep._resolve_rg(force=True) == "/usr/bin/rg"  # 同梱は sha 不一致で捨て which
+
+
+def test_resolve_smoke失格で次候補へ(tmp_path, monkeypatch):
+    from grep_analyzer import ripgrep
+    monkeypatch.setattr(ripgrep, "_RG_RESOLVED", False)
+    monkeypatch.setattr(ripgrep, "_vendored_rg_path", lambda: None)
+    monkeypatch.setenv("GREP_ANALYZER_RG", "/broken/rg")
+    monkeypatch.setattr(ripgrep.shutil, "which", lambda _: "/usr/bin/rg")
+    monkeypatch.setattr(ripgrep, "_smoke_ok", lambda p: p == "/usr/bin/rg")  # env は失格
+    assert ripgrep._resolve_rg(force=True) == "/usr/bin/rg"
+
+
+def test_sha256_sidecar破損はFalse(tmp_path):
+    from grep_analyzer.ripgrep import _verify_sha256
+    b = tmp_path / "rg"; b.write_bytes(b"x")
+    (tmp_path / "rg.sha256").write_text("")          # 空＝split()[0] IndexError→False
+    assert _verify_sha256(b) is False
+
+
+def test_available副作用フリー_smokeを呼ばない(monkeypatch, tmp_path):
+    from grep_analyzer import ripgrep
+    called = {"smoke": 0}
+    monkeypatch.setattr(ripgrep, "_smoke_ok",
+                        lambda p: called.__setitem__("smoke", called["smoke"] + 1) or True)
+    monkeypatch.setenv("GREP_ANALYZER_RG", "/x/rg")
+    assert ripgrep.available() is True
+    assert called["smoke"] == 0                       # available は smoke を起こさない
+```
+
+### B. test 間汚染リセット fixture（H4）— `tests/conftest.py` に追加
+
+```python
+@pytest.fixture(autouse=True)
+def _reset_rg_cache():
+    from grep_analyzer import ripgrep
+    ripgrep._RG_RESOLVED = False
+    ripgrep._RG_CACHE = None
+    yield
+```
+
+### C. Task5 Step1 のトートロジーテストを削除
+
+`test_conftest_gateはavailableを使う`（自分で差し替えた lambda を呼ぶだけ＝無価値）は**削除**。conftest 等価性は Task5 Step4 の全回帰で担保する。
+
+### D. Task6 fetch のライセンス・PIN・abort 強化（C2/H1/H2）— `scripts/fetch_ripgrep.py`
+
+```python
+# _fetch_one 内：LICENSE は MIT/UNLICENSE の両方を取得し、欠ければ abort
+mit = next((m for m in tf.getmembers() if m.name.endswith("LICENSE-MIT")), None)
+unl = next((m for m in tf.getmembers() if m.name.endswith("UNLICENSE")), None)
+if mit is None or unl is None:
+    raise ValueError(f"{arch}: LICENSE-MIT/UNLICENSE が tarball に揃っていない")
+(outdir / "LICENSE-MIT").write_bytes(tf.extractfile(mit).read())
+(outdir / "UNLICENSE").write_bytes(tf.extractfile(unl).read())
+
+# __main__ 冒頭：PIN 未充填なら取得前に即 abort（vendor 空配備の静かな無効化を防ぐ）
+for arch, (_, sha, _) in TARGETS.items():
+    if sha.startswith("PIN_"):
+        raise SystemExit(f"{arch}: sha256 が未充填（PIN_...）。オンラインで実値を埋めてから実行")
+```
+package-data も `LICENSE-MIT`/`UNLICENSE` に更新。`.gitattributes` は分離:
+```
+src/grep_analyzer/vendor/ripgrep/*/rg                      binary
+src/grep_analyzer/vendor/ripgrep/*/rg.sha256              -text
+src/grep_analyzer/vendor/ripgrep/*/LICENSE-MIT            -text
+src/grep_analyzer/vendor/ripgrep/*/UNLICENSE              -text
+```
+
+### E. 新 Task 9: wheel 同梱検証＋配備プロファイルゲート（C4/C2）— `tests/integration/test_vendor_packaging.py`
+
+```python
+import subprocess, sys, zipfile, glob
+from pathlib import Path
+
+
+def test_vendorバイナリが存在すればwheelに同梱される(tmp_path):
+    """vendor に rg があるときのみ実行（無ければ skip）。build→wheel 展開で同梱を確認。"""
+    import pytest
+    if not glob.glob("src/grep_analyzer/vendor/ripgrep/*/rg"):
+        pytest.skip("vendor バイナリ未配置（fetch_ripgrep 未実行）")
+    subprocess.run([sys.executable, "-m", "build", "--wheel", "-o", str(tmp_path)],
+                   check=True)
+    whl = sorted(tmp_path.glob("*.whl"))[-1]
+    with zipfile.ZipFile(whl) as z:
+        names = z.namelist()
+    assert any(n.endswith("/rg") and "vendor/ripgrep/" in n for n in names)
+    assert any(n.endswith("/rg.sha256") for n in names)
+
+
+def test_配備プロファイル_rg不在かつvendor空ならprefilter無効を検知(monkeypatch):
+    """配備機(rg 不在)で vendor 空だと prefilter が恒久無効＝目標未達に静かに転落する。
+    この『静かな無効化』を検知する番兵（vendor 配置忘れの早期警告）。"""
+    from grep_analyzer import ripgrep
+    monkeypatch.setattr(ripgrep, "_RG_RESOLVED", False)
+    monkeypatch.setattr(ripgrep, "_vendored_rg_path", lambda: None)
+    monkeypatch.setattr(ripgrep.shutil, "which", lambda _: None)
+    monkeypatch.delenv("GREP_ANALYZER_RG", raising=False)
+    assert ripgrep.available() is False        # この状態が配備に出たら prefilter 全無効
+```
+
+`requires_ripgrep` ではなく通常テスト（vendor 有無で自己 skip）。commit は Task6 と同じ。
+
+### F. spec 追従（H1/H4）
+
+spec §4.5/§7-6 のテスト項目名を実装に合わせ `_resolve_rg_impl(env,vendored,which)`＋`_normalize_machine`＋`_resolve_rg()`＋`available()`副作用フリーへ改訂し、「rg は requirements.lock 供給網外＝`rg.sha256` が唯一の完全性保証」を §4.1/§4.5 に明記（別コミット）。
+
+### G. Goal/ハンドオフの正直化
+
+**Phase1 完了＝「rg 解決・検証・プローブの仕組みが揃う」であって、実バイナリ同梱の完了ではない**（Task6 Step6 はネット環境での人手手順）。配備には fetch 実行＋vendor コミットが必須。Task9 の配備プロファイル番兵がこの忘れを検知する。
+
+---
 
 ## 実行ハンドオフ
 
