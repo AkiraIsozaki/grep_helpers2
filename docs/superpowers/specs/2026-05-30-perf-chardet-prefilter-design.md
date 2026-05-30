@@ -90,6 +90,8 @@ while any(st.chase_active or st.terminal_active for st in states):
 
 **走査回数**: グローバル hop 数（≈7）に圧縮。keyword 倍が消える。複数 keyword が同一ファイルを参照しても**デコード・パース・automaton 走査は1回**。
 
+> **prefilter の rg は供給網外（§4.5 と整合）**: ここで使う rg は `requirements.lock` の供給網の**外**にある同梱バイナリであり、その完全性は同梱 `rg.sha256` sidecar のみが保証する（lock の hash ピン対象外）。詳細は §4.5。
+
 #### 決定性の要石＝automaton 単調性（検証済み）
 
 ロックステップ共有の唯一かつ最大の前提: **automaton に記号を追加しても、既存記号のヒット集合は不変**。`automaton.py:35` は `iter()`（最長一致でなく**全一致**）を使い `set` 集約後 `sorted()`、語境界判定は**位置のみ**に依存（`:36-39`）。よって記号 X のヒット位置集合は automaton が `{X}` でも `{X,Y,Z,…}`（union）でも同一。**∴ union 走査して keyword 別にフィルタした結果＝各 keyword を単独走査した結果（バイト一致）**。これは union scan・nchunks 分割・resume 部分集合の安全性すべての基盤であり、Inv として明記する（pyahocorasick 2.1.0→2.3.1 で出力 byte 不変＝実機検証済の既存事実とも整合）。
@@ -178,10 +180,11 @@ def decode_with_memo(memo, abspath, raw, fallback):
 
 - **配置はパッケージ内**: `src/grep_analyzer/vendor/ripgrep/{aarch64,x86_64}/rg`（ルート `vendor/` は non-editable install/wheel で消えるため不可）。`pyproject.toml` の `[tool.setuptools.package-data]` で同梱、解決は **`importlib.resources`**（`__file__` 相対は zip-safe でない）。zip install では実体パスが無いため **`importlib.resources.as_file()` で run 単位に1回だけ実体化**しコンテキストを run 全体で保持（毎 prefilter で再実体化しない）。
 - **取得の供給網**: `scripts/fetch_ripgrep.py`（`gen_requirements_lock.py` と同作法＝版・URL・**期待 sha256 をスクリプト内ピン**→DL→hash 照合→配置→LICENSE 取得）。**ripgrep 14.1.1 固定**。README にオンライン再生成・オフライン再現手順。
-- **起動前検証**: 同梱 rg の **sha256 を照合**（`rg.sha256` 併置）。**照合は `_resolve_rg` 内で run 単位に1回**、解決済みパスをキャッシュ（毎 prefilter で再計算しない）。不一致は同梱を捨て which フォールバック＋診断。env `GREP_ANALYZER_RG` 指定は運用者責任で検証バイパス（信頼境界を文書化）。
-- **解決の関数化**: `_resolve_rg(env, machine, which)` に切り出し**遅延評価**。順序は **env → 同梱（`machine` 正規化後）→ `shutil.which`**。`platform.machine()` 正規化辞書 `{aarch64,arm64→aarch64; x86_64,amd64,AMD64→x86_64}`、未知 arch は同梱スキップ。
-- **実行可否**: `_resolve_rg`（解決・**副作用あり**）で `os.access(X_OK)`→不可なら `chmod 0o755` 試行→不可なら次候補。`rg --version` rc=0 スモークまで含める（壊れ/非実行バイナリが prefilter を黙って None に落とし全走査＝目標未達に転落するのを防ぐ）。
-- **`available()` は副作用フリー**（存在と可否判定のみ・chmod を試みない）。conftest gate はこれを使う（collection という read-only フェーズで同梱バイナリの mode を書き換えない）。chmod を伴う解決は本番経路の `_resolve_rg` 側に限定。
+- **供給網外＝sha256 が唯一の完全性保証**: rg は wheel/pip 経路を通らず `requirements.lock` の供給網の**外**にある。よって同梱 `rg.sha256`（sidecar）が rg バイナリの**唯一の完全性保証**であり、`requirements.lock` の hash ピンでは担保されない。
+- **起動前検証**: 同梱 rg の **sha256 を照合**（`_verify_sha256` が併置 `rg.sha256` sidecar の16進1行と実バイトを照合）。これは§4.5 冒頭のとおり **rg が供給網外ゆえ唯一の完全性保証**。**照合は `_resolve_rg` 内で run 単位に1回**、解決済みパスをキャッシュ（毎 prefilter で再計算しない）。不一致は同梱を捨て which フォールバック。env `GREP_ANALYZER_RG` 指定は運用者責任で検証バイパス（信頼境界を文書化）。
+- **解決の関数化（純選択＝3引数注入）**: `_resolve_rg_impl(env, vendored, which)` が**純関数**として採用順 **env → 同梱 → `shutil.which`** で最初の非 None を返す（順序の単一情報源は `_rg_candidates(env, vendored, which)`＝None 除外リスト）。同梱パスは `_vendored_rg_path()`（`importlib.resources` / `_VENDOR_ROOT` 経由）、arch 正規化は `_normalize_machine(machine)`（`_MACHINE_ALIASES` 辞書 `{aarch64,arm64→aarch64; x86_64,amd64,AMD64→x86_64}`、未知 arch は None＝同梱スキップ）。
+- **実行可否**: `_resolve_rg(force=False)`（解決・**副作用あり**・run 単位キャッシュ）が env→同梱（sha256 照合済）→which の各候補を順に `_smoke_ok` に通す。`_smoke_ok(rg_path)` が **唯一の副作用 exec/chmod 地点**＝`os.access(X_OK)`→不可なら `chmod 0o755` 試行→`rg --version`（timeout=5）rc=0 スモーク（壊れ/非実行バイナリが prefilter を黙って None に落とし全走査＝目標未達に転落するのを防ぐ）。`prefilter` 経路のみが `_resolve_rg` を呼ぶ。
+- **`available()` は副作用フリー**（**存在判定のみ**＝env 設定済み or 同梱が `is_file()` or `shutil.which` 非 None。chmod/スモークを一切起こさない）。これは **gate ヒント**であり権威ではない（True でも `_resolve_rg` がスモーク失格で None になり得る＝prefilter の `_resolve_rg` が権威）。conftest gate はこれを使う（collection という read-only フェーズで同梱バイナリの mode を書き換えない）。chmod を伴う解決は本番経路の `_resolve_rg`/`_smoke_ok` 側に限定。
 - **`.gitattributes`**: `src/grep_analyzer/vendor/ripgrep/** -text` と binary 指定。実行ビットは fetch スクリプトが付与（git filemode 依存を避ける）。LICENSE は MIT/UNLICENSE デュアルを同梱。
 - **テスト gate 統一**: `tests/conftest.py` の `requires_ripgrep` gate を `shutil.which` 直叩きから **`ripgrep.available()`（本番と同一解決順）に一本化**（配備機＝同梱rgのみで実使用経路が全 skip される死角を解消）。
 
@@ -232,7 +235,7 @@ worker が返す `(enc, replaced)` は bytes の純関数。memo 状態（charde
 3. keyword 横断共有: 複数 keyword で同一ファイルが direct/indirect に出ても chardet 1回（直列 spy）。**direct/indirect・keyword 順を変えても encoding 列が同値**（順序非依存）。
 4. **並列は spy でなく配線＋バイト一致で検証**: (a) worker ローカル memo が hop 間で効く配線、(b) 出力が jobs=1 とバイト一致（既存 jobs2 golden ハーネスが担保＝新規は配線確認のみ）。
 5. **ロックステップ ⇔ 逐次の keyword 別 TSV バイト一致**（新規の中核回帰）。複数 keyword・多ホップで、共有エンジン出力が「1 keyword ずつ逐次実行」と各 keyword でバイト一致。
-6. rg 解決順: `_resolve_rg(env, machine, which)` を3引数注入で単体（実bin/実FS不要）。env→同梱→which、`platform.machine` 正規化、実行ビット欠落フォールバック、sha256 不一致フォールバック。`available()` のスモーク。
+6. rg 解決順: **純選択 `_resolve_rg_impl(env, vendored, which)` を3引数注入で単体**（実bin/実FS不要）＝env→同梱→which 順。`_normalize_machine` の `platform.machine` 正規化（alias→正規名・未知は None）。`_smoke_ok` 経由の実行ビット欠落フォールバック、`_verify_sha256` 不一致フォールバックは `_resolve_rg`（副作用あり）で検証。**`available()` は副作用フリー**＝存在判定のみを assert（スモーク/chmod を起こさないこと、env/同梱/which 各経路で True を返すこと）。
 7. prefilter 閾値: effective 値と `prefilter` 呼出を観測。総バイト ≥ 閾値で自動ON・未満OFF・明示上書き・rg不在OFF。**`--ripgrep-threshold-bytes` 極小化で1GiB実生成不要**。総バイト集計関数は `stat` monkeypatch で単離検証。
 8. **chardet 回数の決定的ロック（ゲート対象・cp932 コーパス）**: cp932 合成コーパス（全ファイル utf-8 strict 失敗かつ ASCII 記号でヒット）で **chardet 呼び出し回数 ≤ ユニークファイル数** を assert。これが「ユニーク×1回」と #3 再撤回防止の**恒久ガード**（dt でなく回数＝環境非依存）。
 
@@ -277,7 +280,7 @@ worker が返す `(enc, replaced)` は bytes の純関数。memo 状態（charde
 - `src/grep_analyzer/fixedpoint/__init__.py`: ロックステップ駆動（複数 ChaseState・union 走査・per-keyword 吸収）。
 - `src/grep_analyzer/fixedpoint/_finalize.py`: 再 read を memo 経由に。
 - `src/grep_analyzer/pipeline.py`: keyword 群の一括 seed・ロックステップ呼び出し・direct 経路 memo・resume 除外。
-- `src/grep_analyzer/ripgrep.py`: `_resolve_rg` 関数化、env→同梱→which、machine 正規化、sha256/exec スモーク、安全条件（非ASCII透過/未知は除外しない）。
+- `src/grep_analyzer/ripgrep.py`: 純選択 `_resolve_rg_impl(env, vendored, which)`＋副作用ありの `_resolve_rg(force)`、`_normalize_machine`、`_verify_sha256`/`_smoke_ok`、副作用フリー `available()`、env→同梱→which、安全条件（非ASCII透過/未知は除外しない）。
 - `src/grep_analyzer/walk.py`: 総バイト集計の確定スナップショット出力。（walk 高速化は §8 の判断次第）
 - `src/grep_analyzer/cli.py`: prefilter tri-state＋閾値＋`--ripgrep-threshold-bytes`。
 - `src/grep_analyzer/vendor/ripgrep/{aarch64,x86_64}/rg`＋`rg.sha256`＋`LICENSE`、`scripts/fetch_ripgrep.py`、`pyproject.toml` package-data、`.gitattributes`。
