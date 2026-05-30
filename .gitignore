@@ -6,3 +6,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 *.egg-info/
+
+# Claude Code worktrees (harness-managed, never commit)
+.claude/worktrees/
