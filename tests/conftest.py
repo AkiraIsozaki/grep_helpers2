@@ -13,10 +13,18 @@ def pytest_configure(config):
         "markers", "requires_ripgrep: 実 ripgrep を要する（無ければ skip）")
 
 
+@pytest.fixture(autouse=True)
+def _reset_rg_cache():
+    from grep_analyzer import ripgrep
+    ripgrep._RG_RESOLVED = False
+    ripgrep._RG_CACHE = None
+    yield
+
+
 def pytest_collection_modifyitems(config, items):
     import re
-    import shutil
-    rg = shutil.which("rg") is not None
+    from grep_analyzer import ripgrep
+    rg = ripgrep.available()
     markexpr = config.getoption("markexpr") or ""        # -m の式（"-m" でなく markexpr）
     # "perf" がトークンとして式に現れるか（"not perf" 等の部分文字列誤判定回避）。
     perf_selected = bool(re.search(r"\bperf\b", markexpr))
