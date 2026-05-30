@@ -59,6 +59,23 @@ def test_decode_with_memoはdecode_bytesとバイト同値(raw):
     assert got1 == want and got2 == want
 
 
+def test_decode_with_memoはreplaced経路もhitで同値(monkeypatch):
+    """replaced=True（latin-1 置換）の hit 経路を決定的に固定する。
+
+    chardet を None に stub し \x81 を必ず latin-1 置換へ落とす（chardet の揺れに依存しない）。
+    memo hit 時の errors='replace' 再 decode が decode_bytes と同一テキストを返すことを確認。
+    """
+    monkeypatch.setattr(
+        "grep_analyzer.encoding.chardet.detect", lambda b: {"encoding": None})
+    raw = b"\x81"
+    want = decode_bytes(raw, DEFAULT_FALLBACK)
+    assert want[2] is True                                        # replaced=True 経路を踏む
+    memo = {}
+    got1 = decode_with_memo(memo, "/p/z", raw, DEFAULT_FALLBACK)  # miss
+    got2 = decode_with_memo(memo, "/p/z", raw, DEFAULT_FALLBACK)  # hit（errors=replace 再現）
+    assert got1 == want and got2 == want
+
+
 def test_decode_with_memoはhit時chardetを呼ばない(monkeypatch):
     import grep_analyzer.encoding as enc
     calls = {"n": 0}
