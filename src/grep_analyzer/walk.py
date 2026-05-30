@@ -66,6 +66,21 @@ def _is_binary(path: Path) -> bool:
         return b"\x00" in f.read(8192)
 
 
+_PREFIX = 64 * 1024
+# UTF-32 BOM を UTF-16 より先に判定（\xff\xfe は UTF-32-LE BOM の接頭辞のため順序重要）。
+_BOMS = (b"\x00\x00\xfe\xff", b"\xff\xfe\x00\x00", b"\xff\xfe", b"\xfe\xff")
+
+
+def _classify_bytes(head: bytes) -> str:
+    """先頭バイト列を 'binary'(NUL) / 'unsafe'(UTF-16/32 BOM=非ASCII透過) / 'ok' に分類。"""
+    for bom in _BOMS:
+        if head.startswith(bom):
+            return "unsafe"
+    if b"\x00" in head:
+        return "binary"
+    return "ok"
+
+
 def walk_files(
     root: Path, *, include: list[str], exclude: list[str],
     follow_symlinks: bool, max_file_bytes: int, diag: Diagnostics,
@@ -126,3 +141,4 @@ def collect_files(
     return list(walk_files(
         root, include=include, exclude=exclude, follow_symlinks=follow_symlinks,
         max_file_bytes=max_file_bytes, diag=diag))
+
