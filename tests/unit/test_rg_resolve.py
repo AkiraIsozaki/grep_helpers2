@@ -16,3 +16,19 @@ def test_machine正規化はx86系をx86_64に():
 
 def test_machine正規化は未知archでNone():
     assert _normalize_machine("riscv64") is None
+
+
+def test_vendored_pathは未知archでNone(monkeypatch):
+    from grep_analyzer import ripgrep
+    monkeypatch.setattr(ripgrep.platform, "machine", lambda: "riscv64")
+    assert ripgrep._vendored_rg_path() is None
+
+
+def test_vendored_pathは存在する同梱を返す(tmp_path, monkeypatch):
+    from grep_analyzer import ripgrep
+    vroot = tmp_path / "vendor" / "ripgrep" / "aarch64"
+    vroot.mkdir(parents=True)
+    (vroot / "rg").write_bytes(b"#!/bin/sh\n")
+    monkeypatch.setattr(ripgrep.platform, "machine", lambda: "aarch64")
+    monkeypatch.setattr(ripgrep, "_VENDOR_ROOT", tmp_path / "vendor" / "ripgrep")
+    assert ripgrep._vendored_rg_path() == vroot / "rg"

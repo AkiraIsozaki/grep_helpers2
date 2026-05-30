@@ -8,9 +8,11 @@ Related: spec §8.2
 """
 
 import os
+import platform
 import shutil
 import subprocess
 import tempfile
+from importlib.resources import files as _ir_files
 from pathlib import Path
 
 _MACHINE_ALIASES = {
@@ -22,6 +24,28 @@ _MACHINE_ALIASES = {
 def _normalize_machine(machine: str) -> str | None:
     """platform.machine() の表記ゆれを同梱ディレクトリ名へ正規化（未知は None）。"""
     return _MACHINE_ALIASES.get(machine)
+
+
+def _default_vendor_root():
+    try:
+        return _ir_files("grep_analyzer") / "vendor" / "ripgrep"
+    except Exception:
+        return None
+
+
+_VENDOR_ROOT = _default_vendor_root()
+
+
+def _vendored_rg_path():
+    """現 arch の同梱 rg のパス（存在すれば）。未知 arch / 不在は None。"""
+    arch = _normalize_machine(platform.machine())
+    if arch is None or _VENDOR_ROOT is None:
+        return None
+    cand = _VENDOR_ROOT / arch / "rg"
+    try:
+        return cand if cand.is_file() else None
+    except Exception:
+        return None
 
 
 _RG = shutil.which("rg")
