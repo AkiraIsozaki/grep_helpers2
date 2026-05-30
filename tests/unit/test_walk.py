@@ -133,3 +133,21 @@ def test_collect_files_exはtotalbytesとunsafeを返す(tmp_path):
     assert "a.c" in rels and "u.c" in rels and "b.bin" not in rels
     assert "u.c" in unsafe and "a.c" not in unsafe
     assert total == (tmp_path / "a.c").stat().st_size + (tmp_path / "u.c").stat().st_size
+
+
+def test_collect_files_exはlargeを除外しtotalに含めずbinary診断を発火(tmp_path):
+    from grep_analyzer.walk import collect_files_ex
+    from grep_analyzer.diagnostics import Diagnostics
+    (tmp_path / "ok.c").write_text("int CODE=1;\n", "utf-8")
+    (tmp_path / "big.c").write_text("x" * 5000, "utf-8")              # max 超で除外
+    (tmp_path / "b.bin").write_bytes(b"x\x00y")                       # binary skip
+    diag = Diagnostics()
+    files, total, unsafe = collect_files_ex(
+        tmp_path, include=[], exclude=[], follow_symlinks=False,
+        max_file_bytes=1000, diag=diag)
+    rels = {r for r, _ in files}
+    assert rels == {"ok.c"}                                          # large/binary は脱落
+    assert total == (tmp_path / "ok.c").stat().st_size               # large は total に含めない
+    rendered = diag.render(detail_limit=1000, exempt=frozenset())
+    assert "walk_skipped_large" in rendered and "big.c" in rendered  # large 診断
+    assert "walk_skipped_binary" in rendered and "b.bin" in rendered # binary 診断

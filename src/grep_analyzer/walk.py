@@ -67,12 +67,16 @@ def _is_binary(path: Path) -> bool:
 
 
 _PREFIX = 64 * 1024
-# UTF-32 BOM を UTF-16 より先に判定（\xff\xfe は UTF-32-LE BOM の接頭辞のため順序重要）。
+# UTF-16/32 BOM はいずれも "unsafe" を返すため並び順は分類結果に影響しないが、
+# UTF-32-LE(\xff\xfe\x00\x00) を UTF-16-LE(\xff\xfe) より前に置いて意図を明示する。
 _BOMS = (b"\x00\x00\xfe\xff", b"\xff\xfe\x00\x00", b"\xff\xfe", b"\xfe\xff")
 
 
 def _classify_bytes(head: bytes) -> str:
-    """先頭バイト列を 'binary'(NUL) / 'unsafe'(UTF-16/32 BOM=非ASCII透過) / 'ok' に分類。"""
+    """先頭バイト列を 'binary'(NUL) / 'unsafe'(UTF-16/32 BOM=非ASCII透過) / 'ok' に分類。
+
+    NUL 走査は _PREFIX(64KiB) 全域＝_is_binary の 8KiB より厳格（_walk_classified 専用）。
+    """
     for bom in _BOMS:
         if head.startswith(bom):
             return "unsafe"
@@ -151,6 +155,8 @@ def _walk_classified(
 
     kind ∈ {"ok","unsafe"}。binary は walk_skipped_binary でスキップ（既存パスと同一キー）。
     順序・large/symlink/dedup/exclude/include 処理は walk_files と同一（既存 walk_files は不変）。
+    NOTE: stage-1（候補収集）は walk_files の複製。walk_files を正本とし、片方を直す際は
+    両者を同期させること（rev.2 C1/C2 で walk_files 無改変のため意図的に複製）。
     """
     root = Path(root)
     seen_real: dict[str, str] = {}
