@@ -4,8 +4,19 @@ from pathlib import Path
 import pytest
 
 from grep_analyzer.diagnostics import Diagnostics
+from grep_analyzer.fixedpoint import run_fixedpoint
 from grep_analyzer.pipeline import _default_opts, _effective_use_ripgrep, run
 from grep_analyzer.walk import collect_files_ex
+
+
+def test_run_fixedpoint_files_none併用unsafe_relsは禁止(tmp_path):
+    """files=None（walk フォールバック）は unsafe 救済を適用しないため、
+    unsafe_rels との併用は ValueError で早期に弾く（取りこぼし footgun 防止）。"""
+    src = tmp_path / "src"; src.mkdir()
+    with pytest.raises(ValueError):
+        run_fixedpoint(
+            [], src, _default_opts(), Diagnostics(),
+            files=None, unsafe_rels={"x"})
 
 
 def test_effective_明示優先(monkeypatch):
@@ -22,6 +33,50 @@ def test_effective_既定は閾値とrg可否(monkeypatch):
     assert _effective_use_ripgrep(None, total_bytes=(1 << 30) - 1, threshold=1 << 30) is False
     monkeypatch.setattr(ripgrep, "available", lambda: False)
     assert _effective_use_ripgrep(None, total_bytes=10**12, threshold=1 << 30) is False
+
+
+def _diag_text(out_dir: Path) -> str:
+    return (out_dir / "diagnostics.txt").read_text(encoding="utf-8")
+
+
+def test_auto_engage診断は閾値未満では発火しない(tmp_path):
+    """use_ripgrep=None かつ小コーパス（既定閾値未満）では prefilter_auto_engaged が出ない。"""
+    src = tmp_path / "src"; src.mkdir()
+    (src / "A.java").write_text("class A { int x = 0; }\n", "utf-8")
+    inp = tmp_path / "in"; inp.mkdir()
+    (inp / "K.grep").write_text("A.java:1:    int x = 0;\n", "utf-8")
+    out = tmp_path / "out"
+    opts = dataclasses.replace(_default_opts(), use_ripgrep=None)
+    run(inp, out, src, opts)
+    assert "prefilter_auto_engaged" not in _diag_text(out)
+
+
+@pytest.mark.requires_ripgrep
+def test_auto_engage診断は自動発動時に発火する(tmp_path):
+    """use_ripgrep=None ＋ threshold=0 ＋ rg 可用 → 自動発動し診断が出る。"""
+    src = tmp_path / "src"; src.mkdir()
+    (src / "A.java").write_text("class A { int x = 0; }\n", "utf-8")
+    inp = tmp_path / "in"; inp.mkdir()
+    (inp / "K.grep").write_text("A.java:1:    int x = 0;\n", "utf-8")
+    out = tmp_path / "out"
+    opts = dataclasses.replace(
+        _default_opts(), use_ripgrep=None, ripgrep_threshold_bytes=0)
+    run(inp, out, src, opts)
+    assert "prefilter_auto_engaged" in _diag_text(out)
+
+
+@pytest.mark.requires_ripgrep
+def test_auto_engage診断は明示指定では発火しない(tmp_path):
+    """明示 use_ripgrep=True（threshold=0 でも）では auto_engaged は出ない。"""
+    src = tmp_path / "src"; src.mkdir()
+    (src / "A.java").write_text("class A { int x = 0; }\n", "utf-8")
+    inp = tmp_path / "in"; inp.mkdir()
+    (inp / "K.grep").write_text("A.java:1:    int x = 0;\n", "utf-8")
+    out = tmp_path / "out"
+    opts = dataclasses.replace(
+        _default_opts(), use_ripgrep=True, ripgrep_threshold_bytes=0)
+    run(inp, out, src, opts)
+    assert "prefilter_auto_engaged" not in _diag_text(out)
 
 
 @pytest.mark.requires_ripgrep
@@ -54,6 +109,10 @@ def test_unsafe_utf32BOMファイルはprefilterで脱落しない(tmp_path):
     rescue が load-bearing であることを示すため、seed は ASCII の A.java に置き、
     indirect chase が UTF-32 の U.java 内 usage(A.KCODE) に到達する設計にする
     （U.java 自体に seed を置くと direct hit が seed 段で確定し scan を踏まないため）。
+
+    バージョン結合メモ: 「rg が symbol を発見しない（prefilter で脱落）」という assertion は、
+    rg が UTF-32 BOM を auto-transcode しないことを前提とする（rg 14.x まで真。rg は
+    UTF-16 BOM のみ sniff する）。将来 rg が UTF-32 BOM 検出を追加したら見直すこと。
     """
     src = tmp_path / "src"; src.mkdir()
     (src / "A.java").write_text("class A { static final int KCODE = 1; }\n", "utf-8")

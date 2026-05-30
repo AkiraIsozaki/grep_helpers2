@@ -47,6 +47,9 @@ def run_fixedpoint(
     適用しない＝この経路は直接呼ぶテスト向け。本番 pipeline は常に files と unsafe_rels の
     両方を渡す。
     """
+    if files is None and unsafe_rels:
+        raise ValueError(
+            "unsafe_rels は files と併用必須（files=None の walk フォールバックは unsafe 救済を適用しない）")
     source_root = Path(source_root)
     state = initialize_state(seed_hits, source_root, opts, diag)
 

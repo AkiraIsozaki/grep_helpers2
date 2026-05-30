@@ -38,7 +38,7 @@ def _default_opts() -> EngineOptions:
         max_file_bytes=5_000_000, max_symbols=100_000, max_paths=1000)
 
 
-def _effective_use_ripgrep(explicit, total_bytes, threshold) -> bool:
+def _effective_use_ripgrep(explicit: bool | None, total_bytes: int, threshold: int) -> bool:
     """tri-state を実効 bool に解決。明示(True/False)優先、None は rg 可用かつ総バイト>=閾値。"""
     if explicit is not None:
         return explicit
@@ -55,13 +55,18 @@ def run(
     if opts is None:
         opts = _default_opts()
     lang_map = opts.lang_map
+    # collect_files_ex: 64KiB NUL prefix（collect_files の 8KiB より厳格）＋ total_bytes/unsafe_rels を prefilter 判定に使う
     files, total_bytes, unsafe_rels = collect_files_ex(
         Path(source_root), include=opts.include, exclude=opts.exclude,
         follow_symlinks=opts.follow_symlinks,
         max_file_bytes=opts.max_file_bytes, diag=diag)
+    explicit = opts.use_ripgrep
     effective = _effective_use_ripgrep(
-        opts.use_ripgrep, total_bytes, opts.ripgrep_threshold_bytes)
+        explicit, total_bytes, opts.ripgrep_threshold_bytes)
     opts = replace(opts, use_ripgrep=effective)
+    if explicit is None and effective:
+        diag.add("prefilter_auto_engaged",
+                 f"total_bytes={total_bytes} threshold={opts.ripgrep_threshold_bytes}")
 
     fb = list(opts.encoding_fallback) or DEFAULT_FALLBACK
     for grep_file in sorted(Path(input_dir).glob("*.grep")):
