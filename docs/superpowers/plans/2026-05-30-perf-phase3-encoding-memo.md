@@ -259,6 +259,53 @@ def test_chardet回数はユニークファイル数以下_cp932(tmp_path, monke
 - **型整合**: `decode_with_memo(memo, abspath, data, fallback_chain)`、`EncMemo(get/__setitem__/__contains__)`、`_read_meta(..., enc_memo=None)`、`run_fixedpoint(..., enc_memo=)` 一貫。
 - **既知の限界（明記）**: 並列は direct↔indirect・worker 間で memo 非共有＝「ユニーク×1回」は直列性質、並列は「ファイルあたり最大 min(jobs,出現hop数)」（byte 不変・§4.2）。
 
+---
+
+## rev.2 補遺（計画レビュー第1R反映・確定上書き）
+
+### C-1/C-2: enc-memo 配線を全経路で明示
+
+- `run_fixedpoint(..., *, files=None, enc_memo=None)` を追加。`enc_memo is None` なら内部生成（後方互換）。`state.enc_memo = enc_memo` を `initialize_state` 後に代入（H-2）。
+- `scan_hop(..., file_cache=None, pool=None, enc_memo=None)` を追加。直列分岐 `_scan_one(relpath, str(abspath), automaton_obj, opts.lang_map, fallback, cache=file_cache, enc_memo=enc_memo)`（`_scan.py:251`）へ伝播。
+- `_scan_one(..., cache=None, enc_memo=None)` と**末尾追加**。`_read_meta(relpath, abspath, lang_map, fallback, cache, enc_memo)` へ素通し。後方互換 `_scan_file`（`_scan.py:142-150`）は **無変更**（デフォルト None）。
+- 並列: `_worker_init` に `global _WORKER_ENC; _WORKER_ENC = EncMemo()` を追加（既存 global 宣言行にも `_WORKER_ENC` を追記）。`_scan_file_worker` は `_scan_one(..., cache=_WORKER_CACHE, enc_memo=_WORKER_ENC)`。main の enc_memo は worker へ渡さない（プロセス境界・§4.2 N2）。
+
+### H-1: `_read_meta` miss 経路の 3→5 要素再構築（text[:4096] 厳守）
+
+```python
+def _read_meta(relpath, abspath, lang_map, fallback, cache, enc_memo=None):
+    if cache is not None:
+        hit = cache.get(abspath)
+        if hit is not None:
+            return hit                       # 5要素 (text,enc,replaced,language,dialect)
+    if enc_memo is None:
+        meta = file_meta(relpath, Path(abspath).read_bytes(), lang_map, fallback_chain=fallback)
+    else:
+        raw = Path(abspath).read_bytes()
+        text, enc, replaced = decode_with_memo(enc_memo, abspath, raw, fallback)
+        language = detect_language(relpath, text[:4096], lang_map)
+        dialect = detect_shell_dialect(relpath, text[:4096]) if language == "shell" else "bourne"
+        meta = (text, enc, replaced, language, dialect)
+    if cache is not None:
+        cache.put(abspath, meta)
+    return meta
+```
+`text[:4096]` サンプリング（`file_meta` と同一）を厳守＝memo hit/miss で language/dialect 不変＝golden 不変。
+
+### H-2: finalize の memo 経由化
+
+- `ChaseState` に `enc_memo: object | None = None` フィールド追加（`_state.py`）。
+- `_finalize.py:40-42` の `file_meta(...)` を、`state.enc_memo` があれば `decode_with_memo`＋言語/方言再構築（H-1 と同形）に置換。`state.encoding_of.setdefault` は不変。`state.enc_memo is None` なら従来 `file_meta`。
+
+### H-3/H-4: テスト前提の固定
+
+- Task4/Task5 のテストは **`opts = dataclasses.replace(_default_opts(), jobs=1)` を明示**し docstring に「jobs=1（in-process）限定・chardet spy は同一プロセス前提・並列の回数検証はしない」と明記。
+- Task5 の spy は **呼び出し回数カウンタ**（`len(b)` でなく `calls["n"] += 1`）にし、`calls["n"] <= ユニークファイル数` で締める（同長ファイル衝突による過小カウントを排除）。
+
+### L-1: Task1 テストのコメント訂正
+
+`b"\xff\xfe\x80"` は実際は cp932/`replaced=False` に解決される。`replaced=True`（latin-1 replace）経路を踏むテストにしたいなら、全 fallback strict 失敗のバイト列を別途用意。byte 同値性の検証自体は有効なのでテストは残し、コメントのみ訂正。
+
 ## 実行ハンドオフ
 
 Phase 3 完了後 → Phase 4（ロックステップ共有エンジン）。

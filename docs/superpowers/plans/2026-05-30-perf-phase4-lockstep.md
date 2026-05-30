@@ -297,6 +297,60 @@ def test_lockstepはcorpus走査をmax_hopに圧縮(tmp_path, monkeypatch):
 - **型整合**: `run_fixedpoint_multi(states_by_kw, source_root, opts, *, files, unsafe_rels, enc_memo)`、`compute_nchunks_union(states, union_symbols, *, unlimited, max_passes, budget=None)`、`merge_in_order(others)`、`run_fixedpoint` は委譲ラッパ。
 - **リスク（明記）**: 本 Phase は深い restructure。Task3（単一keyword同値）→Task4（複数同値）→Task5（診断）→Task6（効果）の順で**各単位を golden/同値テストで固めながら**進め、一括変更を避ける。automaton 単調性が崩れる兆候（同値テスト失敗）が出たら即停止し `automaton.scan_line` 経路のバイパスを疑う。
 
+---
+
+## rev.2 補遺（計画レビュー第1R反映・確定上書き）
+
+### C-2【最重要・診断汚染】共有 pass_results を keyword 別に relpath 絞りしてから absorb
+
+`absorb_results`（`_ingest.py:72-75`）は **pass_results の全 relpath** に対し `encoding_of.setdefault` と `decode_replaced` 診断を発火する（found の symbol フィルタ `:78` より前）。lock-step では pass_results が union ヒットを含むため、**keyword K2 が、K1 の記号だけがヒットした relpath の `decode_replaced` を記録**してしまい、keyword 別 diagnostics が逐次版と割れる。
+
+**対策（必須）**: 各 keyword の `absorb_results` 呼出前に、pass_results を **「その keyword の scan 集合（sc∪stm）の記号が found に1件でもある relpath」に絞る**:
+
+```python
+for kw, st in states_by_kw.items():
+    sc, stm = per_kw[kw]
+    want = sc | stm
+    kw_results = [(rel, enc, rep, lang, dia,
+                   [t for t in found if t[0] in want])      # t=(symbol,lineno,line,cs)
+                  for (rel, enc, rep, lang, dia, found) in pass_results
+                  if any(t[0] in want for t in found)]      # K がヒットした relpath のみ
+    absorb_results(st, kw_results, sc, stm, ghop)
+```
+
+これで encoding_of/decode_replaced が逐次版（K は自記号でヒットした relpath のみ走査）と一致。automaton 単調性により found 自体は単独走査と同値ゆえ TSV も不変。
+
+### C-1【Phase2 依存の明記】unsafe_rels と collect_files_ex
+
+`unsafe_rels`・3-tuple `collect_files_ex` は **Phase 2 で導入済み前提**（本 Phase は Phase 1/2/3 完了後に着手）。`run_fixedpoint_multi` の `unsafe_rels` 引数・prefilter の `keep | unsafe_rels` は Phase 2 と同一。**Phase 2 未適用の環境では本 Phase を着手しない**（依存を冒頭に明記）。
+
+### C-3【委譲ラッパの機能保持】run_fixedpoint は walk/Progress/automaton_split を保持
+
+`run_fixedpoint` を `run_fixedpoint_multi` 委譲ラッパにする際、**(a) `files is None` の内部 walk フォールバック、(b) `Progress` 駆動、(c) `automaton_split` 診断**を保持する。具体的には:
+- `run_fixedpoint_multi` 自身に **`automaton_split` 診断**（`scan_hop` の `n_actual_chunks` 戻り＞1 のとき `diag.add("automaton_split", f"hop={ghop} chunks={n}")`）と **`Progress`** を持たせる。union 走査は **グローバル hop 単位で1回**なので automaton_split も**共有診断としてグローバル hop ごと1回**（spec §6.2＝§8.4 全件性対象外）。
+- 単一 keyword 委譲時、既存 golden の diagnostics.txt が automaton_split を含む場合、**逐次版と件数が変わり得る**。→ 既存 golden に automaton_split を含むケースが無いことを確認（dev で `grep -rl automaton_split tests/golden` ＝無ければ問題なし）。在る場合はそのケースの diagnostics 期待を更新。
+- `files is None` フォールバックはラッパ側で walk して `run_fixedpoint_multi` に渡す。
+
+### C-2 連鎖【hop 番号入り診断のグローバル hop 化】
+
+`graph_spilled`（`_budget_control.py:54` `hop=N`）・`prov_max_depth` 等 **hop 番号を文字列に含む診断**は lock-step で**グローバル hop 値**になり逐次版（keyword 別 hop）とズレる。単一 keyword では一致（グローバル hop=局所 hop）。複数 keyword の diagnostics 比較（Task5）では、これらを **§8.4 走査構造依存として除外比較**するか、グローバル hop 表記を許容と spec §6.2 に明記。**Task5 の除外カテゴリ確定リスト: `automaton_split`・`graph_spilled`（hop 表記）**。その他カテゴリ（decode_replaced/symbol_rejected/missing_source 等）は C-2 の relpath 絞りで完全一致を要求。
+
+### H-1: compute_nchunks_union のシグネチャ統一
+
+`compute_nchunks_union(states, union_symbols, *, opts, budget)` に統一。`force_chunks`（`opts.force_chunks`）分岐・`budget.exceeded` 判定（`budget=states[0].budget`＝run 共有）・`max_passes`（`opts.max_passes`）を一貫供給。Task2 テストを「unlimited=True→1」「force_chunks>1→min(...)」の2分岐に拡張。
+
+### H-2: resume 完了 keyword の全経路除外
+
+resume 完了 keyword は **(a) direct 構築スキップ (b) `states_by_kw` 非投入 (c) finalize 非呼出 (d) `resume_skipped` 診断を逐次版と同順（keyword sorted）で add**。既存 resume spy テスト（MEMORY #C-2）を回帰として維持。
+
+### H-3: merge_in_order の規約
+
+`_counts[cat] += other._counts[cat]`、`_detail[cat]` は `_MAX_RETAINED` を尊重して extend（超過分は捨て render の retained 行で表現）。逐次版は単一 diag に直列 add ゆえ総数一致。
+
+### M-1: Task4 完了条件
+
+Task4 の完了条件は「Task4 test PASS」でなく **「golden 全件＋jobs2==jobs1 バイト不変」**に一本化（転置の真の回帰ガードは golden）。
+
 ## 実行ハンドオフ
 
 Phase 4 完了で本体最適化は完了。**実コーパスで再計測**（walk・初回chardet・rg走査総量・RAMピーク）し1時間目標を確認。未達なら Phase 5（option B / cchardet）。

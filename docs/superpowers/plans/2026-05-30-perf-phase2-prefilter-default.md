@@ -339,6 +339,37 @@ def test_golden最大ケース総バイトは閾値未満():
 - **プレースホルダ**: Task5 の2つ目テストの具体 assert は実装時に「ON/OFF バイト一致」へ確定（注記済）。他は実コード。
 - **型整合**: `collect_files`→`(files, total_bytes, unsafe_rels)` を全 caller（pipeline・fixedpoint）で追従。`use_ripgrep: bool|None`、`_effective_use_ripgrep(explicit,total_bytes,threshold)->bool`、`run_fixedpoint(...,unsafe_rels=)` 一貫。
 
+---
+
+## rev.2 補遺（計画レビュー第1R反映・上記タスクへの確定上書き）
+
+### C1/C2: 既存契約を壊さない最小破壊設計に変更
+
+`walk_files` の **公開 2-tuple yield（`relpath, abspath`）は不変**に保つ（`test_walk.py:15/40/96`・`test_ripgrep.py:69`・`fixedpoint/__init__.py:48` の 2-tuple unpack を壊さない）。`collect_files`（既存・`list[tuple]` 返し）も**不変**に温存（`test_fixedpoint.py:176` の `files=collect_files(...)` 直渡しを壊さない）。
+
+代わりに **新 API `collect_files_ex(...) -> (files, total_bytes, unsafe_rels)` を追加**し、`pipeline.run` のみがこれを使う。`collect_files_ex` は内部生成器 `_walk_classified`（3-tuple `relpath, abspath, kind` を yield・本 Phase 専用）を回して total/unsafe を集約する。Task2 のファイル構成・Step を「`collect_files`/`walk_files` 改変」から「`collect_files_ex`/`_walk_classified` 新設（既存非改変）」に置換。Task2 Step4 の caller 追従は **`pipeline.py:46` の1箇所のみ**（`collect_files`→`collect_files_ex`）になり、他テストは無改変で緑。
+
+### C3: 既存 CLI テストの追従
+
+`tests/integration/test_cli.py:27` の `assert o.use_ripgrep is False` を **`assert o.use_ripgrep is None`** に更新（tri-state 既定）。テスト名/docstring の「既定OFF」も「既定=閾値判定(None)」に改訂。Task3 のファイル構成に `tests/integration/test_cli.py` を追加。
+
+### H2: `files=None` 内部 walk 経路の unsafe
+
+`run_fixedpoint`（`files=None` 経路）は本番 pipeline からは常に `files`＋`unsafe_rels` 付きで呼ばれる。`files=None` 直接呼び出し（テスト等）は **unsafe 保護外＝呼出側責任**と明記（spec §4.4 の主経路は pipeline 経由で保証）。C1 回帰テスト（Phase4 でなく本 Phase の Task5）は必ず `pipeline.run` 経由にする。
+
+### H1: golden 回帰の前倒し
+
+Task4 Step6 の直後に **`pytest tests/golden -q`（バイト一致）を必須**化（閾値ロジック実装直後に早期検知）。Task6 まで待たない。
+
+### H3: Task5 二つ目テストの確定（プレースホルダ排除）
+
+`U.java`（BOM 付き UTF-16・先頭 CJK 5000字・末尾 `int KCODE = 1;`）を **seed 直接ヒット元**にし、別ファイル不要にする。grep は `U.java:5001:int KCODE = 1;`（実 lineno に合わせる）。assert は **ON/OFF で `KCODE.tsv` がバイト一致**（unsafe 判定で U.java が prefilter ON でも scan に残ることを e2e 固定）。`detect_language` が UTF-16 復号後テキストで java と判定されることも前提に含める。
+
+### 確定事項まとめ（実装者向け）
+
+- 変更ファイルは `collect_files_ex`/`_walk_classified` 新設・`_classify_bytes` 追加（`walk.py`）、`_options.py`、`cli.py`、`pipeline.py`、`fixedpoint/__init__.py`（prefilter 集合のみ）。**既存 `walk_files`/`collect_files` は無改変**。
+- `_BOMS` の並びは UTF-32 を UTF-16 より先（接頭辞衝突回避）＝レビュー確認済で正しい。
+
 ## 実行ハンドオフ
 
 Phase 2 完了後 → Phase 3（encoding メモ）。
