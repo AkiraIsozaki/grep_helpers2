@@ -17,8 +17,9 @@ from grep_analyzer.dispatch import (
     shebang_dialect,
     shebang_language,
 )
-from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes
+from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes, decode_with_memo
 from grep_analyzer.fixedpoint import EngineOptions, run_fixedpoint
+from grep_analyzer.fixedpoint._encmemo import EncMemo
 from grep_analyzer.ingest import parse_grep_line
 from grep_analyzer.model import Hit
 from grep_analyzer.snippet import build_snippet
@@ -69,6 +70,9 @@ def run(
                  f"total_bytes={total_bytes} threshold={opts.ripgrep_threshold_bytes}")
 
     fb = list(opts.encoding_fallback) or DEFAULT_FALLBACK
+    # run 共有 enc-memo：direct 経路と各 keyword の不動点（finalize 再読込）で同一インスタンスを
+    # 共有し、ユニークファイルあたり chardet を run 全体で高々 1 回に抑える（jobs=1 in-process）。
+    enc_memo = EncMemo()
     for grep_file in sorted(Path(input_dir).glob("*.grep")):
         keyword = grep_file.stem
         if opts.resume and resume.is_complete(output_dir, keyword, opts):
@@ -107,7 +111,8 @@ def run(
                 cur_relpath = relpath
                 target = Path(source_root) / relpath
                 if is_contained_relpath(relpath) and target.is_file() and is_within_root(source_root, target):
-                    file_text, enc, replaced = decode_bytes(target.read_bytes(), fb)
+                    file_text, enc, replaced = decode_with_memo(
+                        enc_memo, str(target), target.read_bytes(), fb)
                     sample = file_text[:4096]
                     language = detect_language(relpath, sample, lang_map)
                     dialect = (detect_shell_dialect(relpath, sample)
@@ -144,7 +149,7 @@ def run(
 
         indirect = run_fixedpoint(
             hits, Path(source_root), opts, diag,
-            files=files, unsafe_rels=unsafe_rels)
+            files=files, unsafe_rels=unsafe_rels, enc_memo=enc_memo)
         src_abs = str(Path(source_root).resolve())
         rows = [replace(h, file=f"{src_abs}/{h.file}") for h in hits + indirect]
         output_writer.finalize(output_dir, keyword, rows, opts)

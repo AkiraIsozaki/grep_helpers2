@@ -8,7 +8,8 @@ Related: spec §8.2, §9
 """
 
 from grep_analyzer.classify import classify_hit
-from grep_analyzer.fixedpoint._scan import file_meta
+from grep_analyzer.encoding import decode_with_memo
+from grep_analyzer.fixedpoint._scan import _meta_from_text, file_meta
 from grep_analyzer.fixedpoint._state import ChaseState
 from grep_analyzer.model import Hit
 from grep_analyzer.provenance import Occurrence
@@ -36,10 +37,25 @@ def build_indirect_hits(state: ChaseState) -> list[Hit]:
             continue
         seen.add(c)
         if c.relpath not in line_cache:
-            raw = state.rel_to_abs[c.relpath].read_bytes() if c.relpath in state.rel_to_abs else b""
-            text, enc, replaced, lang, dialect = file_meta(
-                c.relpath, raw, opts.lang_map,
-                fallback_chain=list(opts.encoding_fallback))
+            if c.relpath in state.rel_to_abs:
+                abspath = state.rel_to_abs[c.relpath]
+                raw = abspath.read_bytes()
+                if state.enc_memo is not None:
+                    # run 共有 enc-memo 経由＝scan/direct と同一キー(str(abspath))で chardet 再実行を抑止。
+                    # _meta_from_text で file_meta と byte 同値の 5-tuple を再構築する（golden 不変）。
+                    text, enc, replaced = decode_with_memo(
+                        state.enc_memo, str(abspath), raw,
+                        list(opts.encoding_fallback))
+                    text, enc, replaced, lang, dialect = _meta_from_text(
+                        c.relpath, text, enc, replaced, opts.lang_map)
+                else:
+                    text, enc, replaced, lang, dialect = file_meta(
+                        c.relpath, raw, opts.lang_map,
+                        fallback_chain=list(opts.encoding_fallback))
+            else:
+                text, enc, replaced, lang, dialect = file_meta(
+                    c.relpath, b"", opts.lang_map,
+                    fallback_chain=list(opts.encoding_fallback))
             line_cache[c.relpath] = text.split("\n")
             file_meta_by_relpath[c.relpath] = (text, lang, dialect)
             state.encoding_of.setdefault(c.relpath, (enc, replaced))

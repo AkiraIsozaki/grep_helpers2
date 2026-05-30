@@ -16,9 +16,10 @@ from grep_analyzer.classifiers import _AST_CHASERS
 from grep_analyzer.classifiers.ts_classifier import parse_tree
 from grep_analyzer.diagnostics import Diagnostics
 from grep_analyzer.embed_preprocess import effective_language
+from grep_analyzer.encoding import decode_with_memo
 from grep_analyzer.fixedpoint._ingest import ingest_one
 from grep_analyzer.fixedpoint._options import EngineOptions
-from grep_analyzer.fixedpoint._scan import file_meta, kinds_of
+from grep_analyzer.fixedpoint._scan import _meta_from_text, file_meta, kinds_of
 from grep_analyzer.fixedpoint._state import ChaseState
 from grep_analyzer.model import ChaseSymbols, Hit
 from grep_analyzer.provenance import Occurrence, ProvenanceGraph
@@ -27,7 +28,8 @@ from grep_analyzer.stoplist import SymbolPolicy, load_stoplist
 
 
 def initialize_state(seed_hits: list[Hit], source_root: Path,
-                     opts: EngineOptions, diag: Diagnostics) -> ChaseState:
+                     opts: EngineOptions, diag: Diagnostics,
+                     enc_memo=None) -> ChaseState:
     """seed_hits を ChaseState に取り込み、hop=1 までの初期 ingest を完了させる。"""
     policy = SymbolPolicy(opts.min_specificity, load_stoplist(opts.stoplist_path))
     budget = MemoryBudget(opts.memory_limit_mb)
@@ -62,9 +64,19 @@ def initialize_state(seed_hits: list[Hit], source_root: Path,
         sp = source_root / s.file
         if is_contained_relpath(s.file) and sp.is_file() and is_within_root(source_root, sp):
             if s.file != cur_relpath:
-                cur_text, _, _, cur_lang, cur_dialect = file_meta(
-                    s.file, sp.read_bytes(), opts.lang_map,
-                    fallback_chain=list(opts.encoding_fallback))
+                if enc_memo is not None:
+                    # run 共有 enc-memo 経由＝direct/scan/finalize と同一キー(str(sp))で
+                    # chardet 再実行を抑止。_meta_from_text で file_meta と byte 同値の
+                    # 5-tuple を再構築する（golden 不変）。
+                    _t, _e, _r = decode_with_memo(
+                        enc_memo, str(sp), sp.read_bytes(),
+                        list(opts.encoding_fallback))
+                    cur_text, _, _, cur_lang, cur_dialect = _meta_from_text(
+                        s.file, _t, _e, _r, opts.lang_map)
+                else:
+                    cur_text, _, _, cur_lang, cur_dialect = file_meta(
+                        s.file, sp.read_bytes(), opts.lang_map,
+                        fallback_chain=list(opts.encoding_fallback))
                 cur_lines = None          # 非 AST 言語の split は必要時のみ遅延生成
                 cur_tree_cache = {}
                 cur_relpath = s.file

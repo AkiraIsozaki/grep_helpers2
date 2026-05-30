@@ -52,9 +52,11 @@ def run_fixedpoint(
         raise ValueError(
             "unsafe_rels は files と併用必須（files=None の walk フォールバックは unsafe 救済を適用しない）")
     source_root = Path(source_root)
-    state = initialize_state(seed_hits, source_root, opts, diag)
     if enc_memo is None:
         enc_memo = EncMemo()                  # 後方互換の内部既定（run 共有 enc-memo）
+    # seed 初期化の復号も run 共有 enc-memo を通し、同一ファイルの再 chardet を抑止する
+    # （direct/scan/finalize と単一情報源を共有）。
+    state = initialize_state(seed_hits, source_root, opts, diag, enc_memo=enc_memo)
     # _finalize.build_indirect_hits が state.enc_memo を消費（Phase3 Task4 で配線）
     state.enc_memo = enc_memo
 

@@ -54,3 +54,20 @@ def test_read_meta_enc_memo経路はshell方言分岐でもfile_metaと同一(tm
     assert want[3] == "shell"                   # dialect 分岐を実際に通ることを確認
     got = _read_meta("s.sh", str(f), {}, ["cp932", "euc-jp", "latin-1"], cache=None, enc_memo=EncMemo())
     assert got == want
+
+
+def test_direct経路は同一ファイル複数keywordでchardet1回(tmp_path, monkeypatch):
+    """run 共有 enc-memo で direct の同一ファイル再 chardet を抑止（jobs=1 in-process 限定）。"""
+    import dataclasses
+    import grep_analyzer.encoding as e
+    calls = {"n": 0}; real = e.chardet.detect
+    monkeypatch.setattr(e.chardet, "detect",
+                        lambda b: calls.__setitem__("n", calls["n"] + 1) or real(b))
+    from grep_analyzer.pipeline import run, _default_opts
+    src = tmp_path / "src"; src.mkdir()
+    (src / "A.java").write_bytes("class A { int KCODE=1; int r=KCODE; } // あ".encode("euc-jp") + b"\n")
+    inp = tmp_path / "in"; inp.mkdir()
+    (inp / "K1.grep").write_text("A.java:1:KCODE\n", "utf-8")
+    (inp / "K2.grep").write_text("A.java:1:KCODE\n", "utf-8")
+    run(inp, tmp_path / "out", src, dataclasses.replace(_default_opts(), jobs=1))
+    assert calls["n"] <= 1               # A.java の chardet は run 全体で 1 回（jobs=1）
