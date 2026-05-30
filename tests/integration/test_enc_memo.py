@@ -31,3 +31,26 @@ def test_read_meta_enc_memo経路はfile_metaと同一5タプル(tmp_path):
     want = file_meta("x.java", raw, {}, fallback_chain=["cp932", "euc-jp", "latin-1"])
     got = _read_meta("x.java", str(f), {}, ["cp932", "euc-jp", "latin-1"], cache=None, enc_memo=EncMemo())
     assert got == want
+
+
+def test_read_meta_enc_memo経路はreplaced_Trueでもfile_metaと同一(tmp_path):
+    from grep_analyzer.fixedpoint._scan import _read_meta, file_meta
+    from grep_analyzer.fixedpoint._encmemo import EncMemo
+    # utf-8/ascii(strict) を通らず latin-1 + replace に落ちるバイト列で replaced=True を強制。
+    f = tmp_path / "y.c"; f.write_bytes(b"int x=1; \x81\xff\n")
+    raw = f.read_bytes()
+    want = file_meta("y.c", raw, {}, fallback_chain=["ascii", "latin-1"])
+    assert want[2] is True                      # replaced フラグが実際に立つことを確認
+    got = _read_meta("y.c", str(f), {}, ["ascii", "latin-1"], cache=None, enc_memo=EncMemo())
+    assert got == want
+
+
+def test_read_meta_enc_memo経路はshell方言分岐でもfile_metaと同一(tmp_path):
+    from grep_analyzer.fixedpoint._scan import _read_meta, file_meta
+    from grep_analyzer.fixedpoint._encmemo import EncMemo
+    f = tmp_path / "s.sh"; f.write_bytes("#!/bin/bash\nx=1\n".encode("utf-8"))
+    raw = f.read_bytes()
+    want = file_meta("s.sh", raw, {}, fallback_chain=["cp932", "euc-jp", "latin-1"])
+    assert want[3] == "shell"                   # dialect 分岐を実際に通ることを確認
+    got = _read_meta("s.sh", str(f), {}, ["cp932", "euc-jp", "latin-1"], cache=None, enc_memo=EncMemo())
+    assert got == want

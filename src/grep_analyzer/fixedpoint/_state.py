@@ -10,6 +10,7 @@ from pathlib import Path
 
 from grep_analyzer.budget import MemoryBudget
 from grep_analyzer.diagnostics import Diagnostics
+from grep_analyzer.fixedpoint._encmemo import EncMemo
 from grep_analyzer.fixedpoint._options import EngineOptions
 from grep_analyzer.provenance import Occurrence, ProvenanceGraph
 from grep_analyzer.spill import EdgeStore
@@ -50,7 +51,7 @@ class ChaseState:
     capped: set[str] = field(default_factory=set)
     rel_to_abs: dict[str, Path] = field(default_factory=dict)
     encoding_of: dict[str, tuple[str, bool]] = field(default_factory=dict)
-    enc_memo: object | None = None
+    enc_memo: "EncMemo | None" = None
     spill_logged: bool = False
     no_expand_logged: set[str] = field(default_factory=set)
     replaced_logged: set[str] = field(default_factory=set)

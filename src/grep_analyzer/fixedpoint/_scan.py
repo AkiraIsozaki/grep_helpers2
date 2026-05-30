@@ -24,16 +24,25 @@ from grep_analyzer.dispatch import detect_language, detect_shell_dialect
 from grep_analyzer.embed_preprocess import inline_template_spans
 from grep_analyzer.encoding import DEFAULT_FALLBACK, decode_bytes, decode_with_memo
 from grep_analyzer.fixedpoint._encmemo import EncMemo
+from grep_analyzer.fixedpoint._encmemo import _DEFAULT_MAX as _ENC_MEMO_MAX
 from grep_analyzer.model import ChaseSymbols
+
+
+def _meta_from_text(relpath, text, enc, replaced, lang_map):
+    """(text,enc,replaced) ＋言語/方言判定（text[:4096] サンプリング）を 5-tuple に組む。
+
+    file_meta と _read_meta の enc_memo 経路が共有する単一情報源（golden 不変の要）。
+    """
+    language = detect_language(relpath, text[:4096], lang_map)
+    dialect = detect_shell_dialect(relpath, text[:4096]) if language == "shell" else "bourne"
+    return text, enc, replaced, language, dialect
 
 
 def file_meta(relpath: str, raw: bytes, lang_map: dict[str, str], fallback_chain=None):
     """1 度だけデコードし (text, encoding, replaced, language, dialect) を返す。"""
     chain = list(fallback_chain) if fallback_chain else DEFAULT_FALLBACK
     text, enc, replaced = decode_bytes(raw, chain)
-    language = detect_language(relpath, text[:4096], lang_map)
-    dialect = detect_shell_dialect(relpath, text[:4096]) if language == "shell" else "bourne"
-    return text, enc, replaced, language, dialect
+    return _meta_from_text(relpath, text, enc, replaced, lang_map)
 
 
 _FILE_CACHE_BUDGET = 64 * 1024 * 1024   # 復号テキスト常駐の上限（文字数の概算予算）
@@ -96,9 +105,7 @@ def _read_meta(relpath, abspath, lang_map, fallback, cache, enc_memo=None):
     else:
         raw = Path(abspath).read_bytes()
         text, enc, replaced = decode_with_memo(enc_memo, abspath, raw, fallback)
-        language = detect_language(relpath, text[:4096], lang_map)
-        dialect = detect_shell_dialect(relpath, text[:4096]) if language == "shell" else "bourne"
-        meta = (text, enc, replaced, language, dialect)
+        meta = _meta_from_text(relpath, text, enc, replaced, lang_map)
     if cache is not None:
         cache.put(abspath, meta)
     return meta
@@ -187,7 +194,8 @@ def _worker_init(lang_map, fallback, jobs) -> None:
     _WORKER_FALLBACK = fallback
     # worker ごとに独立 LRU を持つため予算を jobs 分割（合計常駐 ≤ 単一 run 上限）。
     _WORKER_CACHE = _FileCache(budget=_FILE_CACHE_BUDGET // max(1, jobs))
-    _WORKER_ENC = EncMemo()                  # worker ローカル enc-memo（process 境界を越えない）
+    # worker ごとに独立 LRU ＝予算を jobs 分割し合計常駐を有界化（_FileCache と同論拠）。
+    _WORKER_ENC = EncMemo(max_entries=max(1, _ENC_MEMO_MAX // max(1, jobs)))
     _WORKER_SIG = None
     _WORKER_AUTOMATON = None
 
