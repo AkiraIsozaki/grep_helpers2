@@ -20,12 +20,13 @@ def test_vendorバイナリが存在すればwheelに同梱される(tmp_path):
     assert any(n.endswith("/rg.sha256") for n in names)
 
 
-def test_配備プロファイル_rg不在かつvendor空ならprefilter無効を検知(monkeypatch):
+def test_配備プロファイル_rg不在かつvendor空ならprefilter無効を検知(monkeypatch, tmp_path):
     """配備機(rg 不在)で vendor 空だと prefilter が恒久無効＝目標未達に静かに転落する。
-    この『静かな無効化』を検知する番兵（vendor 配置忘れの早期警告）。"""
+    この『静かな無効化』を検知する番兵（vendor 配置忘れの早期警告）。
+    _vendored_rg_path を直接モックせず、空 vendor ディレクトリを実際に走らせる。"""
     from grep_analyzer import ripgrep
-    monkeypatch.setattr(ripgrep, "_RG_RESOLVED", False)
-    monkeypatch.setattr(ripgrep, "_vendored_rg_path", lambda: None)
+    monkeypatch.setattr(ripgrep, "_VENDOR_ROOT", tmp_path)        # 実在する空ディレクトリ
+    monkeypatch.setattr(ripgrep.platform, "machine", lambda: "aarch64")
     monkeypatch.setattr(ripgrep.shutil, "which", lambda _: None)
     monkeypatch.delenv("GREP_ANALYZER_RG", raising=False)
     assert ripgrep.available() is False

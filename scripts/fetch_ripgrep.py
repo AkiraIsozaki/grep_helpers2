@@ -37,17 +37,24 @@ def _check_sha256(blob: bytes, expected: str) -> None:
 
 def _fetch_one(arch: str) -> None:
     url, tar_sha, rg_member = TARGETS[arch]
-    blob = urllib.request.urlopen(url).read()
+    blob = urllib.request.urlopen(url, timeout=60).read()
     _check_sha256(blob, tar_sha)
     with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as tf:
-        rg_bytes = tf.extractfile(rg_member).read()
+        f = tf.extractfile(rg_member)
+        if f is None:
+            raise ValueError(f"{arch}: {rg_member} が通常ファイルとして取得できない")
+        rg_bytes = f.read()
         # rev.2 D: LICENSE-MIT と UNLICENSE の両方を取得し、欠ければ abort
         mit = next((m for m in tf.getmembers() if m.name.endswith("LICENSE-MIT")), None)
         unl = next((m for m in tf.getmembers() if m.name.endswith("UNLICENSE")), None)
         if mit is None or unl is None:
             raise ValueError(f"{arch}: LICENSE-MIT/UNLICENSE が tarball に揃っていない")
-        mit_bytes = tf.extractfile(mit).read()
-        unl_bytes = tf.extractfile(unl).read()
+        mit_f = tf.extractfile(mit)
+        unl_f = tf.extractfile(unl)
+        if mit_f is None or unl_f is None:
+            raise ValueError(f"{arch}: LICENSE を通常ファイルとして取得できない")
+        mit_bytes = mit_f.read()
+        unl_bytes = unl_f.read()
     outdir = VENDOR / arch
     outdir.mkdir(parents=True, exist_ok=True)
     rg_path = outdir / "rg"
