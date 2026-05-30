@@ -7,7 +7,7 @@ import os
 from dataclasses import replace
 from pathlib import Path
 
-from grep_analyzer import output_writer, resume
+from grep_analyzer import output_writer, resume, ripgrep
 from grep_analyzer.classify import classify_hit
 from grep_analyzer.diagnostics import Diagnostics, SECTION_8_4_CATEGORIES
 from grep_analyzer.dispatch import (
@@ -23,7 +23,12 @@ from grep_analyzer.ingest import parse_grep_line
 from grep_analyzer.model import Hit
 from grep_analyzer.snippet import build_snippet
 from grep_analyzer.snippet._sanitize_line import _physical_lines
-from grep_analyzer.walk import DEFAULT_EXCLUDE, collect_files, is_contained_relpath, is_within_root
+from grep_analyzer.walk import (
+    DEFAULT_EXCLUDE,
+    collect_files_ex,
+    is_contained_relpath,
+    is_within_root,
+)
 
 
 def _default_opts() -> EngineOptions:
@@ -31,6 +36,13 @@ def _default_opts() -> EngineOptions:
         max_depth=10, min_specificity=2, stoplist_path=None, lang_map={},
         include=[], exclude=list(DEFAULT_EXCLUDE), jobs=1, follow_symlinks=False,
         max_file_bytes=5_000_000, max_symbols=100_000, max_paths=1000)
+
+
+def _effective_use_ripgrep(explicit, total_bytes, threshold) -> bool:
+    """tri-state を実効 bool に解決。明示(True/False)優先、None は rg 可用かつ総バイト>=閾値。"""
+    if explicit is not None:
+        return explicit
+    return ripgrep.available() and total_bytes >= threshold
 
 
 def run(
@@ -43,10 +55,13 @@ def run(
     if opts is None:
         opts = _default_opts()
     lang_map = opts.lang_map
-    files = collect_files(
+    files, total_bytes, unsafe_rels = collect_files_ex(
         Path(source_root), include=opts.include, exclude=opts.exclude,
         follow_symlinks=opts.follow_symlinks,
         max_file_bytes=opts.max_file_bytes, diag=diag)
+    effective = _effective_use_ripgrep(
+        opts.use_ripgrep, total_bytes, opts.ripgrep_threshold_bytes)
+    opts = replace(opts, use_ripgrep=effective)
 
     fb = list(opts.encoding_fallback) or DEFAULT_FALLBACK
     for grep_file in sorted(Path(input_dir).glob("*.grep")):
@@ -122,7 +137,9 @@ def run(
                 encoding=enc + (" 要確認" if replaced else ""), confidence=confidence,
             ))
 
-        indirect = run_fixedpoint(hits, Path(source_root), opts, diag, files=files)
+        indirect = run_fixedpoint(
+            hits, Path(source_root), opts, diag,
+            files=files, unsafe_rels=unsafe_rels)
         src_abs = str(Path(source_root).resolve())
         rows = [replace(h, file=f"{src_abs}/{h.file}") for h in hits + indirect]
         output_writer.finalize(output_dir, keyword, rows, opts)

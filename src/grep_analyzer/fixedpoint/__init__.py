@@ -35,11 +35,17 @@ __all__ = ["EngineOptions", "run_fixedpoint"]
 
 def run_fixedpoint(
     seed_hits: list[Hit], source_root: Path, opts: EngineOptions, diag: Diagnostics,
-    *, files=None
+    *, files=None, unsafe_rels=None
 ) -> list[Hit]:
     """seed から不動点まで多ホップ追跡し indirect Hit を決定的に返す（spec §8.1）。
 
     files 指定時は内部 walk を省き事前収集 (relpath, abspath) 列を使う（同値）。
+
+    unsafe_rels は非ASCII透過（UTF-16/32 BOM 等）ファイルの relpath 集合で、prefilter
+    ON 時も常に走査対象に残す（rg は生バイトの ASCII symbol を見つけられず脱落させるため）。
+    NOTE(rev.2 H2): files=None（内部 walk フォールバック）の場合は unsafe_rels 保護を
+    適用しない＝この経路は直接呼ぶテスト向け。本番 pipeline は常に files と unsafe_rels の
+    両方を渡す。
     """
     source_root = Path(source_root)
     state = initialize_state(seed_hits, source_root, opts, diag)
@@ -73,7 +79,8 @@ def run_fixedpoint(
             if opts.use_ripgrep:
                 keep_rels = _rg.prefilter(source_root, state.rel_to_abs, scan_symbols)
                 if keep_rels is not None:
-                    scan_files = [(r, a) for r, a in files if r in keep_rels]
+                    safe_keep = keep_rels | (unsafe_rels or set())   # 非ASCII透過は常に走査対象に残す
+                    scan_files = [(r, a) for r, a in files if r in safe_keep]
             nchunks = compute_nchunks(state, scan_symbols)
             pass_results, n_actual_chunks = scan_hop(
                 scan_symbols, scan_files, opts, nchunks,
