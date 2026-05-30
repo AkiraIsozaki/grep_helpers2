@@ -6,13 +6,15 @@ from pathlib import Path
 
 import pytest
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]  # tests/integration/* → repo root
+
 
 def test_vendorバイナリが存在すればwheelに同梱される(tmp_path):
     """vendor に rg があるときのみ実行（無ければ skip）。build→wheel 展開で同梱を確認。"""
-    if not glob.glob("src/grep_analyzer/vendor/ripgrep/*/rg"):
+    if not glob.glob(str(_REPO_ROOT / "src" / "grep_analyzer" / "vendor" / "ripgrep" / "*" / "rg")):
         pytest.skip("vendor バイナリ未配置（fetch_ripgrep 未実行）")
     subprocess.run([sys.executable, "-m", "build", "--wheel", "-o", str(tmp_path)],
-                   check=True)
+                   cwd=str(_REPO_ROOT), check=True)
     whl = sorted(tmp_path.glob("*.whl"))[-1]
     with zipfile.ZipFile(whl) as z:
         names = z.namelist()

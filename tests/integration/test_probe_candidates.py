@@ -1,10 +1,12 @@
 import importlib.util
 from pathlib import Path
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]  # tests/integration/* → repo root
+
 
 def _load():
     spec = importlib.util.spec_from_file_location(
-        "probe_candidates", "scripts/probe_candidates.py")
+        "probe_candidates", str(_REPO_ROOT / "scripts" / "probe_candidates.py"))
     m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
     return m
 

@@ -1,6 +1,10 @@
 """rg バイナリ解決機構（env→同梱→which / sha256 照合 / 副作用境界）の仕様。"""
 
+from pathlib import Path
+
 from grep_analyzer.ripgrep import _normalize_machine
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]  # tests/unit/* → repo root
 
 
 def test_machine正規化はaarch64系をaarch64に():
@@ -117,7 +121,7 @@ def test_fetch_extract_は期待sha不一致で例外(tmp_path):
     import importlib.util, hashlib
     import pytest
     spec = importlib.util.spec_from_file_location(
-        "fetch_ripgrep", "scripts/fetch_ripgrep.py")
+        "fetch_ripgrep", str(_REPO_ROOT / "scripts" / "fetch_ripgrep.py"))
     mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
     blob = b"not-a-real-rg"
     with pytest.raises(ValueError):

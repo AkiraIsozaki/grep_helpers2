@@ -27,6 +27,12 @@ def _normalize_machine(machine: str) -> str | None:
     return _MACHINE_ALIASES.get(machine)
 
 
+# 配備モデルはディレクトリインストール（オフライン wheelhouse → pip install → 展開済み
+# site-packages）を前提とし、importlib.resources.files() が実ファイルシステム上の実体
+# パスを返すものとする。zip-import インストールのように実体パスを持たない非 FS Traversable
+# では _vendored_rg_path() の .is_file() が例外を投げ→捕捉→None へ安全縮退（→ PATH/None
+# フォールバック）する＝同梱 rg を使わないだけでクラッシュしない。as_file()/ExitStack で
+# の実体化は本配備モデルでは不要（YAGNI）ゆえ採らない。
 def _default_vendor_root():
     try:
         return _ir_files("grep_analyzer") / "vendor" / "ripgrep"
